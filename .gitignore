@@ -1,0 +1,51 @@
+# --- FRONTEND (React / Node) ---
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# --- IDE & OS (Редакторы кода и система) ---
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- BACKEND (Python) ---
+# Виртуальное окружение (оно разное на Win и Mac)
+venv/
+.venv/
+env/
+
+# Кэш питона (мусорные файлы)
+__pycache__/
+*.pyc
+
+# --- ВАШИ ДАННЫЕ (ЧТОБЫ НЕ УТЕКЛИ) ---
+# Папки с данными
+data/
+temp_uploads/
+
+# Базы данных
+*.db
+*.sqlite3
+
+# Excel файлы (чтобы случайно не слить отчеты клиентов)
+*.xlsx
+*.xls
+*.csv
+
+# Файл с переменными окружения (пароли и т.д.)
+.env
