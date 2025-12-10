@@ -36,6 +36,7 @@ function App() {
   }, []);
 
   // const handleLogin = () => setIsAuthenticated(true);
+
     const handleLogin = () => {
     // ЭТА СТРОКА СБРАСЫВАЕТ АДРЕС НА ГЛАВНУЮ СТРАНИЦУ
     window.history.replaceState(null, '', '/');

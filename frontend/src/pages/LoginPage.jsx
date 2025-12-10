@@ -19,11 +19,16 @@ const LoginPage = ({ onLogin }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
 
-    // --- ИСПРАВЛЕНИЕ: ИСПОЛЬЗУЕМ URLSearchParams ВМЕСТО FormData ---
-    // FastAPI ожидает формат x-www-form-urlencoded для OAuth2
+    // 1. ПРОВЕРКА НА ПУСТЫЕ ПОЛЯ (Защита от белого экрана)
+    if (!username || !password) {
+        setError('Пожалуйста, введите логин и пароль');
+        return; // Прерываем функцию, ничего не отправляем
+    }
+
+    setLoading(true);
+
     const params = new URLSearchParams();
     params.append('username', username);
     params.append('password', password);
@@ -35,16 +40,32 @@ const LoginPage = ({ onLogin }) => {
         }
       });
 
-      // Успешный вход
       localStorage.setItem('token', res.data.access_token);
+
+      // Сброс истории (чтобы при логине кидало на главную)
+      window.history.replaceState(null, '', '/');
       onLogin();
+
     } catch (err) {
       console.error(err);
-      // Пытаемся достать текст ошибки от сервера (например, "Incorrect username")
-      if (err.response && err.response.data && err.response.data.detail) {
-         setError(err.response.data.detail);
+
+      // 2. БЕЗОПАСНАЯ ОБРАБОТКА ОШИБОК
+      if (err.response) {
+          const data = err.response.data;
+
+          // Если ошибка 422 (Unprocessable Entity) - это обычно массив
+          if (err.response.status === 422) {
+              setError('Ошибка: Поля заполнены неверно');
+          }
+          // Если сервер прислал текстовое сообщение об ошибке
+          else if (data && typeof data.detail === 'string') {
+             setError(data.detail);
+          }
+          else {
+             setError('Неверный логин или пароль');
+          }
       } else {
-         setError('Неверный логин или пароль');
+         setError('Ошибка соединения с сервером');
       }
     } finally {
       setLoading(false);
