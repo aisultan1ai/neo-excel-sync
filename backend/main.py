@@ -3,11 +3,16 @@ import os
 import json
 import logging
 import re
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.responses import FileResponse
 import pandas as pd
+
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+import bcrypt  # <--- ДОБАВИТЬ
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
 
 # Импорт вашей старой логики
 import processor
@@ -21,6 +26,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 log = logging.getLogger(__name__)
 
 app = FastAPI(title="NeoExcelSync API")
+
+origins = [
+    "http://localhost:5173",  # Адрес вашего React приложения
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Настройка CORS
 app.add_middleware(
@@ -436,3 +455,56 @@ def update_client_details(
     if not success:
         raise HTTPException(status_code=400, detail=msg)
     return {"status": "success", "message": msg}
+
+
+# НАСТРОЙКИ БЕЗОПАСНОСТИ
+SECRET_KEY = "super-secret-key-change-this"  # Придумайте сложный ключ
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 часа
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+def verify_password(plain_password, hashed_password):
+    # Преобразуем введенный пароль в байты
+    plain_password_bytes = plain_password.encode('utf-8')
+    # Преобразуем хеш из базы в байты (если он пришел строкой)
+    hashed_password_bytes = hashed_password.encode('utf-8')
+
+    # Проверяем через bcrypt напрямую
+    return bcrypt.checkpw(plain_password_bytes, hashed_password_bytes)
+
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+# --- НОВЫЙ ENDPOINT ДЛЯ ВХОДА ---
+@app.post("/api/token")
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    print(f"Попытка входа: {form_data.username} / {form_data.password}")  # <--- ОТЛАДКА
+
+    # Ищем пользователя
+    user = database_manager.get_user_by_username(form_data.username)
+
+    if not user:
+        print("Пользователь не найден в БД")  # <--- ОТЛАДКА
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+
+    # user[0]=id, user[1]=username, user[2]=hash
+    # Проверяем пароль
+    if not verify_password(form_data.password, user[2]):
+        print("Пароль не совпал")  # <--- ОТЛАДКА
+        raise HTTPException(status_code=401, detail="Неверный пароль")
+
+    access_token = create_access_token(data={"sub": user[1]})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+# ВАЖНО: Добавьте Depends в импорты fastapi:
+from fastapi import FastAPI, Depends, HTTPException, status

@@ -27,13 +27,14 @@ def get_db_connection():
 
 
 def init_database():
-    """Создает таблицу клиентов в PostgreSQL."""
+    """Создает таблицы клиентов и пользователей в PostgreSQL."""
     conn = get_db_connection()
     if not conn:
         return
     try:
         cursor = conn.cursor()
-        # В Postgres используем SERIAL для авто-инкремента вместо AUTOINCREMENT
+
+        # 1. Таблица КЛИЕНТОВ (Ваш старый код)
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS clients
                        (
@@ -57,8 +58,29 @@ def init_database():
                            TEXT
                        )
                        ''')
+
+        # 2. Таблица ПОЛЬЗОВАТЕЛЕЙ (НОВАЯ)
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS users
+                       (
+                           id
+                           SERIAL
+                           PRIMARY
+                           KEY,
+                           username
+                           VARCHAR
+                       (
+                           50
+                       ) UNIQUE NOT NULL,
+                           password_hash VARCHAR
+                       (
+                           255
+                       ) NOT NULL
+                           )
+                       ''')
+
         conn.commit()
-        log.info("Таблица clients проверена/создана.")
+        log.info("Таблицы clients и users проверены/созданы.")
     except Exception as e:
         log.error(f"Ошибка инициализации БД: {e}")
     finally:
@@ -200,3 +222,20 @@ def delete_client(client_id):
     except Exception as e:
         log.error(f"Ошибка удаления: {e}")
         return False, str(e)
+
+def get_user_by_username(username):
+    """Ищет пользователя по логину для авторизации."""
+    conn = get_db_connection()  # <--- ДОЛЖНО БЫТЬ ТАК
+    if not conn:
+        return None
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, password_hash FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+        return user
+    except Exception as e:
+        log.error(f"Ошибка поиска пользователя: {e}")
+        return None
+    finally:
+        conn.close()

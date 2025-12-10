@@ -1,17 +1,17 @@
 // frontend/src/App.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { FileDiff, Settings, FileSpreadsheet, Layers } from 'lucide-react';
-// --- НОВЫЕ ИМПОРТЫ ---
+import { FileDiff, Settings, FileSpreadsheet, Layers } from 'lucide-react'; // УБРАЛИ LogOut, он тут не нужен
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-// ---------------------
 import './App.css';
 
+// Импорт страниц
 import SverkaPage from './pages/SverkaPage';
 import SplitsPage from './pages/SplitsPage';
 import SettingsPage from './pages/SettingsPage';
 import ReportsPage from './pages/ReportsPage';
+import LoginPage from './pages/LoginPage';
 
 const NavButton = ({ to, icon: Icon, label }) => {
   const location = useLocation();
@@ -25,10 +25,45 @@ const NavButton = ({ to, icon: Icon, label }) => {
 };
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // --- ЛОГИКА АВТОРИЗАЦИИ ---
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) setIsAuthenticated(true);
+    setIsLoading(false);
+  }, []);
+
+  // const handleLogin = () => setIsAuthenticated(true);
+    const handleLogin = () => {
+    // ЭТА СТРОКА СБРАСЫВАЕТ АДРЕС НА ГЛАВНУЮ СТРАНИЦУ
+    window.history.replaceState(null, '', '/');
+
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setIsAuthenticated(false);
+  };
+
+  if (isLoading) return <div>Загрузка...</div>;
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginPage onLogin={handleLogin} />
+        <ToastContainer position="bottom-right" />
+      </>
+    );
+  }
+
   return (
     <Router>
       <div className="app-container">
-        {/* ЛЕВОЕ МЕНЮ */}
+
+        {/* САЙДБАР */}
         <aside className="sidebar">
           <div className="logo-area">
             <h2>NeoExcelSync</h2>
@@ -39,35 +74,29 @@ function App() {
             <NavButton to="/splits" icon={Layers} label="Сплиты" />
             <NavButton to="/reports" icon={FileSpreadsheet} label="Отчеты" />
 
-            <div className="spacer" />
+            {/* Распорка (всё, что ниже неё, прижмется к низу экрана) */}
+            <div className="spacer" style={{ flex: 1 }} />
 
+            {/* Настройки теперь в самом низу меню */}
             <NavButton to="/settings" icon={Settings} label="Настройки" />
+
+            {/* КНОПКИ ВЫХОДА ЗДЕСЬ БОЛЬШЕ НЕТ (она теперь внутри страницы настроек) */}
           </nav>
         </aside>
 
-        {/* ПРАВАЯ ЧАСТЬ (КОНТЕНТ) */}
+        {/* ПРАВАЯ ЧАСТЬ */}
         <main className="content-area">
           <Routes>
             <Route path="/" element={<SverkaPage />} />
             <Route path="/splits" element={<SplitsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+
+            {/* ВАЖНО: Мы передаем функцию onLogout внутрь страницы настроек */}
+            <Route path="/settings" element={<SettingsPage onLogout={handleLogout} />} />
           </Routes>
         </main>
 
-        {/* --- КОНТЕЙНЕР ДЛЯ УВЕДОМЛЕНИЙ (ВНИЗУ СПРАВА) --- */}
-        <ToastContainer
-            position="bottom-right"
-            autoClose={3000}
-            hideProgressBar={false}
-            newestOnTop={false}
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="light"
-        />
+        <ToastContainer position="bottom-right" theme="light" />
       </div>
     </Router>
   );
