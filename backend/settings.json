@@ -75,7 +75,7 @@
         "7990"
     ],
     "split_check_enabled": true,
-    "split_list_path": "data\\test_splits.xlsx",
+    "split_list_path": "data\\Декабрь 2.xlsx",
     "split_list_isin_col": "ID_ISIN",
     "daily_file_security_col": "Ценная бумага",
     "split_daily_qty_col": "Количество"

@@ -1,8 +1,10 @@
-// frontend/src/pages/ReportsPage.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, UserPlus, Trash2, Mail, FileText, Download, X, Edit } from 'lucide-react';
-import { toast } from 'react-toastify'; // <-- ВАЖНЫЙ ИМПОРТ
+import {
+  Search, UserPlus, Trash2, Mail, FileText,
+  Download, X, Edit, Lock, ShieldAlert
+} from 'lucide-react';
+import { toast } from 'react-toastify';
 
 const STATUS_COLORS = {
   "Нет": "gray",
@@ -17,45 +19,75 @@ const STATUS_DB_MAP = {
 };
 
 const ReportsPage = () => {
+  // --- СОСТОЯНИЕ АВТОРИЗАЦИИ ---
+  const [userDept, setUserDept] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+
+  // --- СОСТОЯНИЕ СТРАНИЦЫ ---
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [clientDetails, setClientDetails] = useState(null);
   const [loadingList, setLoadingList] = useState(false);
 
-  // --- МОДАЛКА ДОБАВЛЕНИЯ ---
+  // Модалки
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newClient, setNewClient] = useState({
-      name: "", email: "", account: "", folder_path: ""
-  });
-
-  // --- МОДАЛКА РЕДАКТИРОВАНИЯ ---
+  const [newClient, setNewClient] = useState({ name: "", email: "", account: "", folder_path: "" });
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingClient, setEditingClient] = useState({
-      name: "", email: "", account: "", folder_path: ""
-  });
+  const [editingClient, setEditingClient] = useState({ name: "", email: "", account: "", folder_path: "" });
 
-  // Загрузка списка
-  const fetchClients = async (searchTerm = "") => {
+  // 1. ПРОВЕРКА ПРАВ ДОСТУПА
+  useEffect(() => {
+    checkPermission();
+  }, []);
+
+  const checkPermission = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get('http://127.0.0.1:8000/api/profile', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        setUserDept(res.data.department);
+        setIsAdmin(res.data.is_admin);
+
+        // Если доступ есть - сразу грузим клиентов
+        if (res.data.department === 'Back Office' || res.data.is_admin) {
+            fetchClients("", token);
+        }
+    } catch (error) {
+        console.error("Ошибка проверки прав:", error);
+    } finally {
+        setLoadingAuth(false);
+    }
+  };
+
+  // Загрузка списка (вызывается только если есть доступ)
+  const fetchClients = async (searchTerm = "", tokenOverride = null) => {
     setLoadingList(true);
     try {
-      const res = await axios.get(`http://127.0.0.1:8000/api/clients?search=${searchTerm}`);
+      const token = tokenOverride || localStorage.getItem('token');
+      const res = await axios.get(`http://127.0.0.1:8000/api/clients?search=${searchTerm}`, {
+          headers: { Authorization: `Bearer ${token}` }
+      });
       setClients(res.data);
     } catch (e) {
       console.error(e);
-      // toast.error("Ошибка загрузки списка клиентов"); // Можно не спамить этим, если просто инет моргнул
     } finally {
       setLoadingList(false);
     }
   };
 
-  useEffect(() => { fetchClients(); }, []);
-
+  // Поиск (Debounce)
   useEffect(() => {
-    const timer = setTimeout(() => fetchClients(search), 300);
-    return () => clearTimeout(timer);
+    // Ищем только если доступ разрешен
+    if ((userDept === 'Back Office' || isAdmin) && !loadingAuth) {
+        const timer = setTimeout(() => fetchClients(search), 300);
+        return () => clearTimeout(timer);
+    }
   }, [search]);
 
+  // Загрузка деталей
   useEffect(() => {
     if (!selectedId) {
         setClientDetails(null);
@@ -66,17 +98,17 @@ const ReportsPage = () => {
 
   const fetchDetails = async (id) => {
       try {
-          const res = await axios.get(`http://127.0.0.1:8000/api/clients/${id}`);
+          const token = localStorage.getItem('token');
+          const res = await axios.get(`http://127.0.0.1:8000/api/clients/${id}`, {
+              headers: { Authorization: `Bearer ${token}` }
+          });
           setClientDetails(res.data);
       } catch (e) { console.error(e); }
   };
 
-  // --- ФУНКЦИЯ ДОБАВЛЕНИЯ ---
+  // --- CRUD ОПЕРАЦИИ ---
   const handleAddClient = async () => {
-      if (!newClient.name.trim()) {
-          toast.warning("Введите имя клиента!"); // <-- УВЕДОМЛЕНИЕ
-          return;
-      }
+      if (!newClient.name.trim()) { toast.warning("Введите имя"); return; }
       const formData = new FormData();
       formData.append('name', newClient.name);
       formData.append('email', newClient.email);
@@ -84,18 +116,33 @@ const ReportsPage = () => {
       formData.append('folder_path', newClient.folder_path);
 
       try {
-          await axios.post('http://127.0.0.1:8000/api/clients', formData);
+          const token = localStorage.getItem('token');
+          await axios.post('http://127.0.0.1:8000/api/clients', formData, { headers: { Authorization: `Bearer ${token}` }});
           setShowAddModal(false);
           setNewClient({ name: "", email: "", account: "", folder_path: "" });
           fetchClients(search);
-          toast.success("Клиент успешно добавлен!"); // <-- УСПЕХ
-      } catch (e) {
-          const msg = e.response?.data?.detail || e.message;
-          toast.error("Ошибка добавления: " + msg); // <-- ОШИБКА
-      }
+          toast.success("Клиент добавлен");
+      } catch (e) { toast.error("Ошибка добавления"); }
   };
 
-  // --- ФУНКЦИЯ РЕДАКТИРОВАНИЯ (ПОДГОТОВКА) ---
+  const handleUpdateClient = async () => {
+      if (!editingClient.name.trim()) return;
+      const formData = new FormData();
+      formData.append('name', editingClient.name);
+      formData.append('email', editingClient.email);
+      formData.append('account', editingClient.account);
+      formData.append('folder_path', editingClient.folder_path);
+
+      try {
+          const token = localStorage.getItem('token');
+          await axios.put(`http://127.0.0.1:8000/api/clients/${selectedId}`, formData, { headers: { Authorization: `Bearer ${token}` }});
+          setShowEditModal(false);
+          fetchDetails(selectedId);
+          fetchClients(search);
+          toast.success("Обновлено");
+      } catch (e) { toast.error("Ошибка обновления"); }
+  };
+
   const openEditModal = () => {
       if (!clientDetails) return;
       setEditingClient({
@@ -107,104 +154,109 @@ const ReportsPage = () => {
       setShowEditModal(true);
   };
 
-  // --- ФУНКЦИЯ СОХРАНЕНИЯ РЕДАКТИРОВАНИЯ ---
-  const handleUpdateClient = async () => {
-      if (!editingClient.name.trim()) {
-          toast.warning("Имя не может быть пустым");
-          return;
-      }
-
-      const formData = new FormData();
-      formData.append('name', editingClient.name);
-      formData.append('email', editingClient.email);
-      formData.append('account', editingClient.account);
-      formData.append('folder_path', editingClient.folder_path);
-
-      try {
-          await axios.put(`http://127.0.0.1:8000/api/clients/${selectedId}`, formData);
-          setShowEditModal(false);
-          fetchDetails(selectedId);
-          fetchClients(search);
-          toast.success("Данные клиента обновлены!"); // <-- УСПЕХ
-      } catch (e) {
-          toast.error("Ошибка обновления: " + (e.response?.data?.detail || e.message));
-      }
-  };
-
   const handleStatusChange = async (newStatusDisplay) => {
     const dbStatus = Object.keys(STATUS_DB_MAP).find(key => STATUS_DB_MAP[key] === newStatusDisplay);
     try {
-        await axios.put(`http://127.0.0.1:8000/api/clients/${selectedId}/status`, { status: dbStatus });
+        const token = localStorage.getItem('token');
+        await axios.put(`http://127.0.0.1:8000/api/clients/${selectedId}/status`, { status: dbStatus }, { headers: { Authorization: `Bearer ${token}` }});
         setClientDetails(prev => ({...prev, status: dbStatus}));
         fetchClients(search);
-        toast.info(`Статус изменен на "${newStatusDisplay}"`); // <-- ИНФО
-    } catch (e) {
-        toast.error("Ошибка обновления статуса");
-    }
+        toast.info(`Статус: ${newStatusDisplay}`);
+    } catch (e) { toast.error("Ошибка"); }
   };
 
-  const handleDeleteFile = async (filename) => {
-      if(!confirm(`Удалить файл ${filename}?`)) return;
+  const handleDeleteClient = async () => {
+      if(!confirm("Удалить клиента?")) return;
       try {
-          await axios.delete(`http://127.0.0.1:8000/api/clients/${selectedId}/files/${filename}`);
+          const token = localStorage.getItem('token');
+          await axios.delete(`http://127.0.0.1:8000/api/clients/${selectedId}`, { headers: { Authorization: `Bearer ${token}` }});
+          setSelectedId(null);
+          setClientDetails(null);
+          fetchClients(search);
+          toast.success("Удалено");
+      } catch (e) { toast.error("Ошибка"); }
+  };
+
+  // Файловые операции (без изменений логики, только добавил headers)
+  const handleDeleteFile = async (filename) => {
+      if(!confirm(`Удалить ${filename}?`)) return;
+      try {
+          const token = localStorage.getItem('token');
+          await axios.delete(`http://127.0.0.1:8000/api/clients/${selectedId}/files/${filename}`, { headers: { Authorization: `Bearer ${token}` }});
           fetchDetails(selectedId);
           toast.success("Файл удален");
-      } catch (e) {
-          toast.error("Ошибка удаления файла");
-      }
+      } catch (e) { toast.error("Ошибка"); }
   };
 
   const handleDownloadFile = async (filename) => {
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/api/clients/${selectedId}/files/${filename}`, { responseType: 'blob' });
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`http://127.0.0.1:8000/api/clients/${selectedId}/files/${filename}`, {
+            responseType: 'blob',
+            headers: { Authorization: `Bearer ${token}` }
+        });
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const link = document.createElement('a');
         link.href = url;
         link.setAttribute('download', filename);
         document.body.appendChild(link);
         link.click();
-        // toast.info("Скачивание началось..."); // Можно раскомментировать
-      } catch (e) {
-          toast.error("Ошибка скачивания файла");
-      }
+      } catch (e) { toast.error("Ошибка скачивания"); }
   };
 
   const handleFileUpload = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
       const formData = new FormData();
       formData.append('file', file);
-
       try {
-          await axios.post(`http://127.0.0.1:8000/api/clients/${selectedId}/upload`, formData);
+          const token = localStorage.getItem('token');
+          await axios.post(`http://127.0.0.1:8000/api/clients/${selectedId}/upload`, formData, { headers: { Authorization: `Bearer ${token}` }});
           fetchDetails(selectedId);
-          toast.success("Файл загружен!");
-      } catch (e) {
-          toast.error("Ошибка загрузки файла");
-      }
+          toast.success("Загружено");
+      } catch (e) { toast.error("Ошибка загрузки"); }
   };
 
   const handleEmail = () => {
-      if(!clientDetails?.email) return toast.warning("Email не указан у этого клиента");
+      if(!clientDetails?.email) return toast.warning("Email не указан");
       window.location.href = `mailto:${clientDetails.email}?subject=Отчеты`;
   };
 
-  const handleDeleteClient = async () => {
-      if(!confirm("Удалить клиента и все его данные? Это действие необратимо.")) return;
-      try {
-          await axios.delete(`http://127.0.0.1:8000/api/clients/${selectedId}`);
-          setSelectedId(null);
-          setClientDetails(null);
-          fetchClients(search);
-          toast.success("Клиент удален");
-      } catch (e) {
-          toast.error("Ошибка удаления: " + e.message);
-      }
-  };
+  // --- РЕНДЕР: ЗАГРУЗКА ---
+  if (loadingAuth) {
+      return <div style={{padding: 40, textAlign: 'center'}}>Проверка прав доступа...</div>;
+  }
 
+  // --- РЕНДЕР: ДОСТУП ЗАПРЕЩЕН ---
+  // Показываем если НЕ (Back Office ИЛИ Admin)
+  if (userDept !== 'Back Office' && !isAdmin) {
+      return (
+          <div style={{
+              height: '80vh',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#64748b'
+          }}>
+              <div style={{background: '#fee2e2', padding: '20px', borderRadius: '50%', marginBottom: '20px'}}>
+                  <Lock size={48} color="#ef4444" />
+              </div>
+              <h2 style={{color: '#1e293b', marginBottom: '10px'}}>Доступ ограничен</h2>
+              <p style={{textAlign: 'center', maxWidth: '400px'}}>
+                  Раздел <b>"Отчеты"</b> доступен только для сотрудников департамента
+                  <span style={{background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', marginLeft: '5px', fontWeight: 600}}>Back Office</span>.
+              </p>
+              <div style={{marginTop: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px'}}>
+                  <ShieldAlert size={16}/> Ваш отдел: <b>{userDept}</b>
+              </div>
+          </div>
+      );
+  }
+
+  // --- РЕНДЕР: ОСНОВНОЙ КОНТЕНТ (ЕСЛИ ДОСТУП ЕСТЬ) ---
   return (
-    <div style={{display: 'flex', height: '85vh', gap: '20px', position: 'relative'}}>
+    <div style={{display: 'flex', height: '95vh', gap: '20px', position: 'relative'}}>
 
       {/* ЛЕВАЯ КОЛОНКА */}
       <div className="card" style={{width: '300px', display: 'flex', flexDirection: 'column', padding: '15px'}}>

@@ -1,17 +1,19 @@
-// frontend/src/App.jsx
+
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { FileDiff, Settings, FileSpreadsheet, Layers } from 'lucide-react'; // УБРАЛИ LogOut, он тут не нужен
+import { FileDiff, Settings, FileSpreadsheet, Layers, Users, User, LayoutDashboard } from 'lucide-react'; // УБРАЛИ LogOut, он тут не нужен
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 
-// Импорт страниц
+import DashboardPage from './pages/DashboardPage';
 import SverkaPage from './pages/SverkaPage';
 import SplitsPage from './pages/SplitsPage';
 import SettingsPage from './pages/SettingsPage';
 import ReportsPage from './pages/ReportsPage';
 import LoginPage from './pages/LoginPage';
+import DepartmentsPage  from "./pages/DepartmentsPage.jsx";
+import ProfilePage from './pages/ProfilePage';
 
 const NavButton = ({ to, icon: Icon, label }) => {
   const location = useLocation();
@@ -71,12 +73,16 @@ function App() {
           </div>
 
           <nav className="nav-menu">
-            <NavButton to="/" icon={FileDiff} label="Сверка" />
+              <NavButton to="/" icon={LayoutDashboard} label="Главная" />
+            <NavButton to="/sverka" icon={FileDiff} label="Сверка" />
             <NavButton to="/splits" icon={Layers} label="Сплиты" />
             <NavButton to="/reports" icon={FileSpreadsheet} label="Отчеты" />
+              <NavButton to="/departments" icon={Users} label="Департаменты" />
 
             {/* Распорка (всё, что ниже неё, прижмется к низу экрана) */}
             <div className="spacer" style={{ flex: 1 }} />
+
+              <NavButton to="/profile" icon={User} label="Профиль" />
 
             {/* Настройки теперь в самом низу меню */}
             <NavButton to="/settings" icon={Settings} label="Настройки" />
@@ -88,12 +94,15 @@ function App() {
         {/* ПРАВАЯ ЧАСТЬ */}
         <main className="content-area">
           <Routes>
-            <Route path="/" element={<SverkaPage />} />
+              <Route path="/" element={<DashboardPage />} />
+            <Route path="/sverka" element={<SverkaPage />} />
             <Route path="/splits" element={<SplitsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/departments" element={<DepartmentsPage />} />
+              <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
 
             {/* ВАЖНО: Мы передаем функцию onLogout внутрь страницы настроек */}
-            <Route path="/settings" element={<SettingsPage onLogout={handleLogout} />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
 

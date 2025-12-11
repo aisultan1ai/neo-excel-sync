@@ -7,12 +7,11 @@ import logging
 log = logging.getLogger(__name__)
 
 # НАСТРОЙКИ ПОДКЛЮЧЕНИЯ
-# В реальном проекте эти данные лучше хранить в .env файле
 DB_CONFIG = {
-    "dbname": "neo_db",  # Имя базы данных
-    "user": "postgres",  # Ваше имя пользователя в Postgres (обычно postgres)
-    "password": "aisu123",  # ВАШ ПАРОЛЬ ОТ POSTGRES
-    "host": "localhost",  # Адрес сервера (localhost, если база на том же компе)
+    "dbname": "neo_db",
+    "user": "postgres",
+    "password": "aisu123",  # ВАШ ПАРОЛЬ
+    "host": "localhost",
     "port": 5432
 }
 
@@ -27,14 +26,14 @@ def get_db_connection():
 
 
 def init_database():
-    """Создает таблицы клиентов и пользователей в PostgreSQL."""
+    """Создает таблицы и обновляет схему БД."""
     conn = get_db_connection()
     if not conn:
         return
     try:
         cursor = conn.cursor()
 
-        # 1. Таблица КЛИЕНТОВ (Ваш старый код)
+        # 1. Таблица CLIENTS
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS clients
                        (
@@ -59,7 +58,7 @@ def init_database():
                        )
                        ''')
 
-        # 2. Таблица ПОЛЬЗОВАТЕЛЕЙ (НОВАЯ)
+        # 2. Таблица USERS
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS users
                        (
@@ -75,72 +74,177 @@ def init_database():
                            password_hash VARCHAR
                        (
                            255
-                       ) NOT NULL
+                       ) NOT NULL,
+                           department VARCHAR
+                       (
+                           50
+                       ) DEFAULT 'Back Office',
+                           is_admin BOOLEAN DEFAULT FALSE
+                           )
+                       ''')
+
+        # Миграции для users
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(50) DEFAULT 'Back Office'")
+        except Exception:
+            conn.rollback()
+
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE")
+        except Exception:
+            conn.rollback()
+
+        # 2.1 Таблица DEPARTMENTS (Отделы)
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS departments
+                       (
+                           id
+                           SERIAL
+                           PRIMARY
+                           KEY,
+                           name
+                           VARCHAR
+                       (
+                           50
+                       ) UNIQUE NOT NULL
+                           )
+                       ''')
+
+        # Заполняем дефолтными отделами, если таблица пустая
+        cursor.execute("SELECT COUNT(*) FROM departments")
+        if cursor.fetchone()[0] == 0:
+            default_depts = [("Back Office",), ("Trading",), ("Бухгалтерия",), ("Sales",)]
+            cursor.executemany("INSERT INTO departments (name) VALUES (%s)", default_depts)
+
+        # 3. Таблица TASKS
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS tasks
+                       (
+                           id
+                           SERIAL
+                           PRIMARY
+                           KEY,
+                           title
+                           TEXT
+                           NOT
+                           NULL,
+                           description
+                           TEXT,
+                           from_user_id
+                           INTEGER,
+                           to_department
+                           TEXT
+                           NOT
+                           NULL,
+                           status
+                           TEXT
+                           DEFAULT
+                           'Open',
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           FOREIGN
+                           KEY
+                       (
+                           from_user_id
+                       ) REFERENCES users
+                       (
+                           id
+                       )
+                           )
+                       ''')
+
+        # 4. Таблица COMMENTS
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS comments
+                       (
+                           id
+                           SERIAL
+                           PRIMARY
+                           KEY,
+                           task_id
+                           INTEGER,
+                           user_id
+                           INTEGER,
+                           content
+                           TEXT
+                           NOT
+                           NULL,
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           FOREIGN
+                           KEY
+                       (
+                           task_id
+                       ) REFERENCES tasks
+                       (
+                           id
+                       ) ON DELETE CASCADE,
+                           FOREIGN KEY
+                       (
+                           user_id
+                       ) REFERENCES users
+                       (
+                           id
+                       )
                            )
                        ''')
 
         conn.commit()
-        log.info("Таблицы clients и users проверены/созданы.")
+        log.info("БД инициализирована успешно.")
     except Exception as e:
         log.error(f"Ошибка инициализации БД: {e}")
+        conn.rollback()
     finally:
         conn.close()
 
 
-# --- ФУНКЦИИ ПОИСКА И ПРОСМОТРА ---
+# --- ФУНКЦИИ ПОИСКА И ПРОСМОТРА (КЛИЕНТЫ) ---
 
 def search_clients(search_term=""):
     conn = get_db_connection()
     if not conn: return []
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        if search_term:
+            term = f"%{search_term}%"
+            cursor.execute(
+                "SELECT id, name, status FROM clients WHERE name ILIKE %s OR account_number ILIKE %s ORDER BY name",
+                (term, term))
+        else:
+            cursor.execute("SELECT id, name, status FROM clients ORDER BY name")
 
-    # Используем RealDictCursor, чтобы получать результат как словарь, а не кортеж
-    cursor = conn.cursor(cursor_factory=RealDictCursor)  # !! Важно для совместимости с кодом
-
-    # В Postgres LIKE чувствителен к регистру, ILIKE - нет (лучше для поиска)
-    if search_term:
-        term = f"%{search_term}%"
-        cursor.execute(
-            "SELECT id, name, status FROM clients WHERE name ILIKE %s OR account_number ILIKE %s ORDER BY name",
-            (term, term))
-    else:
-        cursor.execute("SELECT id, name, status FROM clients ORDER BY name")
-
-    # Преобразуем RealDictRow в обычные кортежи, так как ваш main.py ожидает кортежи (id, name, status)
-    # Или можно переписать main.py, но проще адаптировать тут:
-    results_dict = cursor.fetchall()
-    conn.close()
-
-    # Конвертируем обратно в формат списка кортежей для совместимости с текущим main.py
-    results = [(row['id'], row['name'], row['status']) for row in results_dict]
-    return results
+        results_dict = cursor.fetchall()
+        return [(row['id'], row['name'], row['status']) for row in results_dict]
+    finally:
+        conn.close()
 
 
 def get_client_details(client_id):
     conn = get_db_connection()
     if not conn: return None
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM clients WHERE id = %s", (client_id,))
+        row = cursor.fetchone()
+        if row: return dict(row)
+        return None
+    finally:
+        conn.close()
 
-    cursor.execute("SELECT * FROM clients WHERE id = %s", (client_id,))
-    row = cursor.fetchone()
-    conn.close()
 
-    if row:
-        return dict(row)
-    return None
-
-
-# --- ФУНКЦИИ ДОБАВЛЕНИЯ И ОБНОВЛЕНИЯ ---
+# --- ФУНКЦИИ УПРАВЛЕНИЯ КЛИЕНТАМИ ---
 
 def add_client(name, email, account, folder_path_override=None):
-    if not name:
-        return False, "Имя клиента обязательно."
+    if not name: return False, "Имя клиента обязательно."
 
-    # Логика папок остается прежней (храним на сервере)
     final_folder_path = folder_path_override
     if not final_folder_path:
         base_dir = os.path.join(os.getcwd(), "client_reports")
-        if not os.path.exists(base_dir):
-            os.makedirs(base_dir)
+        os.makedirs(base_dir, exist_ok=True)
         safe_name = "".join([c for c in name if c.isalpha() or c.isdigit() or c == ' ']).rstrip()
         final_folder_path = os.path.join(base_dir, safe_name)
 
@@ -150,25 +254,26 @@ def add_client(name, email, account, folder_path_override=None):
         except OSError as e:
             return False, f"Ошибка создания папки: {e}"
 
+    conn = get_db_connection()
+    if not conn: return False, "Ошибка БД"
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
-        # В Postgres используем %s вместо ?
         cursor.execute('''
                        INSERT INTO clients (name, email, account_number, folder_path, status)
                        VALUES (%s, %s, %s, %s, 'gray')
                        ''', (name, email, account, final_folder_path))
         conn.commit()
-        conn.close()
         return True, "Клиент успешно добавлен."
     except Exception as e:
-        log.error(f"Ошибка добавления в БД: {e}")
         return False, f"Ошибка БД: {e}"
+    finally:
+        conn.close()
 
 
 def update_client(client_id, name, email, account, folder_path):
+    conn = get_db_connection()
+    if not conn: return False, "Ошибка БД"
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
                        UPDATE clients
@@ -179,63 +284,344 @@ def update_client(client_id, name, email, account, folder_path):
                        WHERE id = %s
                        ''', (name, email, account, folder_path, client_id))
         conn.commit()
-        conn.close()
-        return True, "Данные клиента обновлены."
+        return True, "Данные обновлены."
     except Exception as e:
-        log.error(f"Ошибка обновления клиента: {e}")
         return False, str(e)
+    finally:
+        conn.close()
 
 
 def update_client_status(client_id, new_status):
+    conn = get_db_connection()
+    if not conn: return False
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("UPDATE clients SET status = %s WHERE id = %s", (new_status, client_id))
         conn.commit()
-        conn.close()
         return True
     except Exception as e:
-        log.error(f"Ошибка смены статуса: {e}")
         return False
+    finally:
+        conn.close()
 
 
 def reset_all_client_statuses():
+    conn = get_db_connection()
+    if not conn: return False, "Ошибка БД"
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("UPDATE clients SET status = 'gray'")
         conn.commit()
-        conn.close()
-        return True, "Все статусы сброшены."
+        return True, "Статусы сброшены."
     except Exception as e:
-        return False, f"Ошибка: {e}"
+        return False, str(e)
+    finally:
+        conn.close()
 
 
 def delete_client(client_id):
+    conn = get_db_connection()
+    if not conn: return False, "Ошибка БД"
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM clients WHERE id = %s", (client_id,))
         conn.commit()
-        conn.close()
         return True, "Клиент удален."
     except Exception as e:
-        log.error(f"Ошибка удаления: {e}")
         return False, str(e)
+    finally:
+        conn.close()
+
+
+# --- ПОЛЬЗОВАТЕЛИ И АВТОРИЗАЦИЯ ---
 
 def get_user_by_username(username):
-    """Ищет пользователя по логину для авторизации."""
-    conn = get_db_connection()  # <--- ДОЛЖНО БЫТЬ ТАК
-    if not conn:
-        return None
-
+    conn = get_db_connection()
+    if not conn: return None
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, password_hash FROM users WHERE username = %s", (username,))
-        user = cursor.fetchone()
-        return user
+        cursor.execute("SELECT id, username, password_hash, department, is_admin FROM users WHERE username = %s",
+                       (username,))
+        return cursor.fetchone()
+    finally:
+        conn.close()
+
+
+# --- ЗАДАЧИ ---
+
+def create_task(title, description, from_user_id, to_department):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+                       INSERT INTO tasks (title, description, from_user_id, to_department)
+                       VALUES (%s, %s, %s, %s) RETURNING id
+                       """, (title, description, from_user_id, to_department))
+        task_id = cursor.fetchone()[0]
+        conn.commit()
+        return task_id
     except Exception as e:
-        log.error(f"Ошибка поиска пользователя: {e}")
+        log.error(f"Create task error: {e}")
         return None
+    finally:
+        conn.close()
+
+
+def get_tasks_by_dept(department):
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+                       SELECT t.*, u.username as author_name, u.department as author_dept
+                       FROM tasks t
+                                LEFT JOIN users u ON t.from_user_id = u.id
+                       WHERE t.to_department = %s
+                       ORDER BY t.created_at DESC
+                       """, (department,))
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+
+def update_task_status(task_id, new_status):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE tasks SET status = %s WHERE id = %s", (new_status, task_id))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def update_task_content(task_id, title, description):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE tasks SET title = %s, description = %s WHERE id = %s", (title, description, task_id))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def delete_task(task_id):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM comments WHERE task_id = %s", (task_id,))
+        cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+# --- КОММЕНТАРИИ ---
+
+def add_comment(task_id, user_id, content):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO comments (task_id, user_id, content) VALUES (%s, %s, %s)",
+                       (task_id, user_id, content))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def get_comments(task_id):
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+                       SELECT c.*, u.username, u.department
+                       FROM comments c
+                                JOIN users u ON c.user_id = u.id
+                       WHERE c.task_id = %s
+                       ORDER BY c.created_at ASC
+                       """, (task_id,))
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+
+# --- ПРОФИЛЬ И ДАШБОРД ---
+
+def update_user_password(user_id, new_password_hash):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET password_hash = %s WHERE id = %s", (new_password_hash, user_id))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def get_user_stats(user_id):
+    conn = get_db_connection()
+    if not conn: return {"created": 0, "completed": 0}
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM tasks WHERE from_user_id = %s", (user_id,))
+        created = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM tasks WHERE from_user_id = %s AND status = 'Done'", (user_id,))
+        completed = cursor.fetchone()[0]
+        return {"created": created, "completed": completed}
+    finally:
+        conn.close()
+
+
+def get_dashboard_stats():
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM tasks")
+        total_tasks = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM tasks WHERE status != 'Done'")
+        active_tasks = cursor.fetchone()[0]
+
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+                       SELECT t.title, t.status, t.created_at, u.username
+                       FROM tasks t
+                                JOIN users u ON t.from_user_id = u.id
+                       ORDER BY t.created_at DESC LIMIT 5
+                       """)
+        recent = cursor.fetchall()
+        return {"users": total_users, "total_tasks": total_tasks, "active_tasks": active_tasks,
+                "recent_tasks": [dict(r) for r in recent]}
+    finally:
+        conn.close()
+
+
+# --- АДМИН ПАНЕЛЬ (ПОЛЬЗОВАТЕЛИ) ---
+
+def get_all_users():
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT id, username, department, is_admin FROM users ORDER BY id")
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+
+def create_new_user(username, password_hash, department, is_admin=False):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO users (username, password_hash, department, is_admin) VALUES (%s, %s, %s, %s)",
+            (username, password_hash, department, is_admin)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        log.error(f"Error creating user: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def delete_user(user_id):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM comments WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM tasks WHERE from_user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+# --- АДМИН ПАНЕЛЬ (ОТДЕЛЫ) ---
+
+def get_all_departments():
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM departments ORDER BY id")
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+
+def add_department(name):
+    conn = get_db_connection()
+    if not conn: return False, "Ошибка БД"
+    try:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO departments (name) VALUES (%s)", (name,))
+        conn.commit()
+        return True, "Отдел создан"
+    except Exception as e:
+        return False, f"Ошибка: {e}"
+    finally:
+        conn.close()
+
+
+def delete_department(dept_id):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM departments WHERE id = %s", (dept_id,))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def rename_department(dept_id, new_name):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM departments WHERE id = %s", (dept_id,))
+        res = cursor.fetchone()
+        if not res: return False
+        old_name = res[0]
+
+        cursor.execute("UPDATE departments SET name = %s WHERE id = %s", (new_name, dept_id))
+        cursor.execute("UPDATE users SET department = %s WHERE department = %s", (new_name, old_name))
+        cursor.execute("UPDATE tasks SET to_department = %s WHERE to_department = %s", (new_name, old_name))
+        conn.commit()
+        return True
+    except Exception:
+        return False
     finally:
         conn.close()
