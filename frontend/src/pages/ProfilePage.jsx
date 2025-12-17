@@ -38,6 +38,11 @@ const ProfilePage = ({ onLogout }) => {
   const fetchProfile = async () => {
     try {
       const token = localStorage.getItem('token');
+
+      if (!token) {
+          onLogout();
+          return;
+      }
       const res = await axios.get('http://127.0.0.1:8000/api/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -49,6 +54,14 @@ const ProfilePage = ({ onLogout }) => {
     } catch (err) {
       console.error(err);
       toast.error("Не удалось загрузить профиль");
+
+      if (err.response && err.response.status === 401) {
+          toast.error("Сессия истекла. Войдите заново.");
+          onLogout(); // Эта функция перекинет на Login
+      } else {
+          toast.error("Не удалось загрузить профиль");
+      }
+
       setLoading(false);
     }
   };
@@ -203,8 +216,6 @@ const ProfilePage = ({ onLogout }) => {
                     </div>
                 </div>
             </div>
-
-            {/* Я УБРАЛ ОТСЮДА КНОПКУ ВЫХОДА */}
         </div>
 
         {/* ПРАВАЯ КОЛОНКА (Пароль) */}

@@ -1,4 +1,3 @@
-# settings_manager.py
 import json
 import os
 import logging
@@ -10,7 +9,6 @@ log = logging.getLogger(__name__)
 def get_default_settings():
     """Возвращает словарь с настройками по умолчанию."""
     return {
-        # --- Старые настройки ---
         "podft_sum_col": "Сумма тг",
         "podft_threshold": "7000000",
         "podft_filter_enabled": True,
@@ -31,9 +29,8 @@ def get_default_settings():
         "split_list_path": "",
         "split_list_isin_col": "ID_ISIN",
         "daily_file_security_col": "Ценная бумага",
-        # --- !! ИСПРАВЛЕНИЕ: Новая строка для Количества !! ---
         "split_daily_qty_col": "Количество"
-        # --- !! КОНЕЦ ИСПРАВЛЕНИЯ !! ---
+
     }
 
 
@@ -46,7 +43,6 @@ def load_settings():
         with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
             loaded_settings = json.load(f)
 
-        # Проверим, что все ключи из default есть в загруженных
         default_settings = get_default_settings()
         missing_keys = False
         for key, value in default_settings.items():

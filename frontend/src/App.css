@@ -1,6 +1,4 @@
-/* frontend/src/App.css */
 
-/* --- 1. БАЗОВЫЕ НАСТРОЙКИ --- */
 body {
   margin: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -19,9 +17,9 @@ body {
   overflow: hidden;
 }
 
-/* --- 2. БОКОВОЕ МЕНЮ (SIDEBAR) --- */
+/* --- 2. SIDEBAR --- */
 .sidebar {
-  width: 260px; /* Чуть шире для красоты */
+  width: 260px;
   background-color: #1e293b;
   color: white;
   display: flex;
@@ -83,7 +81,7 @@ body {
   flex: 1;
   padding: 30px;
   overflow-y: auto;
-  background-color: #f1f5f9; /* Светлый фон для контента */
+  background-color: #f1f5f9;
 }
 
 h1, h2, h3 { margin-top: 0; }
@@ -136,7 +134,6 @@ h1, h2, h3 { margin-top: 0; }
 
 /* --- 5. СТИЛИ ДЛЯ СВЕРКИ (SVERKA PAGE) --- */
 
-/* Область загрузки файла (Пустая) */
 .file-upload-area {
   border: 2px dashed #cbd5e1;
   border-radius: 12px;
@@ -158,7 +155,6 @@ h1, h2, h3 { margin-top: 0; }
   background-color: #eff6ff;
 }
 
-/* Карточка УЖЕ ЗАГРУЖЕННОГО файла (Компактная) */
 .uploaded-file-card {
   display: flex;
   align-items: center;
@@ -178,7 +174,6 @@ h1, h2, h3 { margin-top: 0; }
   background: #dcfce7;
 }
 
-/* Скрытый инпут */
 .file-input-hidden {
   position: absolute;
   top: 0; left: 0; width: 100%; height: 100%;
@@ -193,7 +188,6 @@ h1, h2, h3 { margin-top: 0; }
   margin-bottom: 0;
   padding-bottom: 0;
   overflow-x: auto;
-  /* Скрываем скроллбар для красоты */
   scrollbar-width: none;
 }
 .tabs-container::-webkit-scrollbar { display: none; }
@@ -261,6 +255,5 @@ h1, h2, h3 { margin-top: 0; }
   background-color: #f1f5f9;
 }
 
-/* Чередование строк */
 .styled-table tbody tr:nth-of-type(even) { background-color: #ffffff; }
 .styled-table tbody tr:nth-of-type(odd) { background-color: #fcfcfc; }

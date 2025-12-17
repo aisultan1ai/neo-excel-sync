@@ -1,13 +1,9 @@
-# backend/excel_exporter.py
-
 import pandas as pd
 import io
 import logging
 from openpyxl.styles import PatternFill, Font
 
-# Настройка логгера
 log = logging.getLogger(__name__)
-
 
 def _auto_adjust_column_width(worksheet):
     """Автоподбор ширины столбцов на листе Excel."""
@@ -20,7 +16,6 @@ def _auto_adjust_column_width(worksheet):
                     max_length = len(str(cell.value))
             except:
                 pass
-        # Пытаемся получить длину заголовка, если он есть
         try:
             header_length = len(str(column_cells[0].value)) if column_cells[0].value else 0
         except:
@@ -64,14 +59,11 @@ def export_results_to_stream(results_to_export):
         log.error("Вызов export_results с пустым словарем results_to_export.")
         raise ValueError("Нет данных для экспорта.")
 
-    # Создаем поток в памяти вместо файла на диске
     output_stream = io.BytesIO()
 
     log.info("Начало генерации Excel в памяти...")
 
-    # Используем writer с потоком
     with pd.ExcelWriter(output_stream, engine='openpyxl') as writer:
-        # --- Стили ---
         blue_fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
         headers_to_color = ["Account", "Субсчет в учетной организации"]
         yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
@@ -82,17 +74,14 @@ def export_results_to_stream(results_to_export):
             log.debug("Запись листа: '%s' (ключ: %s)", sheet_name, df_key)
             df = results_to_export.get(df_key)
 
-            # Если данных нет или None, создаем пустой DataFrame
             if df is None:
                 df = pd.DataFrame()
 
-            # Если пришел список словарей (JSON), конвертируем в DataFrame
             if isinstance(df, list):
                 df = pd.DataFrame(df)
 
             df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-            # Получаем доступ к листу для форматирования
             worksheet = writer.sheets[sheet_name]
             _auto_adjust_column_width(worksheet)
             _add_autofilter(worksheet)
@@ -105,12 +94,11 @@ def export_results_to_stream(results_to_export):
         write_sheet('Расхождения_Unity', 'unmatched1')
         write_sheet('Расхождения_АИС', 'unmatched2')
 
-        # --- 2. Лист "Сводка" (с выделением) ---
+        # --- 2. Лист "Сводка" ---
         log.debug("Форматирование листа 'Сводка'...")
         summary1 = results_to_export.get('summary1')
         summary2 = results_to_export.get('summary2')
 
-        # Конвертация из JSON (dict) в DataFrame, если нужно
         if isinstance(summary1, dict): summary1 = pd.Series(summary1)
         if isinstance(summary2, dict): summary2 = pd.Series(summary2)
 
@@ -126,13 +114,13 @@ def export_results_to_stream(results_to_export):
             # Подсветка расхождений
             for index, row_data in summary_df.iterrows():
                 if row_data['Unity'] != row_data['АИС']:
-                    # +2 потому что заголовки занимают строку и индексация с 1
+
                     try:
                         excel_row_num = summary_df.index.get_loc(index) + 2
                         for col_num in range(1, worksheet_summary.max_column + 1):
                             worksheet_summary.cell(row=excel_row_num, column=col_num).fill = yellow_fill
                     except Exception as e:
-                        pass  # Игнорируем ошибки индексации при форматировании
+                        pass
 
         # --- 3. Листы "Задвоения" ---
         log.debug("Проверка и запись листов 'Задвоения'...")
@@ -181,7 +169,7 @@ def export_results_to_stream(results_to_export):
             except Exception as e:
                 log.warning("Ошибка при выделении дат в ПОДФТ (7М): %s", e)
 
-        # Статистика 7М
+
         summary_row_index = worksheet_podft.max_row + 2
         total_cell = worksheet_podft.cell(row=summary_row_index, column=1,
                                           value=f"Общее количество (>= 7M): {len(podft_7m_df)}")
@@ -212,7 +200,7 @@ def export_results_to_stream(results_to_export):
             podft_45m_bo_df.to_excel(writer, sheet_name='ПОДФТ', index=False, startrow=table_2_start_row + 1)
             header_row_2 = table_2_start_row + 2
 
-            # Раскраска заголовков второй таблицы
+
             for header in headers_to_color:
                 try:
                     column_names = podft_45m_bo_df.columns.tolist()
@@ -241,7 +229,7 @@ def export_results_to_stream(results_to_export):
                 except Exception as e:
                     log.warning("Ошибка при выделении дат в ПОДФТ (Бонды/Опционы): %s", e)
 
-            # Статистика 45М
+
             summary_row_index_2 = worksheet_podft.max_row + 2
             total_cell_2 = worksheet_podft.cell(row=summary_row_index_2, column=1,
                                                 value=f"Общее количество (Бонды/Опционы): {len(podft_45m_bo_df)}")
@@ -268,7 +256,6 @@ def export_results_to_stream(results_to_export):
                                                                  list) else raw_crypto.copy() if raw_crypto is not None else pd.DataFrame()
 
         if not crypto_deals_df.empty and 'Сумма тг' in crypto_deals_df.columns:
-            # Преобразуем в числа, если это еще не числа (актуально после JSON)
             crypto_deals_df['Сумма тг'] = pd.to_numeric(crypto_deals_df['Сумма тг'], errors='coerce')
             high_value_crypto_df = crypto_deals_df[crypto_deals_df['Сумма тг'] >= 5000000].copy()
         else:
@@ -321,6 +308,5 @@ def export_results_to_stream(results_to_export):
 
     log.info("Экспорт в память успешно завершен.")
 
-    # Сбрасываем курсор потока в начало, чтобы файл можно было прочитать
     output_stream.seek(0)
     return output_stream

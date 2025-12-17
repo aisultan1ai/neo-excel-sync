@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 // import SmartTable from '../components/SmartTable';
 import { toast } from 'react-toastify';
-import * as XLSX from 'xlsx'; // Библиотека для чтения Excel
+import * as XLSX from 'xlsx';
 import {
   UploadCloud, FileSpreadsheet, Play, Download,
   CheckCircle2, FileText, Settings2, RefreshCcw, AlertCircle
@@ -49,7 +49,6 @@ const FileSection = ({
                 }
 
                 // Для счета оставляем гибкость (Account или Счет), так как они часто меняются,
-                // либо используем настройку по умолчанию, если она есть.
                 const foundAcc = foundHeaders.find(h =>
                     (defaultAccName && h.toLowerCase().includes(defaultAccName.toLowerCase())) ||
                     h.toLowerCase().includes("account") ||
@@ -173,7 +172,6 @@ const SverkaPage = () => {
   const [file1, setFile1] = useState(null);
   const [file2, setFile2] = useState(null);
 
-  // Храним список колонок для каждого файла
   const [headers1, setHeaders1] = useState([]);
   const [headers2, setHeaders2] = useState([]);
 
@@ -191,11 +189,9 @@ const SverkaPage = () => {
         if (data.status === 'success') {
           console.log("Найдены сохраненные результаты, восстанавливаем...");
 
-          // 1. Устанавливаем данные (замените setResults на ваше название переменной!)
-          // Обычно это setResults или setReportData
           setResults(data);
 
-          // 2. Если у вас есть переменная, отвечающая за шаг (например, шаг загрузки vs шаг результатов)
+          // 2. Если есть переменная, отвечающая за шаг (например, шаг загрузки vs шаг результатов)
           // переключите её здесь. Например:
           // setActiveStep('results');
         }

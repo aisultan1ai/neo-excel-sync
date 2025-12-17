@@ -2,11 +2,12 @@ import pandas as pd
 import os
 import logging
 from utils import extract_numbers_from_series
+
 log = logging.getLogger(__name__)
 
 
 def _perform_comparison(df1, df2, id_col_1, acc_col_1, id_col_2, acc_col_2):
-    # ... (код не меняется) ...
+
     log.debug("Выполнение _perform_comparison...")
     df1['cleaned_id'] = df1[id_col_1].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     df2['cleaned_id'] = df2[id_col_2].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
@@ -48,10 +49,7 @@ def _process_podft_for_df(df, file_path, podft_settings):
         if filter_col and filter_vals_str and filter_col in temp_df.columns:
             exclude_list = [val.strip().upper() for val in filter_vals_str.split(',')]
 
-            # --- !! ВОТ ИСПРАВЛЕНИЕ !! ---
-            # Мы добавляем .str.strip() для очистки данных из Excel
             temp_df = temp_df[~temp_df[filter_col].astype(str).str.strip().str.upper().isin(exclude_list)]
-            # --- !! КОНЕЦ ИСПРАВЛЕНИЯ !! ---
 
             log.debug("Применен фильтр-исключение (7М). Осталось %d сделок.", len(temp_df))
 
@@ -67,7 +65,6 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
                   overlap_accounts_list_from_settings):
     """
     Основная логика сравнения и проверок.
-    (Весь остальной код НЕ МЕНЯЕТСЯ)
     """
     log.info("Начало основной обработки. Файл 1: %s, Файл 2: %s", os.path.basename(file1_path),
              os.path.basename(file2_path))
@@ -91,7 +88,7 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
         except Exception as e:
             log.warning("Ошибка при очистке итоговых строк: %s", e)
 
-        # --- Поиск задвоенных ID (с "очисткой") ---
+        # --- Поиск задвоенных ID ---
         log.debug("Поиск задвоенных ID в df1...")
         duplicates_df1 = pd.DataFrame()
         duplicates_df2 = pd.DataFrame()
@@ -124,8 +121,6 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
         log.debug("Поиск сделок КРИПТО (USDT)...")
         all_crypto_deals = []
 
-        # --- !! НАЧАЛО ИЗМЕНЕНИЙ !! ---
-        # Имя столбца для FU-фильтра
         instrument_col_name = "Финансовый инструмент"
 
         if 'Валюта' in df1_original.columns:
@@ -135,35 +130,26 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
             # 2. Теперь, если столбец "Финансовый инструмент" существует,
             #    применяем к ним FU-фильтр
             if not crypto1_base.empty and instrument_col_name in crypto1_base.columns:
-                # .astype(str) нужен для .str, чтобы избежать ошибок на NaN
-                # ~ (тильда) означает "НЕ" (not)
                 crypto1 = crypto1_base[~crypto1_base[instrument_col_name].astype(str).str.startswith("FU")].copy()
             else:
-                # Если столбца нет, просто берем все, что нашли (старая логика)
                 crypto1 = crypto1_base
 
-            # 3. Добавляем в общий список, если что-то осталось
             if not crypto1.empty:
                 crypto1.insert(0, 'Источник_Файла', os.path.basename(file1_path))
                 all_crypto_deals.append(crypto1)
 
-        # Повторяем то же самое для df2
         if 'Валюта' in df2_original.columns:
-            # 1. Находим USDT
+
             crypto2_base = df2_original[df2_original['Валюта'] == 'USDT'].copy()
 
-            # 2. Применяем FU-фильтр
             if not crypto2_base.empty and instrument_col_name in crypto2_base.columns:
                 crypto2 = crypto2_base[~crypto2_base[instrument_col_name].astype(str).str.startswith("FU")].copy()
             else:
                 crypto2 = crypto2_base
 
-            # 3. Добавляем в общий список
             if not crypto2.empty:
                 crypto2.insert(0, 'Источник_Файла', os.path.basename(file2_path))
                 all_crypto_deals.append(crypto2)
-
-        # --- !! КОНЕЦ ИЗМЕНЕНИЙ !! ---
 
         crypto_deals_df = pd.concat(all_crypto_deals, ignore_index=True) if all_crypto_deals else pd.DataFrame()
         if crypto_deals_df.empty:
@@ -241,8 +227,6 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
             found_in_df2 = set(extracted_accounts2.dropna().unique()) & overlap_accounts_set
             found_overlap_accounts.update(found_in_df2)
         log.info("Найдено %d уникальных счетов 'перекрытия' в файлах.", len(found_overlap_accounts))
-
-        # --- Фильтрация Счетов "Перекрытия" ---
         log.debug("Фильтрация счетов 'перекрытия' из основных DF...")
         df1 = df1_original.copy()
         df2 = df2_original.copy()
@@ -266,12 +250,11 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
 
         log.info("Найдено %d сделок ПОД/ФТ (%s).", len(podft_results), podft_settings.get('threshold'))
 
-        # --- Основное сравнение ---
+
         log.debug("Запуск основного сравнения...")
         matching, unmatched1, unmatched2, count1, count2 = _perform_comparison(df1, df2, id_col_1, acc_col_1,
                                                                                id_col_2, acc_col_2)
 
-        # --- Сборка результатов ---
         log.debug("Сборка финального словаря результатов.")
         results_to_export = {
             'matches': matching, 'unmatched1': unmatched1, 'unmatched2': unmatched2,

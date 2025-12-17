@@ -1,4 +1,3 @@
-# BackEnd/database_manager.py
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
@@ -6,11 +5,10 @@ import logging
 
 log = logging.getLogger(__name__)
 
-# НАСТРОЙКИ ПОДКЛЮЧЕНИЯ
 DB_CONFIG = {
     "dbname": "neo_db",
     "user": "postgres",
-    "password": "aisu123",  # ВАШ ПАРОЛЬ
+    "password": "aisu123",
     "host": "localhost",
     "port": 5432
 }
@@ -83,7 +81,6 @@ def init_database():
                            )
                        ''')
 
-        # Миграции для users
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(50) DEFAULT 'Back Office'")
         except Exception:
@@ -94,7 +91,7 @@ def init_database():
         except Exception:
             conn.rollback()
 
-        # 2.1 Таблица DEPARTMENTS (Отделы)
+        # 2.1 Таблица DEPARTMENTS
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS departments
                        (
@@ -110,7 +107,6 @@ def init_database():
                            )
                        ''')
 
-        # Заполняем дефолтными отделами, если таблица пустая
         cursor.execute("SELECT COUNT(*) FROM departments")
         if cursor.fetchone()[0] == 0:
             default_depts = [("Back Office",), ("Trading",), ("Бухгалтерия",), ("Sales",)]
@@ -193,6 +189,39 @@ def init_database():
                            )
                        ''')
 
+        # 5. Таблица TASK_ATTACHMENTS
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS task_attachments
+                       (
+                           id
+                           SERIAL
+                           PRIMARY
+                           KEY,
+                           task_id
+                           INTEGER,
+                           filename
+                           TEXT
+                           NOT
+                           NULL,
+                           file_path
+                           TEXT
+                           NOT
+                           NULL,
+                           uploaded_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP,
+                           FOREIGN
+                           KEY
+                       (
+                           task_id
+                       ) REFERENCES tasks
+                       (
+                           id
+                       ) ON DELETE CASCADE
+                           )
+                       ''')
+
         conn.commit()
         log.info("БД инициализирована успешно.")
     except Exception as e:
@@ -201,8 +230,6 @@ def init_database():
     finally:
         conn.close()
 
-
-# --- ФУНКЦИИ ПОИСКА И ПРОСМОТРА (КЛИЕНТЫ) ---
 
 def search_clients(search_term=""):
     conn = get_db_connection()
@@ -236,7 +263,6 @@ def get_client_details(client_id):
         conn.close()
 
 
-# --- ФУНКЦИИ УПРАВЛЕНИЯ КЛИЕНТАМИ ---
 
 def add_client(name, email, account, folder_path_override=None):
     if not name: return False, "Имя клиента обязательно."
@@ -333,8 +359,6 @@ def delete_client(client_id):
         conn.close()
 
 
-# --- ПОЛЬЗОВАТЕЛИ И АВТОРИЗАЦИЯ ---
-
 def get_user_by_username(username):
     conn = get_db_connection()
     if not conn: return None
@@ -346,8 +370,6 @@ def get_user_by_username(username):
     finally:
         conn.close()
 
-
-# --- ЗАДАЧИ ---
 
 def create_task(title, description, from_user_id, to_department):
     conn = get_db_connection()
@@ -428,8 +450,6 @@ def delete_task(task_id):
         conn.close()
 
 
-# --- КОММЕНТАРИИ ---
-
 def add_comment(task_id, user_id, content):
     conn = get_db_connection()
     if not conn: return False
@@ -461,8 +481,6 @@ def get_comments(task_id):
     finally:
         conn.close()
 
-
-# --- ПРОФИЛЬ И ДАШБОРД ---
 
 def update_user_password(user_id, new_password_hash):
     conn = get_db_connection()
@@ -518,8 +536,6 @@ def get_dashboard_stats():
         conn.close()
 
 
-# --- АДМИН ПАНЕЛЬ (ПОЛЬЗОВАТЕЛИ) ---
-
 def get_all_users():
     conn = get_db_connection()
     if not conn: return []
@@ -564,8 +580,6 @@ def delete_user(user_id):
     finally:
         conn.close()
 
-
-# --- АДМИН ПАНЕЛЬ (ОТДЕЛЫ) ---
 
 def get_all_departments():
     conn = get_db_connection()
@@ -623,5 +637,59 @@ def rename_department(dept_id, new_name):
         return True
     except Exception:
         return False
+    finally:
+        conn.close()
+
+
+def add_task_attachment(task_id, filename, file_path):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO task_attachments (task_id, filename, file_path) VALUES (%s, %s, %s)",
+            (task_id, filename, file_path)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        log.error(f"Ошибка сохранения вложения: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_task_attachments(task_id):
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM task_attachments WHERE task_id = %s ORDER BY uploaded_at DESC", (task_id,))
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+
+def delete_task_attachment(attachment_id):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM task_attachments WHERE id = %s", (attachment_id,))
+        conn.commit()
+        return True
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def get_attachment_by_id(attachment_id):
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM task_attachments WHERE id = %s", (attachment_id,))
+        return cursor.fetchone()
     finally:
         conn.close()

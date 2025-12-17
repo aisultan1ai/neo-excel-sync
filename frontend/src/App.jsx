@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { FileDiff, Settings, FileSpreadsheet, Layers, Users, User, LayoutDashboard } from 'lucide-react'; // УБРАЛИ LogOut, он тут не нужен
+import { FileDiff, Settings, FileSpreadsheet, Layers, Users, User, LayoutDashboard } from 'lucide-react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
@@ -87,7 +86,6 @@ function App() {
             {/* Настройки теперь в самом низу меню */}
             <NavButton to="/settings" icon={Settings} label="Настройки" />
 
-            {/* КНОПКИ ВЫХОДА ЗДЕСЬ БОЛЬШЕ НЕТ (она теперь внутри страницы настроек) */}
           </nav>
         </aside>
 
@@ -101,7 +99,6 @@ function App() {
               <Route path="/departments" element={<DepartmentsPage />} />
               <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
 
-            {/* ВАЖНО: Мы передаем функцию onLogout внутрь страницы настроек */}
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

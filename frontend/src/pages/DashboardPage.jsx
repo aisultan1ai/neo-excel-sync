@@ -19,14 +19,15 @@ const DashboardPage = () => {
     try {
       const token = localStorage.getItem('token');
 
-      // 1. Получаем имя пользователя (из профиля или токена)
-      // Можно было бы декодировать токен, но сделаем запрос профиля для простоты или возьмем из статистики
+      // 1. Получаем имя пользователя
+
       const resProfile = await axios.get('http://127.0.0.1:8000/api/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUsername(resProfile.data.username);
 
       // 2. Получаем цифры
+
       const res = await axios.get('http://127.0.0.1:8000/api/dashboard', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -42,8 +43,6 @@ const DashboardPage = () => {
 
   return (
     <div style={{ width: '100%', paddingRight: '20px' }}>
-
-      {/* ПРИВЕТСТВИЕ */}
       <div style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'end' }}>
         <div>
             <h1 style={{ margin: 0, fontSize: '32px', background: 'linear-gradient(90deg, #2563eb, #3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
@@ -57,10 +56,8 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      {/* КАРТОЧКИ СТАТИСТИКИ (KPI) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '30px' }}>
 
-        {/* Карточка 1: Активные задачи */}
         <div className="card" style={{ padding: '25px', display: 'flex', alignItems: 'center', gap: '20px', borderLeft: '4px solid #3b82f6' }}>
             <div style={{ background: '#eff6ff', padding: '15px', borderRadius: '12px' }}>
                 <Clock size={30} color="#3b82f6" />
@@ -71,7 +68,6 @@ const DashboardPage = () => {
             </div>
         </div>
 
-        {/* Карточка 2: Пользователи */}
         <div className="card" style={{ padding: '25px', display: 'flex', alignItems: 'center', gap: '20px', borderLeft: '4px solid #8b5cf6' }}>
             <div style={{ background: '#f5f3ff', padding: '15px', borderRadius: '12px' }}>
                 <Users size={30} color="#8b5cf6" />
@@ -82,7 +78,6 @@ const DashboardPage = () => {
             </div>
         </div>
 
-        {/* Карточка 3: Всего задач */}
         <div className="card" style={{ padding: '25px', display: 'flex', alignItems: 'center', gap: '20px', borderLeft: '4px solid #10b981' }}>
             <div style={{ background: '#ecfdf5', padding: '15px', borderRadius: '12px' }}>
                 <CheckCircle size={30} color="#10b981" />

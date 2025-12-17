@@ -1,4 +1,3 @@
-// frontend/src/pages/LoginPage.jsx
 import React, { useState } from 'react';
 import axios from 'axios';
 import {
@@ -24,7 +23,7 @@ const LoginPage = ({ onLogin }) => {
     // 1. ПРОВЕРКА НА ПУСТЫЕ ПОЛЯ (Защита от белого экрана)
     if (!username || !password) {
         setError('Пожалуйста, введите логин и пароль');
-        return; // Прерываем функцию, ничего не отправляем
+        return;
     }
 
     setLoading(true);
@@ -42,7 +41,6 @@ const LoginPage = ({ onLogin }) => {
 
       localStorage.setItem('token', res.data.access_token);
 
-      // Сброс истории (чтобы при логине кидало на главную)
       window.history.replaceState(null, '', '/');
       onLogin();
 
@@ -53,11 +51,10 @@ const LoginPage = ({ onLogin }) => {
       if (err.response) {
           const data = err.response.data;
 
-          // Если ошибка 422 (Unprocessable Entity) - это обычно массив
           if (err.response.status === 422) {
               setError('Ошибка: Поля заполнены неверно');
           }
-          // Если сервер прислал текстовое сообщение об ошибке
+
           else if (data && typeof data.detail === 'string') {
              setError(data.detail);
           }
@@ -214,7 +211,6 @@ const LoginPage = ({ onLogin }) => {
   );
 };
 
-// Компонент для красивого списка преимуществ слева
 const FeatureItem = ({ icon: Icon, title, desc }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
     <div style={{

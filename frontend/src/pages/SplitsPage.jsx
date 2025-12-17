@@ -135,7 +135,7 @@ const SplitsPage = () => {
          Проверка Сплитов
       </h1>
 
-      {/* --- ВЕРХНЯЯ ЧАСТЬ: ПРОВЕРКА ФАЙЛА --- */}
+      {/* --- ПРОВЕРКА ФАЙЛА --- */}
       <div className="card" style={{ padding: '30px' }}>
         <div style={{ marginBottom: '20px' }}>
             <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -187,7 +187,6 @@ const SplitsPage = () => {
         </div>
       </div>
 
-      {/* ОШИБКИ И РЕЗУЛЬТАТЫ */}
       {error && (
         <div className="card" style={{borderLeft: '5px solid #ef4444', backgroundColor: '#fef2f2', marginTop: '20px'}}>
             <div style={{display: 'flex', alignItems: 'center', gap: '10px', color: '#b91c1c'}}><AlertCircle /> <h3>Ошибка</h3></div>
@@ -231,7 +230,6 @@ const SplitsPage = () => {
         </div>
       )}
 
-      {/* --- НИЖНЯЯ ЧАСТЬ: УПРАВЛЕНИЕ СПРАВОЧНИКОМ --- */}
       <div style={{ marginTop: '40px', borderTop: '1px solid #e2e8f0', paddingTop: '30px' }}>
         <h2 style={{ fontSize: '20px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: '#475569' }}>
             <Database size={24} /> Управление справочником (База сплитов)
@@ -239,7 +237,6 @@ const SplitsPage = () => {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
 
-            {/* 1. Блок загрузки нового справочника */}
             <div className="card" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <h4 style={{ marginTop: 0, marginBottom: '5px' }}>Обновить базу</h4>
                 <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '15px' }}>
@@ -306,7 +303,6 @@ const SplitsPage = () => {
         {showTable && viewData && (
             <div className="card" style={{ marginTop: '20px', overflow: 'hidden', padding: 0 }}>
 
-                {/* Панель фильтрации */}
                 <div style={{ padding: '15px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
                     <div style={{ fontWeight: 600, color: '#334155' }}>
                         Записей: {filteredData.length} <span style={{color: '#94a3b8', fontWeight: 400}}>(всего {viewData.length})</span>

@@ -1,26 +1,25 @@
 import shutil
+import time
 import os
 import json
 import logging
 import re
-from datetime import datetime, timedelta
-
-# --- IMPORTS ---
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel
 import bcrypt
-from jose import JWTError, jwt
 import pandas as pd
-
-# Import your modules
 import processor
 import settings_manager
 import split_processor
 import excel_exporter
 import database_manager
+
+from datetime import datetime, timedelta
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
+from jose import JWTError, jwt
+from fastapi.responses import FileResponse
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -28,33 +27,31 @@ log = logging.getLogger(__name__)
 
 app = FastAPI(title="NeoExcelSync API")
 
-# --- CORS SETUP ---
+
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
-    "http://192.168.0.198:5173"  # Example IP
+    "http://192.168.0.198:5173"
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all for LAN development
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- GLOBAL VARIABLES ---
 TEMP_DIR = "temp_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 LAST_COMPARISON_RESULT = None
 
-# --- SECURITY CONFIGURATION (Moved UP) ---
+# --- SECURITY CONFIGURATION ---
 SECRET_KEY = "super-secret-key-change-this"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
-# Pointing to the correct login endpoint
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
 class UserCreate(BaseModel):
@@ -63,7 +60,7 @@ class UserCreate(BaseModel):
     department: str
     is_admin: bool = False
 
-# --- PYDANTIC MODELS (Moved UP) ---
+# --- PYDANTIC MODELS ---
 class TaskCreate(BaseModel):
     title: str
     description: str
@@ -86,7 +83,7 @@ class PasswordChange(BaseModel):
 class DeptCreate(BaseModel):
     name: str
 
-# --- AUTHENTICATION FUNCTIONS (Moved UP) ---
+# --- AUTHENTICATION FUNCTIONS ---
 
 def verify_password(plain_password, hashed_password):
     """Checks password against hash."""
@@ -121,8 +118,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     return username
 
 
-# --- HELPER FUNCTIONS ---
-
 def save_upload_file(upload_file: UploadFile) -> str:
     try:
         filename = upload_file.filename.replace(" ", "_")
@@ -151,7 +146,6 @@ def startup_event():
     database_manager.init_database()
     log.info("Database initialized.")
 
-
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "NeoExcelSync Backend is running"}
@@ -165,16 +159,13 @@ def get_last_result():
     return LAST_COMPARISON_RESULT
 
 
-# --- SETTINGS ---
 @app.get("/api/settings")
 def get_settings():
     return settings_manager.load_settings()
 
-
 @app.post("/api/settings")
 def update_settings(new_settings: dict):
     return settings_manager.save_settings(new_settings)
-
 
 @app.post("/api/settings/upload-split-list")
 async def upload_split_list_reference(file: UploadFile = File(...)):
@@ -194,7 +185,7 @@ async def upload_split_list_reference(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- COMPARISON ---
+
 @app.post("/api/compare")
 async def run_comparison(
         file1: UploadFile = File(...),
@@ -247,7 +238,6 @@ async def run_comparison(
             sum_cols = [c for c in df_crypto.columns if "сумма" in c.lower() and "тг" in c.lower()]
             target_sum_col = "Сумма тг"
 
-            # Helper to clean sum
             def clean_sum(df, col):
                 temp_series = df[col].astype(str).str.replace(r'\s+', '', regex=True).str.replace(',', '.')
                 return pd.to_numeric(temp_series, errors='coerce')
@@ -311,7 +301,6 @@ async def export_excel_file(report_data: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- SPLITS ---
 @app.post("/api/check-splits")
 async def check_splits(daily_file: UploadFile = File(...), settings_json: str = Form(...)):
     daily_path = None
@@ -337,7 +326,7 @@ async def check_splits(daily_file: UploadFile = File(...), settings_json: str = 
         cleanup_files(daily_path)
 
 
-# --- CLIENTS ---
+
 @app.get("/api/clients")
 def search_clients(search: str = ""):
     raw_clients = database_manager.search_clients(search)
@@ -447,24 +436,25 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 
 # --- TASKS (DEPARTMENTS) ---
-# Note: get_current_user is now defined above, so these will work.
 
 @app.get("/api/tasks/{department}")
 async def read_tasks(department: str, current_user: str = Depends(get_current_user)):
     tasks = database_manager.get_tasks_by_dept(department)
     return [dict(t) for t in tasks]
 
-
 @app.post("/api/tasks")
 async def create_new_task(task: TaskCreate, current_user: str = Depends(get_current_user)):
-    user_data = database_manager.get_user_by_username(current_user)
-    if not user_data:
-        raise HTTPException(status_code=400, detail="User not found")
+    user = database_manager.get_user_by_username(current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-    new_id = database_manager.create_task(task.title, task.description, user_data[0], task.to_department)
-    if new_id:
-        return {"status": "success", "task_id": new_id}
-    raise HTTPException(status_code=500, detail="Failed to create task")
+    task_id = database_manager.create_task(task.title, task.description, user[0], task.to_department)
+
+    if task_id:
+        # ВАЖНО: Мы должны вернуть ID, чтобы фронтенд мог загрузить файл
+        return {"status": "success", "message": "Задача создана", "id": task_id}
+
+    raise HTTPException(status_code=500, detail="Ошибка создания задачи")
 
 
 @app.get("/api/tasks/{task_id}/comments")
@@ -481,7 +471,7 @@ async def create_new_comment(task_id: int, comment: CommentCreate, current_user:
         return {"status": "success"}
     raise HTTPException(status_code=500, detail="Failed to add comment")
 
-# --- ОБНОВЛЕНИЕ СТАТУСА ---
+
 @app.put("/api/tasks/{task_id}/status")
 async def change_task_status(task_id: int, status_data: TaskStatusUpdate, current_user: str = Depends(get_current_user)):
     success = database_manager.update_task_status(task_id, status_data.status)
@@ -489,7 +479,6 @@ async def change_task_status(task_id: int, status_data: TaskStatusUpdate, curren
         return {"status": "success"}
     raise HTTPException(status_code=500, detail="Failed to update status")
 
-# --- РЕДАКТИРОВАНИЕ ЗАДАЧИ ---
 @app.put("/api/tasks/{task_id}")
 async def edit_task(task_id: int, data: TaskUpdateContent, current_user: str = Depends(get_current_user)):
     success = database_manager.update_task_content(task_id, data.title, data.description)
@@ -497,7 +486,6 @@ async def edit_task(task_id: int, data: TaskUpdateContent, current_user: str = D
         return {"status": "success"}
     raise HTTPException(status_code=500, detail="Failed to update task")
 
-# --- УДАЛЕНИЕ ЗАДАЧИ ---
 @app.delete("/api/tasks/{task_id}")
 async def remove_task(task_id: int, current_user: str = Depends(get_current_user)):
     success = database_manager.delete_task(task_id)
@@ -506,7 +494,6 @@ async def remove_task(task_id: int, current_user: str = Depends(get_current_user
     raise HTTPException(status_code=500, detail="Failed to delete task")
 
 
-# --- ПРОФИЛЬ ---
 @app.get("/api/dashboard")
 async def get_dashboard_data(current_user: str = Depends(get_current_user)):
     stats = database_manager.get_dashboard_stats()
@@ -516,7 +503,6 @@ async def get_dashboard_data(current_user: str = Depends(get_current_user)):
             "users": 0, "total_tasks": 0, "active_tasks": 0, "recent_tasks": []
         }
     return stats
-
 
 @app.get("/api/profile")
 async def get_profile_info(current_user: str = Depends(get_current_user)):
@@ -565,8 +551,6 @@ async def change_password(data: PasswordChange, current_user: str = Depends(get_
     raise HTTPException(status_code=500, detail="Ошибка при сохранении пароля")
 
 
-# --- АДМИН ПАНЕЛЬ ---
-
 @app.get("/api/admin/users")
 async def get_users_list(current_user: str = Depends(get_current_user)):
     # Проверка прав (в реальном проекте тут нужна строгая проверка is_admin)
@@ -599,7 +583,6 @@ async def admin_delete_user(user_id: int, current_user: str = Depends(get_curren
     raise HTTPException(status_code=500, detail="Failed to delete user")
 
 
-# --- УПРАВЛЕНИЕ ОТДЕЛАМИ ---
 
 @app.get("/api/departments")
 def get_departments_list():
@@ -628,26 +611,20 @@ def rename_department_endpoint(dept_id: int, dept: DeptCreate, current_user: str
     raise HTTPException(status_code=400, detail="Ошибка переименования")
 
 
-# --- ДОБАВИТЬ В КОНЕЦ BackEnd/main.py ---
-
 @app.get("/api/settings/split-list-content")
 def get_split_list_content():
     """Читает текущий файл сплитов и возвращает его содержимое."""
     try:
-        # 1. Узнаем путь к файлу из настроек
+
         settings = settings_manager.load_settings()
         path = settings.get("split_list_path")
 
         if not path or not os.path.exists(path):
             return {"status": "empty", "data": [], "message": "Файл сплитов не найден или путь не задан."}
 
-        # 2. Читаем Excel
         df = pd.read_excel(path)
-
-        # Заменяем NaN на пустые строки для JSON
         df = df.fillna("")
 
-        # 3. Возвращаем данные
         return {
             "status": "success",
             "data": df.to_dict(orient="records"),
@@ -656,3 +633,52 @@ def get_split_list_content():
     except Exception as e:
         log.error(f"Ошибка чтения сплит-листа: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/tasks/{task_id}/attachments")
+async def upload_task_attachment(task_id: int, file: UploadFile = File(...),
+                                 current_user: str = Depends(get_current_user)):
+    base_dir = os.path.join(os.getcwd(), "task_files")
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+
+    unique_name = f"{task_id}_{int(time.time())}_{file.filename}"
+    file_path = os.path.join(base_dir, unique_name)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    success = database_manager.add_task_attachment(task_id, file.filename, file_path)
+    if success:
+        return {"status": "success", "filename": file.filename}
+    raise HTTPException(status_code=500, detail="Ошибка сохранения файла")
+
+
+@app.get("/api/tasks/{task_id}/attachments")
+async def get_task_files(task_id: int, current_user: str = Depends(get_current_user)):
+    return database_manager.get_task_attachments(task_id)
+
+
+@app.get("/api/attachments/{attachment_id}")
+async def download_attachment(attachment_id: int, current_user: str = Depends(get_current_user)):
+    file_data = database_manager.get_attachment_by_id(attachment_id)
+    if not file_data or not os.path.exists(file_data['file_path']):
+        raise HTTPException(status_code=404, detail="Файл не найден")
+
+    return FileResponse(
+        path=file_data['file_path'],
+        filename=file_data['filename'],
+        media_type='application/octet-stream'
+    )
+
+
+@app.delete("/api/attachments/{attachment_id}")
+async def remove_attachment(attachment_id: int, current_user: str = Depends(get_current_user)):
+    file_data = database_manager.get_attachment_by_id(attachment_id)
+    if file_data and os.path.exists(file_data['file_path']):
+        os.remove(file_data['file_path'])  # Удаляем с диска
+
+    success = database_manager.delete_task_attachment(attachment_id)
+    if success:
+        return {"status": "success"}
+    raise HTTPException(status_code=500, detail="Ошибка удаления")

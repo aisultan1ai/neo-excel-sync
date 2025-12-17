@@ -82,7 +82,6 @@ const SettingsPage = () => {
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '60px' }}>
 
-      {/* ЗАГОЛОВОК (Кнопку отсюда убрали) */}
       <div style={{ marginBottom: '25px', textAlign: 'left' }}>
         <h1 style={{ fontSize: '32px', margin: '0 0 10px 0', color: '#1e293b' }}>Настройки</h1>
         <p style={{ color: '#64748b', margin: 0 }}>Управление параметрами системы</p>
@@ -276,7 +275,8 @@ const SettingsPage = () => {
             </div>
         )}
 
-        {/* 7. АККАУНТ */}
+
+        {/* 7. АККАУНТ ?????????  */}
         {activeTab === 'account' && (
             <div className="fade-in" style={{textAlign: 'center', padding: '40px 0'}}>
                 <div style={{width: '70px', height: '70px', background: '#fee2e2', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto'}}>
@@ -317,7 +317,6 @@ const SettingsPage = () => {
 
       </div>
 
-      {/* CSS для анимации появления и переключателей */}
       <style>{`
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
