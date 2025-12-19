@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-// import SmartTable from '../components/SmartTable';
 import { toast } from 'react-toastify';
 import * as XLSX from 'xlsx';
 import {
   UploadCloud, FileSpreadsheet, Play, Download,
-  CheckCircle2, FileText, Settings2, RefreshCcw, AlertCircle
+  CheckCircle2, FileText, Settings2, RefreshCcw, AlertCircle, Loader
 } from 'lucide-react';
-
 
 // --- КОМПОНЕНТ КАРТОЧКИ ФАЙЛА ---
 const FileSection = ({
@@ -25,7 +23,6 @@ const FileSection = ({
 
     setFile(selectedFile);
 
-    // Читаем заголовки файла для авто-выбора
     const reader = new FileReader();
     reader.onload = (evt) => {
         try {
@@ -39,8 +36,6 @@ const FileSection = ({
                 const foundHeaders = data[0];
                 if (headers.onLoad) headers.onLoad(foundHeaders);
 
-                // --- СТРОГИЙ АВТО-ПОИСК ---
-                // Ищем только если заголовок содержит точное ключевое слово из настроек
                 if (defaultIdName) {
                     const foundId = foundHeaders.find(h =>
                         h.toLowerCase().trim().includes(defaultIdName.toLowerCase().trim())
@@ -48,7 +43,6 @@ const FileSection = ({
                     if (foundId) setIdCol(foundId);
                 }
 
-                // Для счета оставляем гибкость (Account или Счет), так как они часто меняются,
                 const foundAcc = foundHeaders.find(h =>
                     (defaultAccName && h.toLowerCase().includes(defaultAccName.toLowerCase())) ||
                     h.toLowerCase().includes("account") ||
@@ -64,10 +58,7 @@ const FileSection = ({
   };
 
   return (
-    // gap: 12px убирает большой разрыв между файлом и настройками
     <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '350px'}}>
-
-      {/* Заголовок */}
       <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
         <div style={{background: color, padding: '10px', borderRadius: '10px', color: 'white', boxShadow: `0 4px 10px ${color}40`}}>
             <FileSpreadsheet size={24} />
@@ -75,8 +66,6 @@ const FileSection = ({
         <h3 style={{margin: 0, fontSize: '18px', fontWeight: 600, color: '#1e293b'}}>{title}</h3>
       </div>
 
-      {/* Зона загрузки */}
-      {/* minHeight: auto когда файл есть, чтобы блок схлопнулся */}
       <div style={{position: 'relative', minHeight: file ? 'auto' : '160px', transition: 'min-height 0.3s'}}>
          <input
           type="file"
@@ -117,46 +106,24 @@ const FileSection = ({
         )}
       </div>
 
-      {/* Настройки (Выпадающие списки) */}
       <div style={{
-          background: '#ffffff',
-          padding: '15px',
-          borderRadius: '12px',
-          border: '1px solid #e2e8f0',
-          opacity: file ? 1 : 0.6,
-          pointerEvents: file ? 'all' : 'none',
-          transition: 'all 0.3s'
+          background: '#ffffff', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0',
+          opacity: file ? 1 : 0.6, pointerEvents: file ? 'all' : 'none', transition: 'all 0.3s'
       }}>
         <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', color: '#64748b', fontSize: '12px', fontWeight: 700}}>
             <Settings2 size={14} /> ВЫБОР СТОЛБЦОВ
         </div>
-
         <div className="input-group" style={{marginBottom: '10px'}}>
-            <label className="input-label" style={{fontSize: '13px', color: '#475569'}}>
-                Уникальный ID сделки
-            </label>
-            <select
-                className="text-input"
-                value={idCol}
-                onChange={e => setIdCol(e.target.value)}
-                style={{cursor: 'pointer', appearance: 'auto', padding: '8px'}}
-            >
+            <label className="input-label" style={{fontSize: '13px', color: '#475569'}}>Уникальный ID сделки</label>
+            <select className="text-input" value={idCol} onChange={e => setIdCol(e.target.value)} style={{cursor: 'pointer', appearance: 'auto', padding: '8px'}}>
                 <option value="">-- Выберите --</option>
                 {headers.list && headers.list.map((h, i) => <option key={i} value={h}>{h}</option>)}
                 {!headers.list?.includes(idCol) && idCol && <option value={idCol}>{idCol}</option>}
             </select>
         </div>
-
         <div className="input-group" style={{marginBottom: 0}}>
-            <label className="input-label" style={{fontSize: '13px', color: '#475569'}}>
-                Номер счета / Субсчет
-            </label>
-            <select
-                className="text-input"
-                value={accCol}
-                onChange={e => setAccCol(e.target.value)}
-                style={{cursor: 'pointer', appearance: 'auto', padding: '8px'}}
-            >
+            <label className="input-label" style={{fontSize: '13px', color: '#475569'}}>Номер счета / Субсчет</label>
+            <select className="text-input" value={accCol} onChange={e => setAccCol(e.target.value)} style={{cursor: 'pointer', appearance: 'auto', padding: '8px'}}>
                 <option value="">-- Выберите --</option>
                 {headers.list && headers.list.map((h, i) => <option key={i} value={h}>{h}</option>)}
                 {!headers.list?.includes(accCol) && accCol && <option value={accCol}>{accCol}</option>}
@@ -171,64 +138,42 @@ const FileSection = ({
 const SverkaPage = () => {
   const [file1, setFile1] = useState(null);
   const [file2, setFile2] = useState(null);
-
   const [headers1, setHeaders1] = useState([]);
   const [headers2, setHeaders2] = useState([]);
 
   const [loading, setLoading] = useState(false);
+  const [loadingExport, setLoadingExport] = useState(false); // Состояние загрузки экспорта
   const [results, setResults] = useState(null);
   const [activeTab, setActiveTab] = useState('matches');
 
-  // --- БЛОК ВОССТАНОВЛЕНИЯ ДАННЫХ ПРИ ОБНОВЛЕНИИ СТРАНИЦЫ ---
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
+
+  // Восстановление данных
   useEffect(() => {
     const fetchLastResult = async () => {
       try {
         const response = await fetch('http://localhost:8000/api/last-result');
         const data = await response.json();
-
         if (data.status === 'success') {
-          console.log("Найдены сохраненные результаты, восстанавливаем...");
-
           setResults(data);
 
-          // 2. Если есть переменная, отвечающая за шаг (например, шаг загрузки vs шаг результатов)
-          // переключите её здесь. Например:
-          // setActiveStep('results');
+          setIsHeaderExpanded(false);
         }
-      } catch (error) {
-        console.error("Не удалось восстановить данные:", error);
-      }
+      } catch (error) { console.error("Ошибка восстановления:", error); }
     };
-
     fetchLastResult();
-  }, []); // Пустой массив [] гарантирует, что это сработает только 1 раз при входе на вкладку
-  // ----------------------------------------------------------
+  }, []);
 
-  const [cols, setCols] = useState({
-    id_col_1: '', acc_col_1: '',
-    id_col_2: '', acc_col_2: ''
-  });
-
-  // Настройки по умолчанию (загружаются с сервера)
-  const [defaults, setDefaults] = useState({
-      id_unity: 'Execution ID', acc_unity: 'Account',
-      id_ais: 'ID сделки', acc_ais: 'Субсчет'
-  });
+  const [cols, setCols] = useState({ id_col_1: '', acc_col_1: '', id_col_2: '', acc_col_2: '' });
+  const [defaults, setDefaults] = useState({ id_unity: 'Execution ID', acc_unity: 'Account', id_ais: 'ID сделки', acc_ais: 'Субсчет' });
 
   useEffect(() => {
-    // Получаем настройки с сервера, чтобы знать, какие колонки искать автоматически
     axios.get('http://127.0.0.1:8000/api/settings')
       .then(res => {
           if(res.data) {
-             // Предполагаем, что в settings.json есть поля default_id_names
-             // Берем первое значение из массива или конкретное поле
-             // Здесь можно адаптировать под вашу структуру settings.json
-             // Пока используем жестко заданные, если в JSON их нет
              setDefaults({
-                 id_unity: 'Execution ID',
-                 acc_unity: res.data.default_acc_name_unity || 'Account',
-                 id_ais: 'ID сделки',
-                 acc_ais: res.data.default_acc_name_ais || 'Субсчет'
+                 id_unity: 'Execution ID', acc_unity: res.data.default_acc_name_unity || 'Account',
+                 id_ais: 'ID сделки', acc_ais: res.data.default_acc_name_ais || 'Субсчет'
              });
           }
       })
@@ -237,7 +182,7 @@ const SverkaPage = () => {
 
   const handleCompare = async () => {
     if (!file1 || !file2) return toast.warning("Выберите оба файла!");
-    if (!cols.id_col_1 || !cols.id_col_2) return toast.warning("Выберите колонки ID для обоих файлов!");
+    if (!cols.id_col_1 || !cols.id_col_2) return toast.warning("Выберите колонки ID!");
 
     setLoading(true);
     const formData = new FormData();
@@ -247,10 +192,7 @@ const SverkaPage = () => {
     try {
         const settingsRes = await axios.get('http://127.0.0.1:8000/api/settings');
         formData.append('settings_json', JSON.stringify(settingsRes.data));
-    } catch (e) {
-        setLoading(false);
-        return toast.error("Ошибка настроек");
-    }
+    } catch (e) { setLoading(false); return toast.error("Ошибка настроек"); }
 
     formData.append('id_col_1', cols.id_col_1);
     formData.append('acc_col_1', cols.acc_col_1);
@@ -258,31 +200,41 @@ const SverkaPage = () => {
     formData.append('acc_col_2', cols.acc_col_2);
 
     try {
-      const res = await axios.post('http://127.0.0.1:8000/api/compare', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await axios.post('http://127.0.0.1:8000/api/compare', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setResults(res.data);
       toast.success("Готово!");
+
     } catch (error) {
-        const msg = error.response?.data?.detail || error.message;
-        toast.error("Ошибка: " + msg);
-    } finally {
-      setLoading(false);
-    }
+        toast.error("Ошибка: " + (error.response?.data?.detail || error.message));
+    } finally { setLoading(false); }
   };
 
   const handleExport = async () => {
-    if (!results) return;
+    // В results теперь должен быть comparison_id, который пришел от сервера при сверке
+    if (!results || !results.comparison_id) {
+        toast.error("Нет данных для экспорта. Повторите сверку.");
+        return;
+    }
+
+    setLoadingExport(true);
     try {
-        const res = await axios.post('http://127.0.0.1:8000/api/export', results, { responseType: 'blob' });
+        // Теперь это GET запрос с ID
+        const res = await axios.get(`http://127.0.0.1:8000/api/export/${results.comparison_id}`, {
+            responseType: 'blob'
+        });
+
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const link = document.createElement('a');
         link.href = url;
         link.setAttribute('download', `Report_${new Date().toLocaleDateString()}.xlsx`);
         document.body.appendChild(link);
         link.click();
-    } catch (error) { toast.error("Ошибка экспорта"); }
-  };
+    } catch (error) {
+        toast.error("Ошибка экспорта");
+    } finally {
+        setLoadingExport(false);
+    }
+};
 
   const ResultTable = ({ data }) => {
     if (!data || data.length === 0) return (
@@ -293,9 +245,10 @@ const SverkaPage = () => {
     );
     const headers = Object.keys(data[0]);
     return (
-      <div className="result-table-wrapper" style={{maxHeight: '70vh', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}>
+      // ИЗМЕНЕНИЕ: Убрали maxHeight, ставим height: 100% для Flexbox
+      <div className="result-table-wrapper" style={{height: '100%', overflow: 'auto', border: 'none'}}>
         <table className="styled-table">
-          <thead>
+          <thead style={{position: 'sticky', top: 0, zIndex: 5}}>
             <tr>{headers.map(h => <th key={h}>{h}</th>)}</tr>
           </thead>
           <tbody>
@@ -309,72 +262,70 @@ const SverkaPage = () => {
   };
 
   return (
-    <div style={{width: '100%', height: '100%', display: 'flex', flexDirection: 'column'}}>
-      <h1 style={{marginBottom: '30px', fontSize: '28px', color: '#1e293b'}}>Сверка данных</h1>
+    // ИЗМЕНЕНИЕ: height: 100vh минус отступы, overflow: hidden чтобы не было скролла страницы
+    <div style={{width: '100%', height: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
 
-      <div className="card" style={{padding: '30px', marginBottom: '30px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'}}>
-        <div style={{display: 'flex', gap: '40px', flexWrap: 'wrap'}}>
+      {/* Добавляем стили для анимации спиннера */}
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spin-anim { animation: spin 1s linear infinite; }
+      `}</style>
 
-            {/* ФАЙЛ 1 */}
-            <FileSection
-                title="Unity" color="#3b82f6"
-                file={file1} setFile={setFile1}
-                headers={{list: headers1, onLoad: setHeaders1}}
+      {/* Верхняя часть (заголовок и файлы) - не сжимается (flexShrink: 0) */}
+      <div style={{flexShrink: 0, overflowY: 'auto', paddingBottom: '20px'}}>
+          <h1 style={{marginBottom: '20px', fontSize: '28px', color: '#1e293b'}}>Сверка данных</h1>
 
-                // Значения
-                idCol={cols.id_col_1} setIdCol={val => setCols(prev => ({...prev, id_col_1: val}))}
-                accCol={cols.acc_col_1} setAccCol={val => setCols(prev => ({...prev, acc_col_1: val}))}
+          <div className="card" style={{padding: '30px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}>
+            <div style={{display: 'flex', gap: '40px', flexWrap: 'wrap'}}>
+                <FileSection
+                    title="Unity" color="#3b82f6"
+                    file={file1} setFile={setFile1}
+                    headers={{list: headers1, onLoad: setHeaders1}}
+                    idCol={cols.id_col_1} setIdCol={val => setCols(prev => ({...prev, id_col_1: val}))}
+                    accCol={cols.acc_col_1} setAccCol={val => setCols(prev => ({...prev, acc_col_1: val}))}
+                    defaultIdName={defaults.id_unity} defaultAccName={defaults.acc_unity}
+                />
+                <div style={{width: '1px', background: '#e2e8f0', margin: '10px 0'}}></div>
+                <FileSection
+                    title="АИС" color="#8b5cf6"
+                    file={file2} setFile={setFile2}
+                    headers={{list: headers2, onLoad: setHeaders2}}
+                    idCol={cols.id_col_2} setIdCol={val => setCols(prev => ({...prev, id_col_2: val}))}
+                    accCol={cols.acc_col_2} setAccCol={val => setCols(prev => ({...prev, acc_col_2: val}))}
+                    defaultIdName={defaults.id_ais} defaultAccName={defaults.acc_ais}
+                />
+            </div>
 
-                // Строгий авто-выбор (Ищет Execution ID)
-                defaultIdName={defaults.id_unity}
-                defaultAccName={defaults.acc_unity}
-            />
-
-            {/* Разделитель */}
-            <div style={{width: '1px', background: '#e2e8f0', margin: '10px 0'}}></div>
-
-            {/* ФАЙЛ 2 */}
-            <FileSection
-                title="АИС" color="#8b5cf6"
-                file={file2} setFile={setFile2}
-                headers={{list: headers2, onLoad: setHeaders2}}
-
-                // Значения
-                idCol={cols.id_col_2} setIdCol={val => setCols(prev => ({...prev, id_col_2: val}))}
-                accCol={cols.acc_col_2} setAccCol={val => setCols(prev => ({...prev, acc_col_2: val}))}
-
-                // Строгий авто-выбор (Ищет ID сделки)
-                defaultIdName={defaults.id_ais}
-                defaultAccName={defaults.acc_ais}
-            />
-        </div>
-
-        <div style={{marginTop: '40px', display: 'flex', justifyContent: 'center'}}>
-            <button
-                className="btn"
-                onClick={handleCompare}
-                disabled={loading}
-                style={{
-                    padding: '16px 60px',
-                    fontSize: '18px',
-                    fontWeight: 600,
-                    borderRadius: '12px',
-                    display: 'flex', alignItems: 'center', gap: '12px',
-                    boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.4)',
-                    transition: 'transform 0.1s'
-                }}
-                onMouseDown={e => !loading && (e.currentTarget.style.transform = 'scale(0.98)')}
-                onMouseUp={e => !loading && (e.currentTarget.style.transform = 'scale(1)')}
-            >
-                {loading ? 'Обработка...' : <><Play size={24} fill="white" /> Запустить сверку</>}
-            </button>
-        </div>
+            <div style={{marginTop: '30px', display: 'flex', justifyContent: 'center'}}>
+                <button
+                    className="btn"
+                    onClick={handleCompare}
+                    disabled={loading}
+                    style={{
+                        padding: '16px 60px', fontSize: '18px', fontWeight: 600, borderRadius: '12px',
+                        display: 'flex', alignItems: 'center', gap: '12px',
+                        background: loading ? '#94a3b8' : '#3b82f6', cursor: loading ? 'not-allowed' : 'pointer'
+                    }}
+                >
+                    {loading ? 'Обработка...' : <><Play size={24} fill="white" /> Запустить сверку</>}
+                </button>
+            </div>
+          </div>
       </div>
 
-      {/* РЕЗУЛЬТАТЫ */}
+      {/* Результаты - занимают всё оставшееся место (flex: 1) */}
       {results && (
-        <div className="card" style={{padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: '500px'}}>
-            <div style={{padding: '20px 30px', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <div className="card" style={{
+            padding: '0',
+            border: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,           // Растягивается до низа экрана
+            minHeight: 0,      // Важно для скролла внутри flex-элемента
+            marginBottom: '0'
+        }}>
+            {/* Шапка результатов */}
+            <div style={{padding: '15px 30px', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0}}>
                 <div className="tabs-container" style={{marginBottom: 0, borderBottom: 'none'}}>
                     {[
                         {id: 'matches', label: 'Совпадения', color: '#16a34a'},
@@ -388,28 +339,46 @@ const SverkaPage = () => {
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                            style={{fontSize: '15px', padding: '10px 15px'}}
+                            style={{fontSize: '14px', padding: '8px 12px'}}
                         >
                             {tab.label}
                             <span style={{
                                 background: activeTab === tab.id ? tab.color : '#f1f5f9',
                                 color: activeTab === tab.id ? 'white' : '#64748b',
-                                padding: '2px 8px', borderRadius: '12px', fontSize: '12px', marginLeft: '8px', fontWeight: 600
+                                padding: '2px 8px', borderRadius: '12px', fontSize: '11px', marginLeft: '8px', fontWeight: 600
                             }}>
                                 {results[tab.id]?.length || 0}
                             </span>
                         </button>
                     ))}
                 </div>
+
+                {/* Кнопка Экспорта с Анимацией */}
                 <button
-                    className="btn" onClick={handleExport}
-                    style={{background: '#10b981', padding: '10px 20px', fontSize: '14px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(16, 185, 129, 0.2)'}}
+                    className="btn"
+                    onClick={handleExport}
+                    disabled={loadingExport}
+                    style={{
+                        background: loadingExport ? '#94a3b8' : '#10b981',
+                        padding: '10px 20px', fontSize: '14px', borderRadius: '8px',
+                        cursor: loadingExport ? 'wait' : 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '8px'
+                    }}
                 >
-                    <Download size={18} style={{marginRight: '8px'}}/> Excel
+                    {loadingExport ? (
+                        <>
+                            <Loader size={18} className="spin-anim" /> Экспорт...
+                        </>
+                    ) : (
+                        <>
+                            <Download size={18} /> Excel
+                        </>
+                    )}
                 </button>
             </div>
 
-            <div style={{flex: 1, background: '#ffffff'}}>
+            {/* Контейнер таблицы со скроллом */}
+            <div style={{flex: 1, background: '#ffffff', overflow: 'hidden', position: 'relative'}}>
                 <ResultTable data={results[activeTab]} />
             </div>
         </div>

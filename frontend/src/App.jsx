@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { FileDiff, Settings, FileSpreadsheet, Layers, Users, User, LayoutDashboard } from 'lucide-react';
+import { FileDiff, Settings, FileSpreadsheet, Layers, Users, User, LayoutDashboard, Binary } from 'lucide-react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
@@ -13,6 +13,7 @@ import ReportsPage from './pages/ReportsPage';
 import LoginPage from './pages/LoginPage';
 import DepartmentsPage  from "./pages/DepartmentsPage.jsx";
 import ProfilePage from './pages/ProfilePage';
+import InstrumentsPage from './pages/InstrumentsPage';
 
 const NavButton = ({ to, icon: Icon, label }) => {
   const location = useLocation();
@@ -77,13 +78,12 @@ function App() {
             <NavButton to="/splits" icon={Layers} label="Сплиты" />
             <NavButton to="/reports" icon={FileSpreadsheet} label="Отчеты" />
               <NavButton to="/departments" icon={Users} label="Департаменты" />
+              <NavButton to="/instruments" icon={Binary} label="Инструменты" />
 
             {/* Распорка (всё, что ниже неё, прижмется к низу экрана) */}
             <div className="spacer" style={{ flex: 1 }} />
 
               <NavButton to="/profile" icon={User} label="Профиль" />
-
-            {/* Настройки теперь в самом низу меню */}
             <NavButton to="/settings" icon={Settings} label="Настройки" />
 
           </nav>
@@ -97,6 +97,7 @@ function App() {
             <Route path="/splits" element={<SplitsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
               <Route path="/departments" element={<DepartmentsPage />} />
+              <Route path="/instruments" element={<InstrumentsPage />} />
               <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
 
             <Route path="/settings" element={<SettingsPage />} />

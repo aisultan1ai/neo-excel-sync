@@ -693,3 +693,16 @@ def get_attachment_by_id(attachment_id):
         return cursor.fetchone()
     finally:
         conn.close()
+
+
+def reset_all_clients_statuses():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE clients SET status = 'gray'")
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error resetting statuses: {e}")
+        return False

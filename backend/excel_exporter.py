@@ -143,6 +143,9 @@ def export_results_to_stream(results_to_export):
         podft_7m_df = pd.DataFrame(raw_podft_7m) if isinstance(raw_podft_7m,
                                                                list) else raw_podft_7m.copy() if raw_podft_7m is not None else pd.DataFrame()
 
+        if not podft_7m_df.empty and 'Рынок ЦБ' in podft_7m_df.columns:
+            podft_7m_df = podft_7m_df[podft_7m_df['Рынок ЦБ'] != 'MISX']
+
         podft_7m_df.to_excel(writer, sheet_name='ПОДФТ', index=False)
         worksheet_podft = writer.sheets['ПОДФТ']
 
