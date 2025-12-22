@@ -1,274 +1,254 @@
 import pandas as pd
 import os
 import logging
+import re
 from utils import extract_numbers_from_series
 
+# Настройка логгера для этого файла
 log = logging.getLogger(__name__)
 
 
 def _perform_comparison(df1, df2, id_col_1, acc_col_1, id_col_2, acc_col_2):
-
     log.debug("Выполнение _perform_comparison...")
+
+    # Нормализация ID: создаем cleaned_id векторно
     df1['cleaned_id'] = df1[id_col_1].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     df2['cleaned_id'] = df2[id_col_2].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-    matching = df1[df1['cleaned_id'].isin(df2['cleaned_id'])].copy()
-    unmatched1 = df1[~df1['cleaned_id'].isin(df2['cleaned_id'])].copy()
-    unmatched2 = df2[~df2['cleaned_id'].isin(df1['cleaned_id'])].copy()
+
+    # Используем set для быстрого поиска
+    ids1 = set(df1['cleaned_id'])
+    ids2 = set(df2['cleaned_id'])
+
+    # Фильтрация
+    matching = df1[df1['cleaned_id'].isin(ids2)].copy()
+    unmatched1 = df1[~df1['cleaned_id'].isin(ids2)].copy()
+    unmatched2 = df2[~df2['cleaned_id'].isin(ids1)].copy()
+
+    # Чистка служебных колонок
     for df in [matching, unmatched1, unmatched2]:
         df.drop(columns=['cleaned_id'], inplace=True, errors='ignore')
-    count1 = df1.groupby(extract_numbers_from_series(df1[acc_col_1]))[
-        id_col_1].count() if not df1.empty else pd.Series()
-    count2 = df2.groupby(extract_numbers_from_series(df2[acc_col_2]))[
-        id_col_2].count() if not df2.empty else pd.Series()
-    log.debug("Сравнение завершено. Найдено: %d совпадений, %d расх. Unity, %d расх. АИС", len(matching),
-              len(unmatched1), len(unmatched2))
+
+    # Сводка (Summary)
+    count1 = pd.Series()
+    if not df1.empty and acc_col_1 in df1.columns:
+        count1 = df1.groupby(extract_numbers_from_series(df1[acc_col_1]))[id_col_1].count()
+
+    count2 = pd.Series()
+    if not df2.empty and acc_col_2 in df2.columns:
+        count2 = df2.groupby(extract_numbers_from_series(df2[acc_col_2]))[id_col_2].count()
+
     return matching, unmatched1, unmatched2, count1, count2
 
 
-def _process_podft_for_df(df, file_path, podft_settings):
-    """Хелпер для поиска сделок ПОД/ФТ (7М) в одном DataFrame."""
-    log.debug("Поиск ПОД/ФТ (7М) в %s...", os.path.basename(file_path))
+def _process_podft_for_df(df, display_name, podft_settings):
+    """Хелпер для поиска сделок ПОД/ФТ (7М)."""
+    if df.empty: return pd.DataFrame()
+
     try:
-        podft_threshold = float(podft_settings['threshold'].replace(' ', '').replace(',', '.'))
+        threshold_val = str(podft_settings.get('threshold', '7000000'))
+        podft_threshold = float(threshold_val.replace(' ', '').replace(',', '.'))
     except ValueError:
-        log.error("Неверный формат порогового значения ПОД/ФТ (7М): %s", podft_settings['threshold'], exc_info=True)
-        raise ValueError("Пороговое значение для ПОД/ФТ (7М) должно быть числом.")
+        log.error(f"Неверный формат порога ПОД/ФТ: {podft_settings.get('threshold')}")
+        return pd.DataFrame()
 
     podft_column = podft_settings['column']
     if podft_column not in df.columns:
-        log.warning("Столбец для ПОД/ФТ (7М) '%s' не найден в %s.", podft_column, os.path.basename(file_path))
+        # Используем красивое имя в логах
+        log.warning(f"Столбец для ПОД/ФТ (7М) '{podft_column}' не найден в {display_name}.")
         return pd.DataFrame()
 
-    df_numeric = pd.to_numeric(df[podft_column], errors='coerce')
-    temp_df = df.loc[df_numeric >= podft_threshold].copy()
-    log.debug("Найдено %d сделок (7М) >= %f (до фильтра)", len(temp_df), podft_threshold)
+    # Временный DF для расчетов
+    temp_df = df.copy()
 
-    if podft_settings['filter_enabled']:
-        filter_col = podft_settings['filter_column']
-        filter_vals_str = podft_settings['filter_values']
-        if filter_col and filter_vals_str and filter_col in temp_df.columns:
-            exclude_list = [val.strip().upper() for val in filter_vals_str.split(',')]
+    # Преобразуем в числа, ошибки -> NaN. Чистим пробелы внутри чисел (напр. "7 000 000")
+    temp_df['__temp_sum'] = pd.to_numeric(
+        temp_df[podft_column].astype(str).str.replace(r'\s+', '', regex=True).str.replace(',', '.'),
+        errors='coerce'
+    )
 
-            temp_df = temp_df[~temp_df[filter_col].astype(str).str.strip().str.upper().isin(exclude_list)]
+    # Фильтр по сумме
+    result_df = temp_df[temp_df['__temp_sum'] >= podft_threshold].copy()
+    result_df.drop(columns=['__temp_sum'], inplace=True)
 
-            log.debug("Применен фильтр-исключение (7М). Осталось %d сделок.", len(temp_df))
+    # Фильтр по значению (исключения, например Рынок ЦБ != MISX)
+    if podft_settings.get('filter_enabled'):
+        filter_col = podft_settings.get('filter_column')
+        filter_vals = podft_settings.get('filter_values', '')
 
-    if not temp_df.empty:
-        temp_df.insert(0, 'Источник_Файла', os.path.basename(file_path))
+        if filter_col and filter_vals and filter_col in result_df.columns:
+            exclude_list = [v.strip().upper() for v in filter_vals.split(',') if v.strip()]
+            if exclude_list:
+                mask = result_df[filter_col].astype(str).str.strip().str.upper().isin(exclude_list)
+                result_df = result_df[~mask]
 
-    log.debug("Поиск ПОД/ФТ (7М) в %s завершен. Найдено: %d", os.path.basename(file_path), len(temp_df))
-    return temp_df
+    if not result_df.empty:
+        # Вставляем переданное красивое имя
+        result_df.insert(0, 'Источник_Файла', display_name)
+
+    return result_df
 
 
 def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col_2,
-                  podft_settings,
-                  overlap_accounts_list_from_settings):
-    """
-    Основная логика сравнения и проверок.
-    """
-    log.info("Начало основной обработки. Файл 1: %s, Файл 2: %s", os.path.basename(file1_path),
-             os.path.basename(file2_path))
+                  podft_settings, overlap_accounts_list,
+                  display_name1="File1.xlsx", display_name2="File2.xlsx"):
+    """Основная функция обработки."""
+
+    # Логируем красивые имена
+    log.info(f"Начало основной обработки. Файл 1: {display_name1}, Файл 2: {display_name2}")
 
     try:
-        log.debug("Чтение Excel файла 1: %s", file1_path)
-        df1_original = pd.read_excel(file1_path)
-        log.debug("Чтение Excel файла 2: %s", file2_path)
-        df2_original = pd.read_excel(file2_path)
-        log.info("Файлы Excel успешно прочитаны. df1: %d строк, df2: %d строк.", len(df1_original), len(df2_original))
+        # Читаем сразу как строки
+        df1_orig = pd.read_excel(file1_path, dtype=str)
+        df2_orig = pd.read_excel(file2_path, dtype=str)
 
-        df1_cols = df1_original.columns.tolist() if not df1_original.empty else []
-        df2_cols = df2_original.columns.tolist() if not df2_original.empty else []
+        # --- ВАЖНО: АВТОМАТИЧЕСКАЯ ОЧИСТКА НАЗВАНИЙ КОЛОНОК ОТ ПРОБЕЛОВ ---
+        df1_orig.columns = df1_orig.columns.str.strip()
+        df2_orig.columns = df2_orig.columns.str.strip()
 
-        try:
-            if id_col_1 in df1_original.columns and acc_col_1 in df1_original.columns:
-                df1_original = df1_original.dropna(subset=[id_col_1, acc_col_1], how='all')
-            if id_col_2 in df2_original.columns and acc_col_2 in df2_original.columns:
-                df2_original = df2_original.dropna(subset=[id_col_2, acc_col_2], how='all')
-            log.debug("Очистка 'Итоговых' строк завершена.")
-        except Exception as e:
-            log.warning("Ошибка при очистке итоговых строк: %s", e)
+        log.info(f"Файлы Excel успешно прочитаны. df1: {len(df1_orig)} строк, df2: {len(df2_orig)} строк.")
 
-        # --- Поиск задвоенных ID ---
-        log.debug("Поиск задвоенных ID в df1...")
-        duplicates_df1 = pd.DataFrame()
-        duplicates_df2 = pd.DataFrame()
-        temp_id_col = 'temp_cleaned_id_for_dup_check'
-        if id_col_1 in df1_original.columns:
-            df1_original[temp_id_col] = df1_original[id_col_1].astype(str).str.strip().str.replace(r'\.0$', '',
-                                                                                                   regex=True)
-            duplicated_mask_1 = df1_original.duplicated(subset=[temp_id_col], keep=False) & df1_original[
-                temp_id_col].notna() & (df1_original[temp_id_col] != '')
-            duplicates_df1 = df1_original[duplicated_mask_1].copy()
-            df1_original.drop(columns=[temp_id_col], inplace=True)
-            duplicates_df1.drop(columns=[temp_id_col], inplace=True, errors='ignore')
-            if not duplicates_df1.empty:
-                duplicates_df1 = duplicates_df1.sort_values(by=id_col_1)
-        log.info("Найдено %d задвоенных ID в df1.", len(duplicates_df1))
-        log.debug("Поиск задвоенных ID в df2...")
-        if id_col_2 in df2_original.columns:
-            df2_original[temp_id_col] = df2_original[id_col_2].astype(str).str.strip().str.replace(r'\.0$', '',
-                                                                                                   regex=True)
-            duplicated_mask_2 = df2_original.duplicated(subset=[temp_id_col], keep=False) & df2_original[
-                temp_id_col].notna() & (df2_original[temp_id_col] != '')
-            duplicates_df2 = df2_original[duplicated_mask_2].copy()
-            df2_original.drop(columns=[temp_id_col], inplace=True)
-            duplicates_df2.drop(columns=[temp_id_col], inplace=True, errors='ignore')
-            if not duplicates_df2.empty:
-                duplicates_df2 = duplicates_df2.sort_values(by=id_col_2)
-        log.info("Найдено %d задвоенных ID в df2.", len(duplicates_df2))
+        # Убираем пустые строки "Итого"
+        if id_col_1 in df1_orig.columns: df1_orig.dropna(subset=[id_col_1], inplace=True)
+        if id_col_2 in df2_orig.columns: df2_orig.dropna(subset=[id_col_2], inplace=True)
 
-        # --- Блок КРИПТО (USDT) ---
-        log.debug("Поиск сделок КРИПТО (USDT)...")
-        all_crypto_deals = []
+        # 1. Поиск дубликатов (внутри файлов)
+        # -----------------------------------
+        duplicates1 = pd.DataFrame()
+        if id_col_1 in df1_orig.columns:
+            s_ids = df1_orig[id_col_1].str.strip().str.replace(r'\.0$', '', regex=True)
+            mask = s_ids.duplicated(keep=False) & s_ids.notna() & (s_ids != '')
+            duplicates1 = df1_orig[mask].sort_values(by=id_col_1)
+            # В оригинале вы НЕ удаляли дубликаты из df1_orig
 
-        instrument_col_name = "Финансовый инструмент"
+        log.info(f"Найдено {len(duplicates1)} задвоенных ID в df1.")
 
-        if 'Валюта' in df1_original.columns:
-            # 1. Сначала находим все USDT
-            crypto1_base = df1_original[df1_original['Валюта'] == 'USDT'].copy()
+        duplicates2 = pd.DataFrame()
+        if id_col_2 in df2_orig.columns:
+            s_ids = df2_orig[id_col_2].str.strip().str.replace(r'\.0$', '', regex=True)
+            mask = s_ids.duplicated(keep=False) & s_ids.notna() & (s_ids != '')
+            duplicates2 = df2_orig[mask].sort_values(by=id_col_2)
 
-            # 2. Теперь, если столбец "Финансовый инструмент" существует,
-            #    применяем к ним FU-фильтр
-            if not crypto1_base.empty and instrument_col_name in crypto1_base.columns:
-                crypto1 = crypto1_base[~crypto1_base[instrument_col_name].astype(str).str.startswith("FU")].copy()
-            else:
-                crypto1 = crypto1_base
+        log.info(f"Найдено {len(duplicates2)} задвоенных ID в df2.")
 
-            if not crypto1.empty:
-                crypto1.insert(0, 'Источник_Файла', os.path.basename(file1_path))
-                all_crypto_deals.append(crypto1)
+        # 2. Крипто (USDT)
+        # ----------------
+        crypto_dfs = []
+        inst_col = "Финансовый инструмент"  # Можно вынести в настройки
 
-        if 'Валюта' in df2_original.columns:
+        # Используем переданные красивые имена
+        for df, d_name in [(df1_orig, display_name1), (df2_orig, display_name2)]:
+            if 'Валюта' in df.columns:
+                # Ищем USDT
+                crypto = df[df['Валюта'] == 'USDT'].copy()
+                # Фильтр фьючерсов (FU...)
+                if not crypto.empty and inst_col in crypto.columns:
+                    crypto = crypto[~crypto[inst_col].astype(str).str.startswith("FU")]
 
-            crypto2_base = df2_original[df2_original['Валюта'] == 'USDT'].copy()
+                if not crypto.empty:
+                    crypto.insert(0, 'Источник_Файла', d_name)
+                    crypto_dfs.append(crypto)
 
-            if not crypto2_base.empty and instrument_col_name in crypto2_base.columns:
-                crypto2 = crypto2_base[~crypto2_base[instrument_col_name].astype(str).str.startswith("FU")].copy()
-            else:
-                crypto2 = crypto2_base
+        crypto_res = pd.concat(crypto_dfs, ignore_index=True) if crypto_dfs else pd.DataFrame()
+        log.info(f"Найдено {len(crypto_res)} сделок КРИПТО (USDT).")
 
-            if not crypto2.empty:
-                crypto2.insert(0, 'Источник_Файла', os.path.basename(file2_path))
-                all_crypto_deals.append(crypto2)
+        # 3. Бонды / Опционы (45M)
+        # ------------------------
+        bo_res = pd.DataFrame()
+        bo_thresh_str = str(podft_settings.get("bo_threshold", "45000000"))
 
-        crypto_deals_df = pd.concat(all_crypto_deals, ignore_index=True) if all_crypto_deals else pd.DataFrame()
-        if crypto_deals_df.empty:
-            base_cols = df1_cols if df1_cols else df2_cols
-            if base_cols:
-                final_cols = base_cols.copy()
-                if 'Источник_Файла' not in final_cols:
-                    final_cols.insert(0, 'Источник_Файла')
-                crypto_deals_df = pd.DataFrame(columns=final_cols)
-            else:
-                crypto_deals_df = pd.DataFrame(columns=['Источник_Файла', 'Валюта', 'Сумма тг'])
-        log.info("Найдено %d сделок КРИПТО (USDT).", len(crypto_deals_df))
-
-        # --- Блок ПОДФТ Бонды/Опционы (45M) ---
-        log.debug("Поиск сделок Бонды/Опционы (45М)...")
-        bonds_options_df = pd.DataFrame()
         if podft_settings.get('bo_enabled', True):
+            inst_col_unity = podft_settings.get("bo_unity_instrument_col", "Instrument")
+            sum_col_ais = podft_settings.get("bo_ais_sum_col", "Сумма тг")
+            prefixes = [p.strip() for p in podft_settings.get("bo_prefixes", "[BO],[OP]").split(',')]
+
             try:
-                instrument_col_1 = podft_settings.get("bo_unity_instrument_col", "Instrument")
-                bo_threshold_str = podft_settings.get("bo_threshold", "45000000")
-                bo_sum_col = podft_settings.get("bo_ais_sum_col", "Сумма тг")
-                prefixes_str = podft_settings.get("bo_prefixes", "[BO],[OP]")
-                log.debug("Настройки Б/О: Col1='%s', Thresh='%s', SumCol='%s', Prefixes='%s'",
-                          instrument_col_1, bo_threshold_str, bo_sum_col, prefixes_str)
-                bo_threshold = float(bo_threshold_str.replace(' ', '').replace(',', '.'))
-                prefixes_list = [p.strip() for p in prefixes_str.split(',') if p.strip()]
-                if instrument_col_1 in df1_original.columns and id_col_1 in df1_original.columns:
-                    df1_targets_list = []
-                    for prefix in prefixes_list:
-                        log.debug("Поиск префикса: %s", prefix)
-                        df1_targets_list.append(
-                            df1_original[df1_original[instrument_col_1].astype(str).str.startswith(prefix)])
-                    if df1_targets_list:
-                        df1_targets = pd.concat(df1_targets_list)
-                    else:
-                        df1_targets = pd.DataFrame(
-                            columns=df1_original.columns)
-                    log.debug("Найдено %d сделок (Б/О) в Unity по префиксам.", len(df1_targets))
-                    if not df1_targets.empty:
-                        target_ids = df1_targets[id_col_1].astype(str).str.strip().str.replace(r'\.0$', '',
-                                                                                               regex=True).unique()
-                        if id_col_2 in df2_original.columns and bo_sum_col in df2_original.columns:
-                            df2_copy = df2_original.copy()
-                            df2_copy['cleaned_id_bo'] = df2_copy[id_col_2].astype(str).str.strip().str.replace(r'\.0$',
-                                                                                                               '',
-                                                                                                               regex=True)
-                            df2_matches = df2_copy[df2_copy['cleaned_id_bo'].isin(target_ids)].copy()
-                            log.debug("Найдено %d совпадений по ID (Б/О) в АИС.", len(df2_matches))
-                            if not df2_matches.empty:
-                                df2_matches[bo_sum_col] = pd.to_numeric(df2_matches[bo_sum_col], errors='coerce')
-                                bonds_options_df = df2_matches[df2_matches[bo_sum_col] >= bo_threshold].copy()
-                            bonds_options_df.drop(columns=['cleaned_id_bo'], inplace=True, errors='ignore')
-                log.info("Найдено %d сделок Бонды/Опционы (>= %s).", len(bonds_options_df), bo_threshold_str)
+                bo_thresh = float(bo_thresh_str.replace(' ', '').replace(',', '.'))
+
+                if inst_col_unity in df1_orig.columns and id_col_1 in df1_orig.columns:
+                    # Ищем в Unity сделки с префиксами
+                    mask = df1_orig[inst_col_unity].astype(str).str.startswith(tuple(prefixes))
+                    bo_unity = df1_orig[mask]
+
+                    if not bo_unity.empty:
+                        target_ids = set(
+                            bo_unity[id_col_1].astype(str).str.strip().str.replace(r'\.0$', '', regex=True))
+
+                        if id_col_2 in df2_orig.columns and sum_col_ais in df2_orig.columns:
+                            ais_ids = df2_orig[id_col_2].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+                            bo_ais = df2_orig[ais_ids.isin(target_ids)].copy()
+
+                            bo_ais['__sum'] = pd.to_numeric(bo_ais[sum_col_ais], errors='coerce')
+                            bo_res = bo_ais[bo_ais['__sum'] >= bo_thresh].copy()
+                            bo_res.drop(columns=['__sum'], inplace=True)
             except Exception as e:
-                log.error("Ошибка при обработке Бондов/Опционов: %s", e, exc_info=True)
-        else:
-            log.info("Проверка Бондов/Опционов (45М) отключена в настройках.")
-        if bonds_options_df.empty:
-            bo_sum_col_name = podft_settings.get("bo_ais_sum_col", "Сумма тг")
-            if df2_cols:
-                bonds_options_df = pd.DataFrame(columns=df2_cols)
-            else:
-                bonds_options_df = pd.DataFrame(columns=[id_col_2, bo_sum_col_name])
+                log.error(f"Ошибка БО: {e}")
 
-        # --- Поиск Счетов "Перекрытия" ---
-        log.debug("Поиск счетов 'перекрытия' (всего %d в списке)...", len(overlap_accounts_list_from_settings))
-        overlap_accounts_set = set(overlap_accounts_list_from_settings)
-        found_overlap_accounts = set()
-        if acc_col_1 in df1_original.columns:
-            extracted_accounts1 = extract_numbers_from_series(df1_original[acc_col_1])
-            found_in_df1 = set(extracted_accounts1.dropna().unique()) & overlap_accounts_set
-            found_overlap_accounts.update(found_in_df1)
-        if acc_col_2 in df2_original.columns:
-            extracted_accounts2 = extract_numbers_from_series(df2_original[acc_col_2])
-            found_in_df2 = set(extracted_accounts2.dropna().unique()) & overlap_accounts_set
-            found_overlap_accounts.update(found_in_df2)
-        log.info("Найдено %d уникальных счетов 'перекрытия' в файлах.", len(found_overlap_accounts))
-        log.debug("Фильтрация счетов 'перекрытия' из основных DF...")
-        df1 = df1_original.copy()
-        df2 = df2_original.copy()
-        df1_len_before = len(df1)
-        df2_len_before = len(df2)
-        if acc_col_1 in df1.columns:
-            df1 = df1[~extract_numbers_from_series(df1[acc_col_1]).isin(overlap_accounts_set)].copy()
-        if acc_col_2 in df2.columns:
-            df2 = df2[~extract_numbers_from_series(df2[acc_col_2]).isin(overlap_accounts_set)].copy()
-        log.info("Фильтрация df1: %d -> %d строк.", df1_len_before, len(df1))
-        log.info("Фильтрация df2: %d -> %d строк.", df2_len_before, len(df2))
+        log.info(f"Найдено {len(bo_res)} сделок Бонды/Опционы (>= {bo_thresh_str}).")
 
-        # --- Поиск ПОДФТ (7М) ---
-        log.debug("Поиск ПОД/ФТ (%s) по отфильтрованным данным...", podft_settings.get('threshold'))
-        podft_results = pd.DataFrame()
-        if podft_settings['column'] and podft_settings['threshold']:
-            podft_results = pd.concat([
-                _process_podft_for_df(df1, file1_path, podft_settings),
-                _process_podft_for_df(df2, file2_path, podft_settings)
-            ])
+        # 4. Перекрытия (Overlap Accounts)
+        # ------------------------------
+        overlap_set = set(overlap_accounts_list)
+        found_overlaps = set()
 
-        log.info("Найдено %d сделок ПОД/ФТ (%s).", len(podft_results), podft_settings.get('threshold'))
+        def get_accs(df, col):
+            if col in df.columns:
+                return extract_numbers_from_series(df[col])
+            return pd.Series(dtype=object)
 
+        accs1 = get_accs(df1_orig, acc_col_1)
+        accs2 = get_accs(df2_orig, acc_col_2)
 
-        log.debug("Запуск основного сравнения...")
-        matching, unmatched1, unmatched2, count1, count2 = _perform_comparison(df1, df2, id_col_1, acc_col_1,
-                                                                               id_col_2, acc_col_2)
+        if not accs1.empty: found_overlaps.update(set(accs1.dropna()) & overlap_set)
+        if not accs2.empty: found_overlaps.update(set(accs2.dropna()) & overlap_set)
 
-        log.debug("Сборка финального словаря результатов.")
-        results_to_export = {
-            'matches': matching, 'unmatched1': unmatched1, 'unmatched2': unmatched2,
-            'summary1': count1, 'summary2': count2,
-            'podft_7m_deals': podft_results,
-            'podft_45m_bo_deals': bonds_options_df,
-            'crypto_deals': crypto_deals_df,
-            'duplicates1': duplicates_df1,
-            'duplicates2': duplicates_df2
-        }
+        log.info(f"Найдено {len(found_overlaps)} уникальных счетов 'перекрытия' в файлах.")
 
+        # Фильтрация перекрытий (создаем копии для основной сверки)
+        len1_before = len(df1_orig)
+        len2_before = len(df2_orig)
+
+        df1_clean = df1_orig[~accs1.isin(overlap_set)].copy() if not accs1.empty else df1_orig.copy()
+        df2_clean = df2_orig[~accs2.isin(overlap_set)].copy() if not accs2.empty else df2_orig.copy()
+
+        log.info(f"Фильтрация df1: {len1_before} -> {len(df1_clean)} строк.")
+        log.info(f"Фильтрация df2: {len2_before} -> {len(df2_clean)} строк.")
+
+        # 5. ПОД/ФТ (7М)
+        # ----------------
+        # Передаем красивые имена вместо file_path
+        podft_res = pd.concat([
+            _process_podft_for_df(df1_clean, display_name1, podft_settings),
+            _process_podft_for_df(df2_clean, display_name2, podft_settings)
+        ], ignore_index=True)
+
+        thresh_disp = podft_settings.get('threshold')
+        log.info(f"Найдено {len(podft_res)} сделок ПОД/ФТ ({thresh_disp}).")
+
+        # 6. Основная сверка
+        # ------------------
+        matches, diff1, diff2, sum1, sum2 = _perform_comparison(
+            df1_clean, df2_clean,
+            id_col_1, acc_col_1,
+            id_col_2, acc_col_2
+        )
+
+        log.info(
+            f"Сравнение завершено. Совпадений: {len(matches)}, Расхождений Unity: {len(diff1)}, Расхождений АИС: {len(diff2)}")
         log.info("Обработка файлов в processor.py успешно завершена.")
-        return results_to_export, found_overlap_accounts
+
+        return {
+            'matches': matches,
+            'unmatched1': diff1,
+            'unmatched2': diff2,
+            'summary1': sum1,
+            'summary2': sum2,
+            'podft_7m_deals': podft_res,
+            'podft_45m_bo_deals': bo_res,
+            'crypto_deals': crypto_res,
+            'duplicates1': duplicates1,
+            'duplicates2': duplicates2
+        }, found_overlaps
 
     except Exception as e:
-        log.error("Критическая ошибка в process_files: %s", e, exc_info=True)
+        log.error(f"Критическая ошибка в process_files: {e}", exc_info=True)
         raise e

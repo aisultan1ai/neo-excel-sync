@@ -1,5 +1,6 @@
 import shutil
 import time
+import re
 import os
 import json
 import logging
@@ -8,6 +9,7 @@ import bcrypt
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Any
+from threading import Lock
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,7 +30,11 @@ import database_manager
 pd.set_option('future.no_silent_downcasting', True)
 
 # Логирование
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    force=True # <--- ЭТО ВАЖНО, ЧТОБЫ ЛОГИ ПОЯВИЛИСЬ В ТЕРМИНАЛЕ
+)
 log = logging.getLogger(__name__)
 
 app = FastAPI(title="NeoExcelSync API")
@@ -39,16 +45,28 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 # --- CORS ---
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://192.168.0.198:5173"
-]
+#origins = [
+ #   "http://localhost:5173",
+  #  "http://127.0.0.1:5173",
+   # "http://localhost:3000",
+   # "http://192.168.0.198:5173"
+#]
+
+# origins = [
+  #  "http://localhost",           # <--- ВАЖНО ДЛЯ DOCKER (порт 80)
+  #  "http://127.0.0.1",           # <--- Тоже важно
+  #  "http://localhost:5173",      # Для локальной разработки без докера
+  #  "http://127.0.0.1:5173",
+#]
+
+cors_origins = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173"
+).split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Явный список доменов
+    allow_origins=[o.strip() for o in cors_origins if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,9 +76,12 @@ app.add_middleware(
 TEMP_DIR = "temp_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-# Кэш результатов в памяти (в продакшене лучше Redis/DB)
-# Структура: { "uuid_str": { "data": {...}, "created_at": datetime } }
+
 COMPARISON_CACHE: Dict[str, Any] = {}
+CACHE_LOCK = Lock()
+CACHE_TTL_MINUTES = int(os.getenv("CACHE_TTL_MINUTES", "60"))  # 60 минут по умолчанию
+CACHE_MAX_ITEMS = int(os.getenv("CACHE_MAX_ITEMS", "30"))      # лучше меньше, чем 50
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
@@ -129,6 +150,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     return username
 
+async def require_admin(current_user: str = Depends(get_current_user)):
+    user = database_manager.get_user_by_username(current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    is_admin = user[4] if len(user) > 4 else False
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
 
 def save_upload_file(upload_file: UploadFile) -> str:
     try:
@@ -153,6 +183,25 @@ def cleanup_files(*file_paths):
                 os.remove(path)
             except Exception as e:
                 log.warning(f"Failed to remove temp file {path}: {e}")
+
+def cleanup_cache():
+    """Удаляет просроченные элементы и ограничивает размер кэша."""
+    now = datetime.now()
+    ttl = timedelta(minutes=CACHE_TTL_MINUTES)
+
+    with CACHE_LOCK:
+        # 1) удалить просроченные
+        expired_keys = [
+            k for k, v in COMPARISON_CACHE.items()
+            if (now - v.get("created_at", now)) > ttl
+        ]
+        for k in expired_keys:
+            COMPARISON_CACHE.pop(k, None)
+
+        # 2) ограничить размер (удаляем самые старые)
+        while len(COMPARISON_CACHE) > CACHE_MAX_ITEMS:
+            oldest = min(COMPARISON_CACHE.keys(), key=lambda k: COMPARISON_CACHE[k]["created_at"])
+            COMPARISON_CACHE.pop(oldest, None)
 
 
 # --- API ---
@@ -195,6 +244,9 @@ async def run_comparison(
     f1_path = None
     f2_path = None
     try:
+
+        original_name_1 = file1.filename
+        original_name_2 = file2.filename
         # Сохранение файлов (синхронное I/O, но быстрое)
         f1_path = save_upload_file(file1)
         f2_path = save_upload_file(file2)
@@ -205,20 +257,21 @@ async def run_comparison(
             _process_comparison_sync,
             f1_path, id_col_1, acc_col_1,
             f2_path, id_col_2, acc_col_2,
-            settings
+            settings,
+            original_name_1,
+            original_name_2
         )
 
         # Сохраняем результат в кэш
         comparison_id = str(uuid.uuid4())
-        COMPARISON_CACHE[comparison_id] = {
-            "data": results,
-            "created_at": datetime.now()
-        }
 
-        # Очистка старого кэша (опционально, простая реализация)
-        if len(COMPARISON_CACHE) > 50:
-            oldest = min(COMPARISON_CACHE.keys(), key=lambda k: COMPARISON_CACHE[k]["created_at"])
-            del COMPARISON_CACHE[oldest]
+        with CACHE_LOCK:
+            COMPARISON_CACHE[comparison_id] = {
+                "data": results,
+                "created_at": datetime.now()
+            }
+
+        cleanup_cache()
 
         # Подготовка ответа для JSON (DataFrame -> dict)
         json_response = {}
@@ -242,7 +295,7 @@ async def run_comparison(
         cleanup_files(f1_path, f2_path)
 
 
-def _process_comparison_sync(f1_path, id_col_1, acc_col_1, f2_path, id_col_2, acc_col_2, settings):
+def _process_comparison_sync(f1_path, id_col_1, acc_col_1, f2_path, id_col_2, acc_col_2, settings, name1, name2):
     """Синхронная функция обработки, запускаемая в треде."""
     podft_settings = {
         'column': settings.get("podft_sum_col", "Сумма тг"),
@@ -262,7 +315,9 @@ def _process_comparison_sync(f1_path, id_col_1, acc_col_1, f2_path, id_col_2, ac
         f1_path, id_col_1, acc_col_1,
         f2_path, id_col_2, acc_col_2,
         podft_settings,
-        overlap_accounts
+        overlap_accounts,
+        display_name1=name1,  # <--- ВОТ ТУТ
+        display_name2=name2
     )
 
     # Фильтр MISX
@@ -312,24 +367,36 @@ def _process_comparison_sync(f1_path, id_col_1, acc_col_1, f2_path, id_col_2, ac
 @app.get("/api/export/{comparison_id}")
 async def export_excel_file(comparison_id: str):
     """Экспорт по ID без передачи данных обратно."""
-    cached = COMPARISON_CACHE.get(comparison_id)
+
+    # 1) чистим просроченный кэш
+    cleanup_cache()
+
+    # 2) читаем кэш под lock (чтобы не было гонок)
+    with CACHE_LOCK:
+        cached = COMPARISON_CACHE.get(comparison_id)
+
     if not cached:
         raise HTTPException(status_code=404, detail="Результаты устарели или не найдены. Повторите сверку.")
 
     results = cached["data"]
+
     try:
-        # Запускаем генерацию Excel в потоке, чтобы не блочить
+        # 3) генерация Excel в потоке, чтобы не блочить event loop
         stream = await run_in_threadpool(excel_exporter.export_results_to_stream, results)
 
         filename = f"Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-        headers = {'Content-Disposition': f'attachment; filename="{filename}"'}
+        headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+
         return StreamingResponse(
-            stream, headers=headers,
-            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            stream,
+            headers=headers,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
     except Exception as e:
         log.error(f"Export error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка генерации Excel")
+
 
 
 # --- СТАРЫЙ ENDPOINT ПОЛУЧЕНИЯ РЕЗУЛЬТАТА (для обратной совместимости, если нужно) ---
@@ -571,6 +638,18 @@ async def change_task_status(task_id: int, status_data: TaskStatusUpdate,
     raise HTTPException(500, "Error updating status")
 
 
+@app.put("/api/tasks/{task_id}")
+async def update_task_endpoint(task_id: int, task: TaskUpdateContent):
+    # Вызываем вашу функцию из database_manager
+    # Обратите внимание: мы передаем только title и description,
+    # так как ваша функция в БД обновляет только их.
+    success = database_manager.update_task(task_id, task.title, task.description)
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update task")
+
+    return {"status": "success", "message": "Task updated"}
+
 @app.get("/api/tasks/{task_id}/comments")
 async def read_comments(task_id: int, current_user: str = Depends(get_current_user)):
     comments = database_manager.get_comments(task_id)
@@ -606,6 +685,7 @@ async def upload_task_attachment(task_id: int, file: UploadFile = File(...),
 @app.get("/api/tasks/{task_id}/attachments")
 async def get_task_files(task_id: int, current_user: str = Depends(get_current_user)):
     return database_manager.get_task_attachments(task_id)
+
 
 
 @app.get("/api/attachments/{attachment_id}")
@@ -669,17 +749,17 @@ async def get_dashboard_data(current_user: str = Depends(get_current_user)):
 
 
 @app.get("/api/admin/users")
-async def get_users_list(current_user: str = Depends(get_current_user)):
+async def get_users_list(current_user: str = Depends(require_admin)):
     return database_manager.get_all_users()
 
-
 @app.post("/api/admin/users")
-async def admin_create_user(user: UserCreate, current_user: str = Depends(get_current_user)):
+async def admin_create_user(user: UserCreate, current_user: str = Depends(require_admin)):
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(user.password.encode('utf-8'), salt).decode('utf-8')
     if database_manager.create_new_user(user.username, hashed, user.department, user.is_admin):
         return {"status": "success"}
     raise HTTPException(400, "User exists or error")
+
 
 
 @app.delete("/api/admin/users/{user_id}")
@@ -699,24 +779,27 @@ def get_departments_list():
 
 
 @app.post("/api/admin/departments")
-def create_department(dept: DeptCreate, current_user: str = Depends(get_current_user)):
+def create_department(dept: DeptCreate, current_user: str = Depends(require_admin)):
     success, msg = database_manager.add_department(dept.name)
     if not success: raise HTTPException(400, msg)
     return {"status": "success"}
 
 
+
 @app.delete("/api/admin/departments/{dept_id}")
-def remove_department(dept_id: int, current_user: str = Depends(get_current_user)):
+def remove_department(dept_id: int, current_user: str = Depends(require_admin)):
     if database_manager.delete_department(dept_id):
         return {"status": "success"}
     raise HTTPException(400, "Error deleting department")
 
 
+
 @app.put("/api/admin/departments/{dept_id}")
-def rename_department_endpoint(dept_id: int, dept: DeptCreate, current_user: str = Depends(get_current_user)):
+def rename_department_endpoint(dept_id: int, dept: DeptCreate, current_user: str = Depends(require_admin)):
     if database_manager.rename_department(dept_id, dept.name):
         return {"status": "success"}
     raise HTTPException(400, "Error renaming")
+
 
 
 # --- ИНСТРУМЕНТЫ (Сравнение) ---
@@ -782,3 +865,34 @@ def _process_instruments(f1, f2, c1, c2):
             "matches": common, "only_in_unity": missing_in_2, "only_in_ais": missing_in_1
         }
     }
+
+
+@app.get("/api/my-tasks")
+async def read_my_tasks(current_user: str = Depends(get_current_user)):
+    user = database_manager.get_user_by_username(current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    tasks = database_manager.get_user_tasks(user[0])  # user[0] is ID
+    return [dict(t) for t in tasks]
+
+@app.delete("/api/tasks/{task_id}")
+async def remove_task(task_id: int, current_user: str = Depends(get_current_user)):
+    success = database_manager.delete_task(task_id)
+    if success:
+        return {"status": "success"}
+    # Если delete_task вернул False, то вылетит 500
+    raise HTTPException(status_code=500, detail="Failed to delete task")
+
+@app.get("/api/health")
+def health_check():
+    api_status = "Online"
+    db_status = "Disconnected"
+    try:
+        conn = database_manager.get_db_connection()
+        if conn:
+            db_status = "Connected"
+            conn.close()
+    except Exception:
+        pass
+    return {"api": api_status, "db": db_status}

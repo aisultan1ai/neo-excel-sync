@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
   Search, UserPlus, Trash2, Mail, FileText,
   Download, X, Edit, Lock, ShieldAlert,
-  ChevronRight, Upload, Briefcase, RotateCcw
+  ChevronRight, Upload, Briefcase, RotateCcw, AlertTriangle // <--- Добавил иконку
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -71,6 +71,9 @@ const ReportsPage = () => {
   const [newClient, setNewClient] = useState({ name: "", email: "", account: "", folder_path: "" });
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingClient, setEditingClient] = useState({ name: "", email: "", account: "", folder_path: "" });
+
+  // Стейт для кастомного подтверждения сброса
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // 1. ПРОВЕРКА ПРАВ
   useEffect(() => {
@@ -200,8 +203,15 @@ const ReportsPage = () => {
     } catch (e) { toast.error("Ошибка"); }
   };
 
-  const handleResetAllStatuses = async () => {
-    if (!confirm("Вы уверены, что хотите сбросить статусы ВСЕХ клиентов на 'Нет отчетов'?")) return;
+  // --- НОВАЯ ЛОГИКА СБРОСА СТАТУСОВ ---
+
+  // 1. Открыть окно
+  const openResetModal = () => {
+      setShowResetConfirm(true);
+  };
+
+  // 2. Выполнить сброс
+  const executeResetStatuses = async () => {
     try {
         const token = localStorage.getItem('token');
         await axios.post('http://127.0.0.1:8000/api/clients/reset-status', {}, { headers: { Authorization: `Bearer ${token}` } });
@@ -210,6 +220,8 @@ const ReportsPage = () => {
     } catch (e) {
         console.error(e);
         toast.error("Ошибка при сбросе статусов");
+    } finally {
+        setShowResetConfirm(false); // Закрываем модалку
     }
   };
 
@@ -285,7 +297,7 @@ const ReportsPage = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h1 style={{ fontSize: '24px', margin: 0 }}>Клиентские отчеты</h1>
         <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn" onClick={handleResetAllStatuses} style={{display: 'flex', alignItems: 'center', gap: '8px', background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0'}}>
+            <button className="btn" onClick={openResetModal} style={{display: 'flex', alignItems: 'center', gap: '8px', background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0'}}>
                 <RotateCcw size={18} /> Сбросить статусы
             </button>
             <button className="btn" onClick={() => setShowAddModal(true)} style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
@@ -420,6 +432,44 @@ const ReportsPage = () => {
       {/* MODALS */}
       {showAddModal && <ClientModal title="Новый клиент" data={newClient} setData={setNewClient} onSave={handleAddClient} onClose={() => setShowAddModal(false)} />}
       {showEditModal && <ClientModal title="Редактировать" data={editingClient} setData={setEditingClient} onSave={handleUpdateClient} onClose={() => setShowEditModal(false)} />}
+
+      {/* --- МОДАЛКА ПОДТВЕРЖДЕНИЯ СБРОСА --- */}
+      {showResetConfirm && (
+        <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            zIndex: 2000,
+            backdropFilter: 'blur(3px)'
+        }}>
+            <div className="card" style={{ width: '400px', padding: '30px', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+                <div style={{ margin: '0 auto 20px auto', width: '60px', height: '60px', background: '#fee2e2', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <AlertTriangle size={32} color="#ef4444" />
+                </div>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '20px', color: '#1f2937' }}>Сбросить статусы?</h3>
+                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '25px', lineHeight: '1.5' }}>
+                    Вы собираетесь сбросить статус <b>ВСЕХ</b> клиентов на "Нет отчетов". <br/>
+                    Это действие нельзя отменить.
+                </p>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    <button
+                        className="btn"
+                        onClick={() => setShowResetConfirm(false)}
+                        style={{ background: 'white', color: '#374151', border: '1px solid #d1d5db' }}
+                    >
+                        Отмена
+                    </button>
+                    <button
+                        className="btn"
+                        onClick={executeResetStatuses}
+                        style={{ background: '#ef4444', color: 'white', border: 'none' }}
+                    >
+                        Да, сбросить
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       <style>{`.table-row-hover:hover { background-color: #f8fafc; } .btn-icon { background: none; border: none; cursor: pointer; } .btn-icon:hover { color: #3b82f6; }`}</style>
     </div>

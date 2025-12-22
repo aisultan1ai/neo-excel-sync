@@ -11,9 +11,25 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState("User");
 
+  const [health, setHealth] = useState({ api: 'Checking...', db: 'Checking...' });
+
   useEffect(() => {
     fetchDashboard();
+    checkSystemHealth();
+
+    const interval = setInterval(checkSystemHealth, 30000);
+    return () => clearInterval(interval);
   }, []);
+
+  const checkSystemHealth = async () => {
+      try {
+          // Short timeout so we don't wait long if server is down
+          const res = await axios.get('http://127.0.0.1:8000/api/health', { timeout: 2000 });
+          setHealth(res.data);
+      } catch (err) {
+          setHealth({ api: 'Offline', db: 'Disconnected' });
+      }
+  };
 
   const fetchDashboard = async () => {
     try {
@@ -39,6 +55,11 @@ const DashboardPage = () => {
     }
   };
 
+  const getStatusColor = (status) => {
+      if (status === 'Online' || status === 'Connected') return '#4ade80'; // Green
+      if (status === 'Checking...') return '#94a3b8'; // Grey
+      return '#ef4444'; // Red (Offline/Error)
+  };
   if (loading) return <div style={{padding: 40}}>Загрузка аналитики...</div>;
 
   return (
@@ -50,9 +71,11 @@ const DashboardPage = () => {
             </h1>
             <p style={{ color: '#64748b', marginTop: '5px' }}>Вот обзор системы на сегодня.</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#ecfdf5', padding: '8px 15px', borderRadius: '20px', border: '1px solid #a7f3d0' }}>
-            <div style={{ width: '8px', height: '8px', background: '#10b981', borderRadius: '50%', boxShadow: '0 0 5px #10b981' }}></div>
-            <span style={{ fontSize: '13px', color: '#065f46', fontWeight: 600 }}>System Stable</span>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: health.api === 'Online' ? '#ecfdf5' : '#fef2f2', padding: '8px 15px', borderRadius: '20px', border: `1px solid ${health.api === 'Online' ? '#a7f3d0' : '#fecaca'}` }}>
+            <div style={{ width: '8px', height: '8px', background: health.api === 'Online' ? '#10b981' : '#ef4444', borderRadius: '50%', boxShadow: `0 0 5px ${health.api === 'Online' ? '#10b981' : '#ef4444'}` }}></div>
+            <span style={{ fontSize: '13px', color: health.api === 'Online' ? '#065f46' : '#991b1b', fontWeight: 600 }}>
+                {health.api === 'Online' ? 'System Stable' : 'System Issues'}
+            </span>
         </div>
       </div>
 
@@ -151,18 +174,27 @@ const DashboardPage = () => {
             <div className="card" style={{ background: '#1e293b', color: 'white' }}>
                 <h3 style={{ marginTop: 0, color: 'white', fontSize: '16px' }}>Technical Status</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '15px' }}>
+
+                    {/* API Status */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px' }}>
-                            <Server size={16} color="#4ade80" /> API Server
+                            <Server size={16} color={getStatusColor(health.api)} /> API Server
                         </div>
-                        <span style={{ color: '#4ade80', fontSize: '12px' }}>Online</span>
+                        <span style={{ color: getStatusColor(health.api), fontSize: '12px', fontWeight: 600 }}>
+                            {health.api}
+                        </span>
                     </div>
+
+                    {/* DB Status */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px' }}>
-                            <Database size={16} color="#4ade80" /> PostgreSQL
+                            <Database size={16} color={getStatusColor(health.db)} /> PostgreSQL
                         </div>
-                        <span style={{ color: '#4ade80', fontSize: '12px' }}>Connected</span>
+                        <span style={{ color: getStatusColor(health.db), fontSize: '12px', fontWeight: 600 }}>
+                            {health.db}
+                        </span>
                     </div>
+
                 </div>
             </div>
 

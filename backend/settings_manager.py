@@ -2,7 +2,14 @@ import json
 import os
 import logging
 
-SETTINGS_FILE = "settings.json"
+# Настройка путей: файл всегда будет лежать в той же папке, где и этот скрипт (BackEnd/data)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Можно положить настройки в отдельную папку data, чтобы не мусорить в корне
+DATA_DIR = os.path.join(BASE_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
+
 log = logging.getLogger(__name__)
 
 
@@ -14,11 +21,13 @@ def get_default_settings():
         "podft_filter_enabled": True,
         "podft_filter_col": "Рынок ЦБ",
         "podft_filter_values": "COMMODITY, CRYPTO, FOREX",
+
         "bo_enabled": True,
         "bo_unity_instrument_col": "Instrument",
         "bo_ais_sum_col": "Сумма тг",
         "bo_threshold": "45000000",
         "bo_prefixes": "[BO], [OP]",
+
         "default_id_names": ["Execution ID", "ID сделки на бирже"],
         "default_acc_name_unity": "Account",
         "default_acc_name_ais": "Субсчет в учетной организации",
@@ -29,36 +38,53 @@ def get_default_settings():
         "split_list_path": "",
         "split_list_isin_col": "ID_ISIN",
         "daily_file_security_col": "Ценная бумага",
-        "split_daily_qty_col": "Количество"
+        "split_daily_qty_col": "Количество",
 
+        # --- БЛОК КРИПТО ---
+        "crypto_enabled": True,
+        "crypto_keywords": "USDT",
+        "crypto_col": "Валюта"
     }
 
 
 def load_settings():
     """Загружает настройки из JSON-файла. Дополняет недостающие ключи из default."""
     if not os.path.exists(SETTINGS_FILE):
-        log.warning("Файл настроек %s не найден, создаю новый.", SETTINGS_FILE)
+        log.warning(f"Файл настроек {SETTINGS_FILE} не найден, создаю новый.")
         return save_settings(get_default_settings())
+
     try:
         with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
-            loaded_settings = json.load(f)
+            content = f.read().strip()
+            if not content:
+                # Если файл пустой, возвращаем дефолт
+                return save_settings(get_default_settings())
+            loaded_settings = json.loads(content)
 
         default_settings = get_default_settings()
         missing_keys = False
+
+        # Проверяем, есть ли все необходимые ключи
         for key, value in default_settings.items():
             if key not in loaded_settings:
                 loaded_settings[key] = value
                 missing_keys = True
 
         if missing_keys:
-            log.info("Обнаружены новые ключи настроек. Обновляю %s", SETTINGS_FILE)
+            log.info(f"Обнаружены новые ключи настроек. Обновляю {SETTINGS_FILE}")
             save_settings(loaded_settings)
 
         return loaded_settings
 
+    except json.JSONDecodeError:
+        log.error(f"Файл настроек {SETTINGS_FILE} поврежден. Пересоздаю дефолтный.")
+        # Делаем бэкап битого файла, чтобы не потерять данные
+        if os.path.exists(SETTINGS_FILE):
+            os.rename(SETTINGS_FILE, SETTINGS_FILE + ".bak")
+        return save_settings(get_default_settings())
+
     except Exception as e:
-        log.error("Критическая ошибка при чтении %s: %s. Загружаю настройки по умолчанию.", SETTINGS_FILE, e,
-                  exc_info=True)
+        log.error(f"Критическая ошибка при чтении {SETTINGS_FILE}: {e}", exc_info=True)
         return get_default_settings()
 
 
@@ -69,5 +95,7 @@ def save_settings(settings):
             json.dump(settings, f, indent=4, ensure_ascii=False)
         return settings
     except Exception as e:
-        log.error("Не удалось сохранить настройки в %s: %s", SETTINGS_FILE, e, exc_info=True)
-        return get_default_settings()
+        log.error(f"Не удалось сохранить настройки в {SETTINGS_FILE}: {e}", exc_info=True)
+        # Если не удалось сохранить, возвращаем то, что пытались сохранить,
+        # чтобы программа продолжила работать в памяти
+        return settings

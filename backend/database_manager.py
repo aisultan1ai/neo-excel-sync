@@ -5,18 +5,27 @@ import logging
 
 log = logging.getLogger(__name__)
 
-DB_CONFIG = {
-    "dbname": "neo_db",
-    "user": "postgres",
-    "password": "aisu123",
-    "host": "localhost",
-    "port": 5432
-}
+# DB_CONFIG = {
+#    "dbname": "neo_db",
+#   "user": "postgres",
+#    "password": "aisu123",
+#    "host": "localhost",
+#    "port": 5432
+#}
 
+DB_CONFIG = {
+    "dbname": os.getenv("POSTGRES_DB", "neo_db"),
+    "user": os.getenv("POSTGRES_USER", "postgres"),
+    "password": os.getenv("POSTGRES_PASSWORD", "aisu123"),
+    "host": os.getenv("DB_HOST", "localhost"), # <--- ГЛАВНОЕ ИЗМЕНЕНИЕ
+    "port": int(os.getenv("DB_PORT", 5432)),
+"client_encoding": "utf8"
+}
 
 def get_db_connection():
     try:
         conn = psycopg2.connect(**DB_CONFIG)
+        conn.set_client_encoding('UTF8')
         return conn
     except Exception as e:
         log.error(f"Ошибка подключения к БД: {e}")
@@ -331,20 +340,6 @@ def update_client_status(client_id, new_status):
         conn.close()
 
 
-def reset_all_client_statuses():
-    conn = get_db_connection()
-    if not conn: return False, "Ошибка БД"
-    try:
-        cursor = conn.cursor()
-        cursor.execute("UPDATE clients SET status = 'gray'")
-        conn.commit()
-        return True, "Статусы сброшены."
-    except Exception as e:
-        return False, str(e)
-    finally:
-        conn.close()
-
-
 def delete_client(client_id):
     conn = get_db_connection()
     if not conn: return False, "Ошибка БД"
@@ -407,6 +402,26 @@ def get_tasks_by_dept(department):
         conn.close()
 
 
+def update_task(task_id, title, description):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        # МЫ УБРАЛИ: , updated_at = NOW()
+        cursor.execute("""
+            UPDATE tasks 
+            SET title = %s, description = %s
+            WHERE id = %s
+        """, (title, description, task_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        log.error(f"Error updating task: {e}")
+        return False
+    finally:
+        conn.close()
+
+
 def update_task_status(task_id, new_status):
     conn = get_db_connection()
     if not conn: return False
@@ -440,11 +455,21 @@ def delete_task(task_id):
     if not conn: return False
     try:
         cursor = conn.cursor()
+
+        # 1. Сначала удаляем комментарии
         cursor.execute("DELETE FROM comments WHERE task_id = %s", (task_id,))
+
+        # 2. Удаляем файлы (записи в БД)
+        cursor.execute("DELETE FROM task_attachments WHERE task_id = %s", (task_id,))
+
+        # 3. И только потом саму задачу
         cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
+
         conn.commit()
         return True
-    except Exception:
+    except Exception as e:
+        log.error(f"Error deleting task: {e}")
+        conn.rollback()  # Важно откатить транзакцию при ошибке
         return False
     finally:
         conn.close()
@@ -706,3 +731,19 @@ def reset_all_clients_statuses():
     except Exception as e:
         print(f"Error resetting statuses: {e}")
         return False
+
+def get_user_tasks(user_id):
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT t.*, u.username as author_name, u.department as author_dept
+            FROM tasks t
+            LEFT JOIN users u ON t.from_user_id = u.id
+            WHERE t.from_user_id = %s
+            ORDER BY t.created_at DESC
+        """, (user_id,))
+        return cursor.fetchall()
+    finally:
+        conn.close()

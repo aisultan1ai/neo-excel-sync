@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {useEffect, useState} from 'react';
 import axios from 'axios';
 import {
   LogIn,
@@ -15,6 +15,20 @@ const LoginPage = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [systemStatus, setSystemStatus] = useState('CHECKING');
+
+  useEffect(() => {
+      const checkHealth = async () => {
+          try {
+              await axios.get('http://127.0.0.1:8000/api/health', { timeout: 2000 });
+              setSystemStatus('ONLINE');
+          } catch (e) {
+              setSystemStatus('OFFLINE');
+          }
+      };
+      checkHealth();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -96,12 +110,19 @@ const LoginPage = ({ onLogin }) => {
 
         <div style={{ maxWidth: '500px', zIndex: 2 }}>
           <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '10px',
-            background: 'rgba(255,255,255,0.1)', padding: '8px 16px', borderRadius: '20px', marginBottom: '20px'
-          }}>
-            <span style={{ width: '8px', height: '8px', background: '#4ade80', borderRadius: '50%' }}></span>
-            <span style={{ fontSize: '12px', letterSpacing: '1px', fontWeight: 600 }}>SYSTEM ONLINE</span>
-          </div>
+    display: 'inline-flex', alignItems: 'center', gap: '10px',
+    background: 'rgba(255,255,255,0.1)', padding: '8px 16px', borderRadius: '20px', marginBottom: '20px',
+    border: systemStatus === 'OFFLINE' ? '1px solid rgba(239, 68, 68, 0.5)' : 'none' // Red border if offline
+}}>
+    <span style={{
+        width: '8px', height: '8px', borderRadius: '50%',
+        background: systemStatus === 'ONLINE' ? '#4ade80' : (systemStatus === 'CHECKING' ? '#fbbf24' : '#ef4444'),
+        boxShadow: systemStatus === 'ONLINE' ? '0 0 10px #4ade80' : 'none'
+    }}></span>
+    <span style={{ fontSize: '12px', letterSpacing: '1px', fontWeight: 600, color: 'white' }}>
+        {systemStatus === 'ONLINE' ? 'SYSTEM ONLINE' : (systemStatus === 'CHECKING' ? 'CHECKING SYSTEM...' : 'SYSTEM OFFLINE')}
+    </span>
+</div>
 
           <h1 style={{ fontSize: '60px', fontWeight: 800, marginBottom: '20px', lineHeight: '1.1' }}>
             NeoExcelSync <span style={{ color: '#60a5fa' }}>Platform</span>
