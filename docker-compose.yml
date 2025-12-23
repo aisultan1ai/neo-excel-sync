@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: neo_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: aisu123
+      POSTGRES_DB: neo_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    # --- ДОБАВЛЕНО: Проверка здоровья базы ---
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: neo_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    # --- ИЗМЕНЕНО: Ждем, пока база станет здоровой (healthy) ---
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DB_HOST=db
+      - POSTGRES_DB=neo_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=aisu123
+    volumes:
+      - ./backend/data:/app/data
+      - ./backend/uploads:/app/uploads
+
+  frontend:
+    build: ./frontend
+    container_name: neo_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

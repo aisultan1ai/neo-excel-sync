@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+psycopg2-binary
+python-multipart
+requests
+python-jose[cryptography]
+passlib[bcrypt]
+sqlalchemy
+pydantic
+python-dotenv
+pandas
+openpyxl
+xlrd>=2.0.1
