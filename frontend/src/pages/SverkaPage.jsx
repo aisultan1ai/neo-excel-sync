@@ -152,7 +152,7 @@ const SverkaPage = () => {
   useEffect(() => {
     const fetchLastResult = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/last-result');
+        const response = await fetch('/api/last-result');
         const data = await response.json();
         if (data.status === 'success') {
           setResults(data);
@@ -168,7 +168,7 @@ const SverkaPage = () => {
   const [defaults, setDefaults] = useState({ id_unity: 'Execution ID', acc_unity: 'Account', id_ais: 'ID сделки', acc_ais: 'Субсчет' });
 
   useEffect(() => {
-    axios.get('http://127.0.0.1:8000/api/settings')
+    axios.get('/api/settings')
       .then(res => {
           if(res.data) {
              setDefaults({
@@ -190,7 +190,7 @@ const SverkaPage = () => {
     formData.append('file2', file2);
 
     try {
-        const settingsRes = await axios.get('http://127.0.0.1:8000/api/settings');
+        const settingsRes = await axios.get('/api/settings');
         formData.append('settings_json', JSON.stringify(settingsRes.data));
     } catch (e) { setLoading(false); return toast.error("Ошибка настроек"); }
 
@@ -200,7 +200,7 @@ const SverkaPage = () => {
     formData.append('acc_col_2', cols.acc_col_2);
 
     try {
-      const res = await axios.post('http://127.0.0.1:8000/api/compare', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const res = await axios.post('/api/compare', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setResults(res.data);
       toast.success("Готово!");
 
@@ -219,7 +219,7 @@ const SverkaPage = () => {
     setLoadingExport(true);
     try {
         // Теперь это GET запрос с ID
-        const res = await axios.get(`http://127.0.0.1:8000/api/export/${results.comparison_id}`, {
+        const res = await axios.get(`/api/export/${results.comparison_id}`, {
             responseType: 'blob'
         });
 

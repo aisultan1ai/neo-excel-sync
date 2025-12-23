@@ -45,7 +45,7 @@ const DepartmentsPage = () => {
 
   const fetchDepartments = async () => {
     try {
-        const res = await axios.get('http://127.0.0.1:8000/api/departments');
+        const res = await axios.get('/api/departments');
         setDepartments(res.data);
         setLoadingDepts(false);
     } catch (err) { setLoadingDepts(false); }
@@ -54,7 +54,7 @@ const DepartmentsPage = () => {
   const fetchTasks = async () => {
     try {
       const token = localStorage.getItem('token');
-      let url = activeDept === 'My Tasks' ? 'http://127.0.0.1:8000/api/my-tasks' : `http://127.0.0.1:8000/api/tasks/${activeDept}`;
+      let url = activeDept === 'My Tasks' ? '/api/my-tasks' : `/api/tasks/${activeDept}`;
       const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
       setTasks(res.data);
     } catch (err) { console.error(err); }
@@ -67,14 +67,14 @@ const DepartmentsPage = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const taskRes = await axios.post('http://127.0.0.1:8000/api/tasks', {
+      const taskRes = await axios.post('/api/tasks', {
         title: newTaskTitle, description: newTaskDesc, to_department: deptToSend
       }, { headers: { Authorization: `Bearer ${token}` } });
 
       const newTaskId = taskRes.data.id;
       if (newTaskFile && newTaskId) {
           const formData = new FormData(); formData.append('file', newTaskFile);
-          await axios.post(`http://127.0.0.1:8000/api/tasks/${newTaskId}/attachments`, formData, { headers: { Authorization: `Bearer ${token}` } });
+          await axios.post(`/api/tasks/${newTaskId}/attachments`, formData, { headers: { Authorization: `Bearer ${token}` } });
       }
       toast.success("Задача создана!");
       setShowModal(false); setNewTaskTitle(""); setNewTaskDesc(""); setNewTaskFile(null); fetchTasks();
@@ -91,8 +91,8 @@ const DepartmentsPage = () => {
     try {
       const token = localStorage.getItem('token');
       const [resComments, resFiles] = await Promise.all([
-          axios.get(`http://127.0.0.1:8000/api/tasks/${task.id}/comments`, { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get(`http://127.0.0.1:8000/api/tasks/${task.id}/attachments`, { headers: { Authorization: `Bearer ${token}` } })
+          axios.get(`/api/tasks/${task.id}/comments`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`/api/tasks/${task.id}/attachments`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
       setComments(resComments.data); setAttachments(resFiles.data);
     } catch (err) { console.error(err); }
@@ -103,8 +103,8 @@ const DepartmentsPage = () => {
       const formData = new FormData(); formData.append('file', file);
       try {
           const token = localStorage.getItem('token');
-          await axios.post(`http://127.0.0.1:8000/api/tasks/${expandedTask.id}/attachments`, formData, { headers: { Authorization: `Bearer ${token}` } });
-          const res = await axios.get(`http://127.0.0.1:8000/api/tasks/${expandedTask.id}/attachments`, { headers: { Authorization: `Bearer ${token}` } });
+          await axios.post(`/api/tasks/${expandedTask.id}/attachments`, formData, { headers: { Authorization: `Bearer ${token}` } });
+          const res = await axios.get(`/api/tasks/${expandedTask.id}/attachments`, { headers: { Authorization: `Bearer ${token}` } });
           setAttachments(res.data); toast.success("Файл загружен");
       } catch (e) { toast.error("Ошибка загрузки"); }
   };
@@ -112,7 +112,7 @@ const DepartmentsPage = () => {
   const handleDownloadFile = async (file) => {
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.get(`http://127.0.0.1:8000/api/attachments/${file.id}`, { responseType: 'blob', headers: { Authorization: `Bearer ${token}` } });
+        const res = await axios.get(`/api/attachments/${file.id}`, { responseType: 'blob', headers: { Authorization: `Bearer ${token}` } });
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const link = document.createElement('a'); link.href = url; link.setAttribute('download', file.filename); document.body.appendChild(link); link.click();
       } catch (e) { toast.error("Ошибка скачивания"); }
@@ -127,7 +127,7 @@ const DepartmentsPage = () => {
       if (!fileToDeleteId) return;
       try {
           const token = localStorage.getItem('token');
-          await axios.delete(`http://127.0.0.1:8000/api/attachments/${fileToDeleteId}`, { headers: { Authorization: `Bearer ${token}` } });
+          await axios.delete(`/api/attachments/${fileToDeleteId}`, { headers: { Authorization: `Bearer ${token}` } });
           setAttachments(prev => prev.filter(f => f.id !== fileToDeleteId));
           toast.success("Файл удален");
       } catch (e) { toast.error("Ошибка"); }
@@ -140,7 +140,7 @@ const DepartmentsPage = () => {
   const handleStatusChange = async (newStatus) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`http://127.0.0.1:8000/api/tasks/${expandedTask.id}/status`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.put(`/api/tasks/${expandedTask.id}/status`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
       const updatedTask = { ...expandedTask, status: newStatus };
       setExpandedTask(updatedTask);
       setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
@@ -155,7 +155,7 @@ const DepartmentsPage = () => {
   const executeDeleteTask = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://127.0.0.1:8000/api/tasks/${expandedTask.id}`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.delete(`/api/tasks/${expandedTask.id}`, { headers: { Authorization: `Bearer ${token}` } });
       setExpandedTask(null);
       fetchTasks();
       toast.info("Удалено");
@@ -168,7 +168,7 @@ const DepartmentsPage = () => {
   const handleSaveEdit = async () => {
     try {
         const token = localStorage.getItem('token');
-        await axios.put(`http://127.0.0.1:8000/api/tasks/${expandedTask.id}`, { title: editTitle, description: editDesc }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.put(`/api/tasks/${expandedTask.id}`, { title: editTitle, description: editDesc }, { headers: { Authorization: `Bearer ${token}` } });
         const updatedTask = { ...expandedTask, title: editTitle, description: editDesc };
         setExpandedTask(updatedTask);
         setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
@@ -180,9 +180,9 @@ const DepartmentsPage = () => {
     if(!newComment) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`http://127.0.0.1:8000/api/tasks/${expandedTask.id}/comments`, { content: newComment }, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post(`/api/tasks/${expandedTask.id}/comments`, { content: newComment }, { headers: { Authorization: `Bearer ${token}` } });
       setNewComment("");
-      const res = await axios.get(`http://127.0.0.1:8000/api/tasks/${expandedTask.id}/comments`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(`/api/tasks/${expandedTask.id}/comments`, { headers: { Authorization: `Bearer ${token}` } });
       setComments(res.data);
     } catch (err) { toast.error("Ошибка"); }
   };

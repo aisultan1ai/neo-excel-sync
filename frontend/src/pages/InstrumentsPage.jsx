@@ -97,7 +97,7 @@ const InstrumentsPage = () => {
         formData.append('col2', col2);
 
         try {
-            const res = await axios.post('http://127.0.0.1:8000/api/compare-instruments', formData);
+            const res = await axios.post('/api/compare-instruments', formData);
             setResult(res.data);
             toast.success("Готово!");
         } catch (e) {

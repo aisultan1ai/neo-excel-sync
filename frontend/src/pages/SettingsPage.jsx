@@ -22,8 +22,8 @@ const SettingsPage = () => {
         try {
             const token = localStorage.getItem('token');
             const [settingsRes, profileRes] = await Promise.all([
-                axios.get('http://127.0.0.1:8000/api/settings'),
-                axios.get('http://127.0.0.1:8000/api/profile', { headers: { Authorization: `Bearer ${token}` } })
+                axios.get('/api/settings'),
+                axios.get('/api/profile', { headers: { Authorization: `Bearer ${token}` } })
             ]);
 
             setSettings(settingsRes.data);
@@ -76,7 +76,7 @@ const SettingsPage = () => {
     formData.append('file', file);
     const toastId = toast.loading("Загрузка...");
     try {
-        const res = await axios.post('http://127.0.0.1:8000/api/settings/upload-split-list', formData);
+        const res = await axios.post('/api/settings/upload-split-list', formData);
         // Direct state update is fine here since it comes from server response
         setSettings(prev => ({ ...prev, split_list_path: res.data.new_path }));
         toast.update(toastId, { render: "Файл обновлен", type: "success", isLoading: false, autoClose: 2000 });
@@ -89,7 +89,7 @@ const SettingsPage = () => {
     if (!canEdit) return;
     setSaving(true);
     try {
-      await axios.post('http://127.0.0.1:8000/api/settings', settings);
+      await axios.post('/api/settings', settings);
       toast.success("Настройки сохранены");
     } catch (error) {
       toast.error("Ошибка сохранения");

@@ -80,7 +80,7 @@ const ReportsPage = () => {
     const checkPermission = async () => {
       try {
           const token = localStorage.getItem('token');
-          const res = await axios.get('http://127.0.0.1:8000/api/profile', { headers: { Authorization: `Bearer ${token}` } });
+          const res = await axios.get('/api/profile', { headers: { Authorization: `Bearer ${token}` } });
           setUserDept(res.data.department);
           setIsAdmin(res.data.is_admin);
           // Загружаем клиентов только если есть права
@@ -100,7 +100,7 @@ const ReportsPage = () => {
   const fetchClients = useCallback(async (searchTerm = "", tokenOverride = null) => {
     try {
       const token = tokenOverride || localStorage.getItem('token');
-      const res = await axios.get(`http://127.0.0.1:8000/api/clients?search=${searchTerm}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(`/api/clients?search=${searchTerm}`, { headers: { Authorization: `Bearer ${token}` } });
       setClients(res.data);
     } catch (e) { console.error(e); }
   }, []);
@@ -124,7 +124,7 @@ const ReportsPage = () => {
   const fetchDetails = useCallback(async (id) => {
       try {
           const token = localStorage.getItem('token');
-          const res = await axios.get(`http://127.0.0.1:8000/api/clients/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+          const res = await axios.get(`/api/clients/${id}`, { headers: { Authorization: `Bearer ${token}` } });
           setClientDetails(res.data);
       } catch (e) { console.error(e); }
   }, []);
@@ -162,7 +162,7 @@ const ReportsPage = () => {
       Object.keys(newClient).forEach(k => formData.append(k, newClient[k]));
       try {
           const token = localStorage.getItem('token');
-          await axios.post('http://127.0.0.1:8000/api/clients', formData, { headers: { Authorization: `Bearer ${token}` } });
+          await axios.post('/api/clients', formData, { headers: { Authorization: `Bearer ${token}` } });
           setShowAddModal(false); setNewClient({ name: "", email: "", account: "", folder_path: "" }); fetchClients(search); toast.success("Создано");
       } catch (e) { toast.error("Ошибка"); }
   };
@@ -184,7 +184,7 @@ const ReportsPage = () => {
       Object.keys(editingClient).forEach(k => formData.append(k, editingClient[k]));
       try {
           const token = localStorage.getItem('token');
-          await axios.put(`http://127.0.0.1:8000/api/clients/${selectedClient.id}`, formData, { headers: { Authorization: `Bearer ${token}` }});
+          await axios.put(`/api/clients/${selectedClient.id}`, formData, { headers: { Authorization: `Bearer ${token}` }});
           setShowEditModal(false);
           fetchDetails(selectedClient.id);
           fetchClients(search);
@@ -196,7 +196,7 @@ const ReportsPage = () => {
     const dbStatus = STATUS_DISPLAY_MAP[newStatusDisplay];
     try {
         const token = localStorage.getItem('token');
-        await axios.put(`http://127.0.0.1:8000/api/clients/${selectedClient.id}/status`, { status: dbStatus }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.put(`/api/clients/${selectedClient.id}/status`, { status: dbStatus }, { headers: { Authorization: `Bearer ${token}` } });
         setClientDetails(prev => ({...prev, status: dbStatus}));
         setClients(prev => prev.map(c => c.id === selectedClient.id ? {...c, status: dbStatus} : c));
         toast.info("Статус обновлен");
@@ -214,7 +214,7 @@ const ReportsPage = () => {
   const executeResetStatuses = async () => {
     try {
         const token = localStorage.getItem('token');
-        await axios.post('http://127.0.0.1:8000/api/clients/reset-status', {}, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post('/api/clients/reset-status', {}, { headers: { Authorization: `Bearer ${token}` } });
         fetchClients(search);
         toast.success("Все статусы сброшены");
     } catch (e) {
@@ -229,7 +229,7 @@ const ReportsPage = () => {
       if(!confirm("Удалить клиента?")) return;
       try {
           const token = localStorage.getItem('token');
-          await axios.delete(`http://127.0.0.1:8000/api/clients/${selectedClient.id}`, { headers: { Authorization: `Bearer ${token}` } });
+          await axios.delete(`/api/clients/${selectedClient.id}`, { headers: { Authorization: `Bearer ${token}` } });
           closeDrawer(); fetchClients(search); toast.success("Удалено");
       } catch (e) { toast.error("Ошибка"); }
   };
@@ -239,7 +239,7 @@ const ReportsPage = () => {
       const formData = new FormData(); formData.append('file', file);
       try {
           const token = localStorage.getItem('token');
-          await axios.post(`http://127.0.0.1:8000/api/clients/${selectedClient.id}/upload`, formData, { headers: { Authorization: `Bearer ${token}` } });
+          await axios.post(`/api/clients/${selectedClient.id}/upload`, formData, { headers: { Authorization: `Bearer ${token}` } });
           fetchDetails(selectedClient.id); toast.success("Загружено");
       } catch (e) { toast.error("Ошибка"); }
   };
@@ -248,7 +248,7 @@ const ReportsPage = () => {
       if(!confirm("Удалить файл?")) return;
       try {
           const token = localStorage.getItem('token');
-          await axios.delete(`http://127.0.0.1:8000/api/clients/${selectedClient.id}/files/${filename}`, { headers: { Authorization: `Bearer ${token}` } });
+          await axios.delete(`/api/clients/${selectedClient.id}/files/${filename}`, { headers: { Authorization: `Bearer ${token}` } });
           fetchDetails(selectedClient.id); toast.success("Файл удален");
       } catch (e) { toast.error("Ошибка"); }
   };
@@ -256,7 +256,7 @@ const ReportsPage = () => {
   const handleDownloadFile = async (filename) => {
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.get(`http://127.0.0.1:8000/api/clients/${selectedClient.id}/files/${filename}`, { responseType: 'blob', headers: { Authorization: `Bearer ${token}` } });
+        const res = await axios.get(`/api/clients/${selectedClient.id}/files/${filename}`, { responseType: 'blob', headers: { Authorization: `Bearer ${token}` } });
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const link = document.createElement('a'); link.href = url; link.setAttribute('download', filename); document.body.appendChild(link); link.click();
       } catch (e) { toast.error("Ошибка"); }

@@ -24,7 +24,7 @@ const DashboardPage = () => {
   const checkSystemHealth = async () => {
       try {
           // Short timeout so we don't wait long if server is down
-          const res = await axios.get('http://127.0.0.1:8000/api/health', { timeout: 2000 });
+          const res = await axios.get('/api/health', { timeout: 2000 });
           setHealth(res.data);
       } catch (err) {
           setHealth({ api: 'Offline', db: 'Disconnected' });
@@ -37,14 +37,14 @@ const DashboardPage = () => {
 
       // 1. Получаем имя пользователя
 
-      const resProfile = await axios.get('http://127.0.0.1:8000/api/profile', {
+      const resProfile = await axios.get('/api/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUsername(resProfile.data.username);
 
       // 2. Получаем цифры
 
-      const res = await axios.get('http://127.0.0.1:8000/api/dashboard', {
+      const res = await axios.get('/api/dashboard', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setStats(res.data);

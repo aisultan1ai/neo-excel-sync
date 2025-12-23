@@ -43,7 +43,7 @@ const ProfilePage = ({ onLogout }) => {
           onLogout();
           return;
       }
-      const res = await axios.get('http://127.0.0.1:8000/api/profile', {
+      const res = await axios.get('/api/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProfile(res.data);
@@ -68,14 +68,14 @@ const ProfilePage = ({ onLogout }) => {
 
   const fetchUsers = async (token) => {
     try {
-        const res = await axios.get('http://127.0.0.1:8000/api/admin/users', { headers: { Authorization: `Bearer ${token}` } });
+        const res = await axios.get('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } });
         setUsers(res.data);
     } catch (err) { console.error(err); }
   };
 
   const fetchDepartments = async () => {
     try {
-        const res = await axios.get('http://127.0.0.1:8000/api/departments');
+        const res = await axios.get('/api/departments');
         setDepartments(res.data);
         if (res.data.length > 0) {
             setNewUser(prev => ({...prev, department: res.data[0].name}));
@@ -88,7 +88,7 @@ const ProfilePage = ({ onLogout }) => {
     if (!newUser.username || !newUser.password) { toast.error("Заполните поля"); return; }
     try {
         const token = localStorage.getItem('token');
-        await axios.post('http://127.0.0.1:8000/api/admin/users', newUser, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post('/api/admin/users', newUser, { headers: { Authorization: `Bearer ${token}` } });
         toast.success("Пользователь создан");
         setShowCreateUserModal(false);
         setNewUser({ username: '', password: '', department: departments[0]?.name || '', is_admin: false });
@@ -100,7 +100,7 @@ const ProfilePage = ({ onLogout }) => {
     if (!window.confirm("Удалить пользователя?")) return;
     try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://127.0.0.1:8000/api/admin/users/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.delete(`/api/admin/users/${id}`, { headers: { Authorization: `Bearer ${token}` } });
         toast.success("Удалено");
         fetchUsers(token);
     } catch (err) { toast.error("Ошибка"); }
@@ -111,7 +111,7 @@ const ProfilePage = ({ onLogout }) => {
     if (!newDeptName.trim()) return;
     try {
         const token = localStorage.getItem('token');
-        await axios.post('http://127.0.0.1:8000/api/admin/departments', { name: newDeptName }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post('/api/admin/departments', { name: newDeptName }, { headers: { Authorization: `Bearer ${token}` } });
         toast.success("Отдел добавлен");
         setNewDeptName("");
         fetchDepartments();
@@ -122,7 +122,7 @@ const ProfilePage = ({ onLogout }) => {
     if (!window.confirm("Удалить отдел?")) return;
     try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://127.0.0.1:8000/api/admin/departments/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.delete(`/api/admin/departments/${id}`, { headers: { Authorization: `Bearer ${token}` } });
         toast.success("Отдел удален");
         fetchDepartments();
     } catch (err) { toast.error("Ошибка удаления"); }
@@ -137,7 +137,7 @@ const ProfilePage = ({ onLogout }) => {
     if (!editDeptName.trim()) return;
     try {
         const token = localStorage.getItem('token');
-        await axios.put(`http://127.0.0.1:8000/api/admin/departments/${editingDept}`, { name: editDeptName }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.put(`/api/admin/departments/${editingDept}`, { name: editDeptName }, { headers: { Authorization: `Bearer ${token}` } });
         toast.success("Переименовано");
         setEditingDept(null);
         fetchDepartments();
@@ -151,7 +151,7 @@ const ProfilePage = ({ onLogout }) => {
     setSavingPass(true);
     try {
         const token = localStorage.getItem('token');
-        await axios.post('http://127.0.0.1:8000/api/profile/change-password', { old_password: oldPass, new_password: newPass }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post('/api/profile/change-password', { old_password: oldPass, new_password: newPass }, { headers: { Authorization: `Bearer ${token}` } });
         toast.success("Пароль изменен!");
         setOldPass(""); setNewPass(""); setConfirmPass("");
     } catch (err) { toast.error("Ошибка"); }

@@ -21,7 +21,7 @@ const LoginPage = ({ onLogin }) => {
   useEffect(() => {
       const checkHealth = async () => {
           try {
-              await axios.get('http://127.0.0.1:8000/api/health', { timeout: 2000 });
+              await axios.get('/api/health', { timeout: 2000 });
               setSystemStatus('ONLINE');
           } catch (e) {
               setSystemStatus('OFFLINE');
@@ -47,7 +47,7 @@ const LoginPage = ({ onLogin }) => {
     params.append('password', password);
 
     try {
-      const res = await axios.post('http://127.0.0.1:8000/api/token', params, {
+      const res = await axios.post('/api/token', params, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         }
