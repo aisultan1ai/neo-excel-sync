@@ -896,3 +896,102 @@ def health_check():
     except Exception:
         pass
     return {"api": api_status, "db": db_status}
+
+
+# --- ГЕНЕРАТОР ОТЧЕТОВ ПО СДЕЛКАМ (НОВЫЙ РАЗДЕЛ) ---
+
+def format_report_number(num):
+    """Форматирует число: пробел как разделитель тысяч, точка для дроби"""
+    try:
+        # Округляем до 2 знаков
+        val = float(num)
+        # Форматируем с запятой как разделителем тысяч, потом меняем на пробел
+        return "{:,.2f}".format(val).replace(",", " ")
+    except:
+        return str(num)
+
+
+def parse_ticker_from_instrument(instr_str):
+    """
+    Превращает [EQ]AGQ.NYSEA.TOM -> AGQ
+    Логика: берем текст между ']' и первой '.'
+    """
+    s = str(instr_str)
+    try:
+        # Если есть квадратная скобка, режем по ней
+        if ']' in s:
+            s = s.split(']')[1]
+        # Если есть точка, режем по ней
+        if '.' in s:
+            s = s.split('.')[0]
+        return s.strip()
+    except:
+        return s
+
+
+@app.post("/api/tools/generate-trade-report")
+async def generate_trade_report(file: UploadFile = File(...)):
+    temp_path = save_upload_file(file)
+    try:
+        # Читаем файл
+        df = pd.read_excel(temp_path)
+
+        # Нормализация имен колонок (убираем лишние пробелы)
+        df.columns = [c.strip() for c in df.columns]
+
+        # Проверяем наличие колонок
+        required = ['Instrument', 'Amount', 'Quote amount']
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            # Попытка найти похожие колонки, если точных нет
+            # (Для простоты требуем точные названия, но можно добавить логику поиска)
+            raise HTTPException(400, f"В файле не найдены колонки: {missing}")
+
+        report_lines = []
+
+        # 1. Подготовка данных
+        df['Ticker'] = df['Instrument'].apply(parse_ticker_from_instrument)
+        # Определяем тип: Лонг (Amount > 0) или Шорт (Amount < 0)
+        df['Type'] = df['Amount'].apply(lambda x: 'лонг' if x > 0 else 'шорт')
+
+        # 2. Группировка
+        # Группируем по Тикеру и Типу.
+        # sort=False сохраняет порядок появления (если нужно), но лучше отсортировать по тикеру
+        grouped = df.groupby(['Ticker', 'Type'])
+
+        for (ticker, trade_type), group in grouped:
+            count_parts = len(group)
+
+            # Списки значений для перечисления
+            amounts = group['Amount'].tolist()
+            quotes = group['Quote amount'].tolist()
+
+            # Формируем строки перечисления (соединяем через " и ")
+            # Для Amount просто числа, для Quote amount - с форматированием
+            amounts_str = " и ".join([str(x) for x in amounts])
+            quotes_str = " и ".join([format_report_number(x) for x in quotes])
+
+            # Суммы
+            total_amount = sum(amounts)
+            total_quote = sum(quotes)
+
+            # Сборка строки по шаблону
+            line = (
+                f"{ticker} ({trade_type}) раздробился на {count_parts} частей "
+                f"по количеству — {amounts_str} "
+                f"по сумме ({quotes_str}) "
+                f"в общем количестве — {total_amount}, "
+                f"а по сумме выходит {format_report_number(total_quote)}"
+            )
+            report_lines.append(line)
+
+        # Объединяем весь отчет
+        full_text = "\n".join(report_lines)
+
+        return {"status": "success", "report": full_text}
+
+    except Exception as e:
+        log.error(f"Report generation error: {e}", exc_info=True)
+        raise HTTPException(500, f"Ошибка обработки файла: {str(e)}")
+    finally:
+        cleanup_files(temp_path)
