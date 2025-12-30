@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   db:
@@ -11,16 +11,21 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Если это PROD и БД не нужна снаружи — лучше НЕ публиковать порт.
+    # Оставь ports только если тебе реально надо подключаться к БД с хоста.
     ports:
       - "5433:5432"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   backend:
-    build: ./backend
+    # Если пушишь в Docker Hub — лучше так:
+    image: aisultan1a/neoexcelsync-backend:1.0
+    # Если хочешь локально собирать — раскомментируй build и закомментируй image
+    # build: ./backend
     container_name: neo_backend
     restart: always
     ports:
@@ -29,8 +34,9 @@ services:
       db:
         condition: service_healthy
     environment:
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
+      # Внутри docker-сети хост БД = имя сервиса "db"
+      DB_HOST: db
+      DB_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -40,7 +46,8 @@ services:
       - ./backend/uploads:/app/uploads
 
   frontend:
-    build: ./frontend
+    image: aisultan1a/neoexcelsync-frontend:1.0
+    # build: ./frontend
     container_name: neo_frontend
     restart: always
     ports:

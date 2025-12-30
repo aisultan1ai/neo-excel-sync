@@ -1,23 +1,28 @@
-# BackEnd/Dockerfile
-
-# Используем легкий образ Python
+# ===== Base image =====
 FROM python:3.9-slim
 
-# Устанавливаем рабочую директорию внутри контейнера
+# Отключаем .pyc и буферизацию
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Сначала копируем зависимости (для кэширования слоев Docker)
+# ---- системные зависимости (минимум) ----
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       gcc \
+       libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---- Python deps ----
 COPY requirements.txt .
 
-# Устанавливаем зависимости
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r requirements.txt
 
-# Копируем остальной код
+# ---- App code ----
 COPY . .
 
-# Создаем папку для загрузок, если её нет (важно для вашего функционала)
 RUN mkdir -p uploads withdrawals
 
-# Команда для запуска сервера
-# host 0.0.0.0 обязателен для Docker!
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
