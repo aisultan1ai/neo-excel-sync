@@ -1,0 +1,17 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.idea/
+.vscode/
+node_modules/
+dist/
+build/
+uploads/
+withdrawals/
+data/
+*.xlsx
+*.csv
