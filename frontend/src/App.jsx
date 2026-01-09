@@ -14,6 +14,8 @@ import LoginPage from './pages/LoginPage';
 import DepartmentsPage  from "./pages/DepartmentsPage.jsx";
 import ProfilePage from './pages/ProfilePage';
 import InstrumentsPage from './pages/InstrumentsPage';
+import ExcelReconcileToolsPage from './pages/ExcelReconcileToolsPage';
+
 
 import AccountsPage from "./pages/AccountsPage.jsx";
 
@@ -81,6 +83,8 @@ function App() {
             <NavButton to="/reports" icon={FileSpreadsheet} label="Отчеты" />
               <NavButton to="/departments" icon={Users} label="Департаменты" />
               <NavButton to="/instruments" icon={Binary} label="Инструменты" />
+              <NavButton to="/excel-reconcile" icon={FileSpreadsheet} label="Сверка Excel (Tools)" />
+
 
               <NavButton to="/accounts" icon={Wallet} label="Счета" />
 
@@ -103,6 +107,8 @@ function App() {
             <Route path="/reports" element={<ReportsPage />} />
               <Route path="/departments" element={<DepartmentsPage />} />
               <Route path="/instruments" element={<InstrumentsPage />} />
+              <Route path="/excel-reconcile" element={<ExcelReconcileToolsPage />} />
+
               <Route path="/accounts" element={<AccountsPage />} />
 
               <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />

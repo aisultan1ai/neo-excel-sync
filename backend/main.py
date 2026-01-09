@@ -714,7 +714,6 @@ async def get_profile_info(current_user: str = Depends(get_current_user)):
     user = database_manager.get_user_by_username(current_user)
     if not user: raise HTTPException(404, "User not found")
 
-    # user tuple: id, username, hash, dept, is_admin
     is_admin = user[4] if len(user) > 4 else False
     stats = database_manager.get_user_stats(user[0])
 
@@ -898,14 +897,12 @@ def health_check():
     return {"api": api_status, "db": db_status}
 
 
-# --- ГЕНЕРАТОР ОТЧЕТОВ ПО СДЕЛКАМ (НОВЫЙ РАЗДЕЛ) ---
-
 def format_report_number(num):
     """Форматирует число: пробел как разделитель тысяч, точка для дроби"""
     try:
-        # Округляем до 2 знаков
+
         val = float(num)
-        # Форматируем с запятой как разделителем тысяч, потом меняем на пробел
+
         return "{:,.2f}".format(val).replace(",", " ")
     except:
         return str(num)
@@ -918,10 +915,10 @@ def parse_ticker_from_instrument(instr_str):
     """
     s = str(instr_str)
     try:
-        # Если есть квадратная скобка, режем по ней
+
         if ']' in s:
             s = s.split(']')[1]
-        # Если есть точка, режем по ней
+
         if '.' in s:
             s = s.split('.')[0]
         return s.strip()
@@ -933,18 +930,14 @@ def parse_ticker_from_instrument(instr_str):
 async def generate_trade_report(file: UploadFile = File(...)):
     temp_path = save_upload_file(file)
     try:
-        # Читаем файл
         df = pd.read_excel(temp_path)
 
-        # Нормализация имен колонок (убираем лишние пробелы)
         df.columns = [c.strip() for c in df.columns]
 
-        # Проверяем наличие колонок
         required = ['Instrument', 'Amount', 'Quote amount']
         missing = [c for c in required if c not in df.columns]
         if missing:
-            # Попытка найти похожие колонки, если точных нет
-            # (Для простоты требуем точные названия, но можно добавить логику поиска)
+
             raise HTTPException(400, f"В файле не найдены колонки: {missing}")
 
         report_lines = []
@@ -954,28 +947,20 @@ async def generate_trade_report(file: UploadFile = File(...)):
         # Определяем тип: Лонг (Amount > 0) или Шорт (Amount < 0)
         df['Type'] = df['Amount'].apply(lambda x: 'лонг' if x > 0 else 'шорт')
 
-        # 2. Группировка
-        # Группируем по Тикеру и Типу.
-        # sort=False сохраняет порядок появления (если нужно), но лучше отсортировать по тикеру
         grouped = df.groupby(['Ticker', 'Type'])
 
         for (ticker, trade_type), group in grouped:
             count_parts = len(group)
 
-            # Списки значений для перечисления
             amounts = group['Amount'].tolist()
             quotes = group['Quote amount'].tolist()
 
-            # Формируем строки перечисления (соединяем через " и ")
-            # Для Amount просто числа, для Quote amount - с форматированием
             amounts_str = " и ".join([str(x) for x in amounts])
             quotes_str = " и ".join([format_report_number(x) for x in quotes])
 
-            # Суммы
             total_amount = sum(amounts)
             total_quote = sum(quotes)
 
-            # Сборка строки по шаблону
             line = (
                 f"{ticker} ({trade_type}) раздробился на {count_parts} частей "
                 f"по количеству — {amounts_str} "
@@ -985,7 +970,6 @@ async def generate_trade_report(file: UploadFile = File(...)):
             )
             report_lines.append(line)
 
-        # Объединяем весь отчет
         full_text = "\n".join(report_lines)
 
         return {"status": "success", "report": full_text}
