@@ -29,7 +29,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # ✅ КЭШ ДЛЯ BACKEND
       - name: Build & push backend
         uses: docker/build-push-action@v6
         with:
@@ -38,10 +37,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_BACKEND }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
-      # ✅ КЭШ ДЛЯ FRONTEND
       - name: Build & push frontend
         uses: docker/build-push-action@v6
         with:
@@ -50,5 +46,3 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_FRONTEND }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
