@@ -22,7 +22,7 @@ def _auto_adjust_column_width(worksheet):
             header_length = 0
 
         adjusted_width = max(max_length + 2, header_length + 2)
-
+        # Ограничим максимальную ширину, чтобы не было гигантских колонок
         if adjusted_width > 100:
             adjusted_width = 100
         worksheet.column_dimensions[column_letter].width = adjusted_width

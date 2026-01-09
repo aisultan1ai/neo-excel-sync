@@ -5,11 +5,19 @@ import logging
 
 log = logging.getLogger(__name__)
 
+# DB_CONFIG = {
+#    "dbname": "neo_db",
+#   "user": "postgres",
+#    "password": "aisu123",
+#    "host": "localhost",
+#    "port": 5432
+#}
+
 DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB", "neo_db"),
     "user": os.getenv("POSTGRES_USER", "postgres"),
     "password": os.getenv("POSTGRES_PASSWORD", "aisu123"),
-    "host": os.getenv("DB_HOST", "localhost"),
+    "host": os.getenv("DB_HOST", "localhost"), # <--- ГЛАВНОЕ ИЗМЕНЕНИЕ
     "port": int(os.getenv("DB_PORT", 5432)),
 "client_encoding": "utf8"
 }
@@ -448,8 +456,13 @@ def delete_task(task_id):
     try:
         cursor = conn.cursor()
 
+        # 1. Сначала удаляем комментарии
         cursor.execute("DELETE FROM comments WHERE task_id = %s", (task_id,))
+
+        # 2. Удаляем файлы (записи в БД)
         cursor.execute("DELETE FROM task_attachments WHERE task_id = %s", (task_id,))
+
+        # 3. И только потом саму задачу
         cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
 
         conn.commit()
