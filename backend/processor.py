@@ -4,31 +4,26 @@ import logging
 import re
 from utils import extract_numbers_from_series
 
-# Настройка логгера для этого файла
 log = logging.getLogger(__name__)
 
 
 def _perform_comparison(df1, df2, id_col_1, acc_col_1, id_col_2, acc_col_2):
     log.debug("Выполнение _perform_comparison...")
 
-    # Нормализация ID: создаем cleaned_id векторно
     df1['cleaned_id'] = df1[id_col_1].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     df2['cleaned_id'] = df2[id_col_2].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
 
-    # Используем set для быстрого поиска
     ids1 = set(df1['cleaned_id'])
     ids2 = set(df2['cleaned_id'])
 
-    # Фильтрация
     matching = df1[df1['cleaned_id'].isin(ids2)].copy()
     unmatched1 = df1[~df1['cleaned_id'].isin(ids2)].copy()
     unmatched2 = df2[~df2['cleaned_id'].isin(ids1)].copy()
 
-    # Чистка служебных колонок
     for df in [matching, unmatched1, unmatched2]:
         df.drop(columns=['cleaned_id'], inplace=True, errors='ignore')
 
-    # Сводка (Summary)
+    # Сводка
     count1 = pd.Series()
     if not df1.empty and acc_col_1 in df1.columns:
         count1 = df1.groupby(extract_numbers_from_series(df1[acc_col_1]))[id_col_1].count()
@@ -53,24 +48,19 @@ def _process_podft_for_df(df, display_name, podft_settings):
 
     podft_column = podft_settings['column']
     if podft_column not in df.columns:
-        # Используем красивое имя в логах
         log.warning(f"Столбец для ПОД/ФТ (7М) '{podft_column}' не найден в {display_name}.")
         return pd.DataFrame()
 
-    # Временный DF для расчетов
     temp_df = df.copy()
 
-    # Преобразуем в числа, ошибки -> NaN. Чистим пробелы внутри чисел (напр. "7 000 000")
     temp_df['__temp_sum'] = pd.to_numeric(
         temp_df[podft_column].astype(str).str.replace(r'\s+', '', regex=True).str.replace(',', '.'),
         errors='coerce'
     )
 
-    # Фильтр по сумме
     result_df = temp_df[temp_df['__temp_sum'] >= podft_threshold].copy()
     result_df.drop(columns=['__temp_sum'], inplace=True)
 
-    # Фильтр по значению (исключения, например Рынок ЦБ != MISX)
     if podft_settings.get('filter_enabled'):
         filter_col = podft_settings.get('filter_column')
         filter_vals = podft_settings.get('filter_values', '')
@@ -82,7 +72,6 @@ def _process_podft_for_df(df, display_name, podft_settings):
                 result_df = result_df[~mask]
 
     if not result_df.empty:
-        # Вставляем переданное красивое имя
         result_df.insert(0, 'Источник_Файла', display_name)
 
     return result_df
@@ -93,32 +82,28 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
                   display_name1="File1.xlsx", display_name2="File2.xlsx"):
     """Основная функция обработки."""
 
-    # Логируем красивые имена
     log.info(f"Начало основной обработки. Файл 1: {display_name1}, Файл 2: {display_name2}")
 
     try:
-        # Читаем сразу как строки
         df1_orig = pd.read_excel(file1_path, dtype=str)
         df2_orig = pd.read_excel(file2_path, dtype=str)
 
-        # --- ВАЖНО: АВТОМАТИЧЕСКАЯ ОЧИСТКА НАЗВАНИЙ КОЛОНОК ОТ ПРОБЕЛОВ ---
         df1_orig.columns = df1_orig.columns.str.strip()
         df2_orig.columns = df2_orig.columns.str.strip()
 
         log.info(f"Файлы Excel успешно прочитаны. df1: {len(df1_orig)} строк, df2: {len(df2_orig)} строк.")
 
-        # Убираем пустые строки "Итого"
+
         if id_col_1 in df1_orig.columns: df1_orig.dropna(subset=[id_col_1], inplace=True)
         if id_col_2 in df2_orig.columns: df2_orig.dropna(subset=[id_col_2], inplace=True)
 
-        # 1. Поиск дубликатов (внутри файлов)
-        # -----------------------------------
+        #  Поиск дубликатов
+
         duplicates1 = pd.DataFrame()
         if id_col_1 in df1_orig.columns:
             s_ids = df1_orig[id_col_1].str.strip().str.replace(r'\.0$', '', regex=True)
             mask = s_ids.duplicated(keep=False) & s_ids.notna() & (s_ids != '')
             duplicates1 = df1_orig[mask].sort_values(by=id_col_1)
-            # В оригинале вы НЕ удаляли дубликаты из df1_orig
 
         log.info(f"Найдено {len(duplicates1)} задвоенных ID в df1.")
 
@@ -130,12 +115,11 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
 
         log.info(f"Найдено {len(duplicates2)} задвоенных ID в df2.")
 
-        # 2. Крипто (USDT)
-        # ----------------
-        crypto_dfs = []
-        inst_col = "Финансовый инструмент"  # Можно вынести в настройки
+        # Крипто (USDT)
 
-        # Используем переданные красивые имена
+        crypto_dfs = []
+        inst_col = "Финансовый инструмент"
+
         for df, d_name in [(df1_orig, display_name1), (df2_orig, display_name2)]:
             if 'Валюта' in df.columns:
                 # Ищем USDT
@@ -151,8 +135,8 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
         crypto_res = pd.concat(crypto_dfs, ignore_index=True) if crypto_dfs else pd.DataFrame()
         log.info(f"Найдено {len(crypto_res)} сделок КРИПТО (USDT).")
 
-        # 3. Бонды / Опционы (45M)
-        # ------------------------
+        #  Бонды / Опционы (45M)
+
         bo_res = pd.DataFrame()
         bo_thresh_str = str(podft_settings.get("bo_threshold", "45000000"))
 
@@ -185,8 +169,8 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
 
         log.info(f"Найдено {len(bo_res)} сделок Бонды/Опционы (>= {bo_thresh_str}).")
 
-        # 4. Перекрытия (Overlap Accounts)
-        # ------------------------------
+        #  Перекрытия
+
         overlap_set = set(overlap_accounts_list)
         found_overlaps = set()
 
@@ -203,7 +187,6 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
 
         log.info(f"Найдено {len(found_overlaps)} уникальных счетов 'перекрытия' в файлах.")
 
-        # Фильтрация перекрытий (создаем копии для основной сверки)
         len1_before = len(df1_orig)
         len2_before = len(df2_orig)
 
@@ -213,9 +196,8 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
         log.info(f"Фильтрация df1: {len1_before} -> {len(df1_clean)} строк.")
         log.info(f"Фильтрация df2: {len2_before} -> {len(df2_clean)} строк.")
 
-        # 5. ПОД/ФТ (7М)
-        # ----------------
-        # Передаем красивые имена вместо file_path
+        #  ПОД/ФТ (7М)
+
         podft_res = pd.concat([
             _process_podft_for_df(df1_clean, display_name1, podft_settings),
             _process_podft_for_df(df2_clean, display_name2, podft_settings)
@@ -224,8 +206,8 @@ def process_files(file1_path, id_col_1, acc_col_1, file2_path, id_col_2, acc_col
         thresh_disp = podft_settings.get('threshold')
         log.info(f"Найдено {len(podft_res)} сделок ПОД/ФТ ({thresh_disp}).")
 
-        # 6. Основная сверка
-        # ------------------
+        #  Основная сверка
+
         matches, diff1, diff2, sum1, sum2 = _perform_comparison(
             df1_clean, df2_clean,
             id_col_1, acc_col_1,

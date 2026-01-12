@@ -12,11 +12,9 @@ const SettingsPage = () => {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("general");
 
-  // --- PERMISSIONS STATE ---
   const [canEdit, setCanEdit] = useState(false);
   const [userRole, setUserRole] = useState("");
 
-  // --- INITIAL DATA LOADING ---
   useEffect(() => {
     const fetchData = async () => {
         try {
@@ -28,7 +26,6 @@ const SettingsPage = () => {
 
             setSettings(settingsRes.data);
 
-            // Check Permissions
             const { department, is_admin } = profileRes.data;
             const hasAccess = department === 'Back Office' || is_admin;
             setCanEdit(hasAccess);
@@ -44,7 +41,6 @@ const SettingsPage = () => {
     fetchData();
   }, []);
 
-  // --- HANDLERS ---
   const handleChange = (key, value) => {
       if (!canEdit) return; // Guard clause
       setSettings(prev => ({ ...prev, [key]: value }));
@@ -125,7 +121,6 @@ const SettingsPage = () => {
         )}
       </div>
 
-      {/* ГОРИЗОНТАЛЬНЫЕ ВКЛАДКИ */}
       <div style={{
           display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '5px', marginBottom: '25px',
           justifyContent: 'center', flexWrap: 'wrap'
@@ -153,10 +148,8 @@ const SettingsPage = () => {
         })}
       </div>
 
-      {/* --- ОБЛАСТЬ КОНТЕНТА --- */}
       <div className="card" style={{ padding: '40px', minHeight: '300px', borderTop: '4px solid #3b82f6', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01)' }}>
 
-        {/* 1. ОБЩИЕ */}
         {activeTab === 'general' && (
             <div className="fade-in">
                 <h3 style={{marginTop: 0, marginBottom: '25px'}}>Основные параметры</h3>

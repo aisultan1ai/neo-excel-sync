@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-// --- КОНСТАНТЫ ---
 const STATUS_STYLES = {
   "Нет": { bg: "#f1f5f9", color: "#64748b", label: "Нет отчетов" },
   "В ожидании": { bg: "#fef9c3", color: "#b45309", label: "В ожидании" },
@@ -17,7 +16,6 @@ const STATUS_STYLES = {
 const STATUS_DB_MAP = { "gray": "Нет", "yellow": "В ожидании", "green": "Отправлено" };
 const STATUS_DISPLAY_MAP = { "Нет": "gray", "В ожидании": "yellow", "Отправлено": "green" };
 
-// --- ОПТИМИЗИРОВАННЫЙ КОМПОНЕНТ СТРОКИ (React.memo) ---
 const ClientRow = React.memo(({ client, statusInfo, onClick }) => {
   return (
     <tr
@@ -119,7 +117,6 @@ const ReportsPage = () => {
     }
   }, [search, fetchClients, userDept, isAdmin, loadingAuth]);
 
-  // --- ЛОГИКА DRAWER (С ИСПРАВЛЕНИЕМ БАГА) ---
 
   const fetchDetails = useCallback(async (id) => {
       try {
@@ -130,7 +127,7 @@ const ReportsPage = () => {
   }, []);
 
   const openDrawer = useCallback((client) => {
-      // 1. ОТМЕНЯЕМ таймер закрытия, если он был запущен (чтобы не стереть данные)
+
       if (closeTimerRef.current) {
           clearTimeout(closeTimerRef.current);
           closeTimerRef.current = null;
@@ -148,13 +145,11 @@ const ReportsPage = () => {
       setIsDrawerOpen(false);
       document.body.style.overflow = 'auto';
 
-      // Запускаем таймер очистки данных с сохранением ID таймера
       closeTimerRef.current = setTimeout(() => {
           setSelectedClient(null);
       }, 300);
   }, []);
 
-  // --- ДЕЙСТВИЯ ---
 
   const handleAddClient = async () => {
       if (!newClient.name.trim()) return toast.warning("Нужно имя");
@@ -203,14 +198,12 @@ const ReportsPage = () => {
     } catch (e) { toast.error("Ошибка"); }
   };
 
-  // --- НОВАЯ ЛОГИКА СБРОСА СТАТУСОВ ---
+  // --- ЛОГИКА СБРОСА СТАТУСОВ ---
 
-  // 1. Открыть окно
   const openResetModal = () => {
       setShowResetConfirm(true);
   };
 
-  // 2. Выполнить сброс
   const executeResetStatuses = async () => {
     try {
         const token = localStorage.getItem('token');
@@ -262,7 +255,6 @@ const ReportsPage = () => {
       } catch (e) { toast.error("Ошибка"); }
   };
 
-  // --- ЗАГЛУШКА ДОСТУПА (ВАШ КОД) ---
   if (loadingAuth) return <div style={{padding: 40, textAlign: 'center'}}>Загрузка...</div>;
   if (userDept !== 'Back Office' && !isAdmin) {
     return (
@@ -289,7 +281,6 @@ const ReportsPage = () => {
     );
   }
 
-  // --- ОСНОВНОЙ РЕНДЕР ---
   return (
     <div style={{ width: '100%', height: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column', paddingRight: '10px' }}>
 
@@ -324,7 +315,6 @@ const ReportsPage = () => {
         </div>
       </div>
 
-      {/* TABLE */}
       <div className="card" style={{ padding: 0, flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{overflowY: 'auto', flex: 1}}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
@@ -350,10 +340,8 @@ const ReportsPage = () => {
         </div>
       </div>
 
-      {/* BACKDROP */}
       {isDrawerOpen && <div onClick={closeDrawer} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 40 }} />}
 
-      {/* DRAWER */}
       <div style={{
           position: 'fixed', top: 0, right: 0, height: '100%', width: '500px', maxWidth: '85vw',
           backgroundColor: 'white', boxShadow: '-10px 0 30px rgba(0,0,0,0.15)',
@@ -429,11 +417,9 @@ const ReportsPage = () => {
         )}
       </div>
 
-      {/* MODALS */}
       {showAddModal && <ClientModal title="Новый клиент" data={newClient} setData={setNewClient} onSave={handleAddClient} onClose={() => setShowAddModal(false)} />}
       {showEditModal && <ClientModal title="Редактировать" data={editingClient} setData={setEditingClient} onSave={handleUpdateClient} onClose={() => setShowEditModal(false)} />}
 
-      {/* --- МОДАЛКА ПОДТВЕРЖДЕНИЯ СБРОСА --- */}
       {showResetConfirm && (
         <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -476,7 +462,7 @@ const ReportsPage = () => {
   );
 };
 
-// ClientModal component same as before
+
 const ClientModal = ({ title, data, setData, onSave, onClose }) => (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
         <div className="card" style={{ width: '400px', padding: '30px', position: 'relative' }}>

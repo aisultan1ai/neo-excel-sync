@@ -23,7 +23,7 @@ const DashboardPage = () => {
 
   const checkSystemHealth = async () => {
       try {
-          // Short timeout so we don't wait long if server is down
+
           const res = await axios.get('/api/health', { timeout: 2000 });
           setHealth(res.data);
       } catch (err) {
@@ -35,14 +35,10 @@ const DashboardPage = () => {
     try {
       const token = localStorage.getItem('token');
 
-      // 1. Получаем имя пользователя
-
       const resProfile = await axios.get('/api/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUsername(resProfile.data.username);
-
-      // 2. Получаем цифры
 
       const res = await axios.get('/api/dashboard', {
         headers: { Authorization: `Bearer ${token}` }

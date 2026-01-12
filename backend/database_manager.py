@@ -5,14 +5,6 @@ import logging
 
 log = logging.getLogger(__name__)
 
-# DB_CONFIG = {
-#    "dbname": "neo_db",
-#   "user": "postgres",
-#    "password": "aisu123",
-#    "host": "localhost",
-#    "port": 5432
-#}
-
 DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB", "neo_db"),
     "user": os.getenv("POSTGRES_USER", "postgres"),
@@ -89,59 +81,6 @@ def init_database():
                            is_admin BOOLEAN DEFAULT FALSE
                            )
                        ''')
-
-        # --- CLIENT ACCOUNTS (ежемесячные счета клиента) ---
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS client_accounts_monthly (
-                id SERIAL PRIMARY KEY,
-                client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-                exchange TEXT NOT NULL,
-                currency TEXT NOT NULL,
-                balance NUMERIC,
-                period VARCHAR(7) NOT NULL, -- YYYY-MM (например 2026-01)
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-
-        # --- CRYPTO ACCOUNTS ---
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS crypto_accounts (
-                id SERIAL PRIMARY KEY,
-                provider TEXT NOT NULL,
-                name TEXT NOT NULL,
-                asset TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-
-        # --- CRYPTO TRANSFERS ---
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS crypto_transfers (
-                id SERIAL PRIMARY KEY,
-                date DATE NOT NULL,
-                type TEXT NOT NULL CHECK (type IN ('transfer','deposit','withdraw')),
-                from_account_id INTEGER NULL REFERENCES crypto_accounts(id) ON DELETE SET NULL,
-                to_account_id INTEGER NULL REFERENCES crypto_accounts(id) ON DELETE SET NULL,
-                asset TEXT NOT NULL,
-                amount NUMERIC NOT NULL,
-                comment TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-
-        # --- FLOW SCHEMES (ReactFlow nodes/edges) ---
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS crypto_flow_schemes (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL,
-                nodes JSONB NOT NULL,
-                edges JSONB NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-
-
-
 
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(50) DEFAULT 'Back Office'")
@@ -324,8 +263,6 @@ def get_client_details(client_id):
     finally:
         conn.close()
 
-
-
 def add_client(name, email, account, folder_path_override=None):
     if not name: return False, "Имя клиента обязательно."
 
@@ -460,7 +397,6 @@ def update_task(task_id, title, description):
     if not conn: return False
     try:
         cursor = conn.cursor()
-        # МЫ УБРАЛИ: , updated_at = NOW()
         cursor.execute("""
             UPDATE tasks 
             SET title = %s, description = %s
@@ -488,7 +424,6 @@ def update_task_status(task_id, new_status):
     finally:
         conn.close()
 
-
 def update_task_content(task_id, title, description):
     conn = get_db_connection()
     if not conn: return False
@@ -502,27 +437,22 @@ def update_task_content(task_id, title, description):
     finally:
         conn.close()
 
-
 def delete_task(task_id):
     conn = get_db_connection()
     if not conn: return False
     try:
         cursor = conn.cursor()
-
-        # 1. Сначала удаляем комментарии
         cursor.execute("DELETE FROM comments WHERE task_id = %s", (task_id,))
 
-        # 2. Удаляем файлы (записи в БД)
         cursor.execute("DELETE FROM task_attachments WHERE task_id = %s", (task_id,))
 
-        # 3. И только потом саму задачу
         cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
 
         conn.commit()
         return True
     except Exception as e:
         log.error(f"Error deleting task: {e}")
-        conn.rollback()  # Важно откатить транзакцию при ошибке
+        conn.rollback()
         return False
     finally:
         conn.close()
@@ -801,177 +731,3 @@ def get_user_tasks(user_id):
     finally:
         conn.close()
 
-
-def get_client_accounts_monthly(client_id: int, period: str):
-    conn = get_db_connection()
-    if not conn: return []
-    try:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("""
-            SELECT id, exchange, currency, balance, period
-            FROM client_accounts_monthly
-            WHERE client_id = %s AND period = %s
-            ORDER BY id DESC
-        """, (client_id, period))
-        return cur.fetchall()
-    finally:
-        conn.close()
-
-
-def add_client_account_monthly(client_id: int, exchange: str, currency: str, balance, period: str):
-    conn = get_db_connection()
-    if not conn: return None
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO client_accounts_monthly (client_id, exchange, currency, balance, period)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id
-        """, (client_id, exchange, currency, balance, period))
-        new_id = cur.fetchone()[0]
-        conn.commit()
-        return new_id
-    finally:
-        conn.close()
-
-
-def delete_client_account_monthly(account_id: int):
-    conn = get_db_connection()
-    if not conn: return False
-    try:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM client_accounts_monthly WHERE id = %s", (account_id,))
-        conn.commit()
-        return True
-    finally:
-        conn.close()
-
-def get_crypto_accounts():
-    conn = get_db_connection()
-    if not conn: return []
-    try:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT id, provider, name, asset FROM crypto_accounts ORDER BY id DESC")
-        return cur.fetchall()
-    finally:
-        conn.close()
-
-
-def create_crypto_account(provider: str, name: str, asset: str = ""):
-    conn = get_db_connection()
-    if not conn: return None
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO crypto_accounts (provider, name, asset)
-            VALUES (%s, %s, %s)
-            RETURNING id
-        """, (provider, name, asset))
-        new_id = cur.fetchone()[0]
-        conn.commit()
-        return new_id
-    finally:
-        conn.close()
-
-
-def update_crypto_account(acc_id: int, provider: str, name: str, asset: str = ""):
-    conn = get_db_connection()
-    if not conn: return False
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            UPDATE crypto_accounts
-            SET provider=%s, name=%s, asset=%s
-            WHERE id=%s
-        """, (provider, name, asset, acc_id))
-        conn.commit()
-        return True
-    finally:
-        conn.close()
-
-
-def delete_crypto_account(acc_id: int):
-    conn = get_db_connection()
-    if not conn: return False
-    try:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM crypto_accounts WHERE id=%s", (acc_id,))
-        conn.commit()
-        return True
-    finally:
-        conn.close()
-
-def get_crypto_transfers(limit: int = 200):
-    conn = get_db_connection()
-    if not conn: return []
-    try:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("""
-            SELECT id, date, type, from_account_id, to_account_id, asset, amount, comment
-            FROM crypto_transfers
-            ORDER BY date DESC, id DESC
-            LIMIT %s
-        """, (limit,))
-        return cur.fetchall()
-    finally:
-        conn.close()
-
-
-def create_crypto_transfer(date, tx_type: str, from_id, to_id, asset: str, amount, comment: str = ""):
-    conn = get_db_connection()
-    if not conn: return None
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO crypto_transfers (date, type, from_account_id, to_account_id, asset, amount, comment)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (date, tx_type, from_id, to_id, asset, amount, comment))
-        new_id = cur.fetchone()[0]
-        conn.commit()
-        return new_id
-    finally:
-        conn.close()
-
-def get_crypto_flow_schemes():
-    conn = get_db_connection()
-    if not conn: return []
-    try:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("""
-            SELECT id, name, nodes, edges, created_at
-            FROM crypto_flow_schemes
-            ORDER BY id DESC
-        """)
-        return cur.fetchall()
-    finally:
-        conn.close()
-
-
-def create_crypto_flow_scheme(name: str, nodes, edges):
-    conn = get_db_connection()
-    if not conn: return None
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO crypto_flow_schemes (name, nodes, edges)
-            VALUES (%s, %s, %s)
-            RETURNING id
-        """, (name, Json(nodes), Json(edges)))
-        new_id = cur.fetchone()[0]
-        conn.commit()
-        return new_id
-    finally:
-        conn.close()
-
-
-def delete_crypto_flow_scheme(scheme_id: int):
-    conn = get_db_connection()
-    if not conn: return False
-    try:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM crypto_flow_schemes WHERE id=%s", (scheme_id,))
-        conn.commit()
-        return True
-    finally:
-        conn.close()

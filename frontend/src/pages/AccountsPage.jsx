@@ -1,4 +1,3 @@
-// AccountsPage.jsx
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { api } from "../api";
 import { toast } from "react-toastify";
@@ -35,9 +34,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-// =====================================================
-// 0) HELPERS
-// =====================================================
+
 const cx = (...arr) => arr.filter(Boolean).join(" ");
 
 const PROVIDERS = ["Binance", "ByBit", "OKX", "Kraken", "Ledger", "Metamask"];

@@ -7,7 +7,6 @@ import {
     ArrowRightLeft, List, FileText, Copy, ClipboardCheck, Loader2, Info
 } from 'lucide-react';
 
-// --- CSS STYLES (Встроенные стили для анимаций и hover-эффектов) ---
 const styles = `
   .fade-in { animation: fadeIn 0.3s ease-in-out; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -24,7 +23,6 @@ const styles = `
   .drop-zone:hover { border-color: #94a3b8; }
 `;
 
-// --- КОМПОНЕНТ ЗАГРУЗКИ ФАЙЛА ---
 const SimpleFileBlock = ({ title, file, setFile, headers, setHeaders, selectedCol, setSelectedCol, color, showSelect = true, description }) => {
     const [isDragging, setIsDragging] = useState(false);
 
@@ -134,7 +132,6 @@ const SimpleFileBlock = ({ title, file, setFile, headers, setHeaders, selectedCo
     );
 };
 
-// --- СРАВНЕНИЕ (View) ---
 const ComparisonView = () => {
     const [file1, setFile1] = useState(null);
     const [headers1, setHeaders1] = useState([]);
@@ -287,7 +284,7 @@ const ComparisonView = () => {
     );
 };
 
-// --- ГЕНЕРАТОР ОТЧЕТА (View) ---
+// --- ГЕНЕРАТОР ОТЧЕТА ---
 const ReportView = () => {
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -413,8 +410,6 @@ const ReportView = () => {
     );
 };
 
-// --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
-
 const TabButton = ({ active, onClick, color, label, count }) => (
     <button
         onClick={onClick}
@@ -465,7 +460,6 @@ const NavButton = ({ active, onClick, icon: Icon, label }) => (
     </button>
 );
 
-// --- ГЛАВНЫЙ КОМПОНЕНТ СТРАНИЦЫ ---
 const InstrumentsPage = () => {
     const [viewMode, setViewMode] = useState('compare');
 
@@ -478,8 +472,8 @@ const InstrumentsPage = () => {
                 height: 'calc(100vh - 60px)',
                 display: 'flex',
                 flexDirection: 'column',
-                background: '#f1f5f9', // Светло-серый фон для всей страницы
-                borderRadius: '16px 0 0 16px' // Небольшое скругление, если это часть сайдбара
+                background: '#f1f5f9',
+                borderRadius: '16px 0 0 16px'
             }}>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
@@ -488,7 +482,6 @@ const InstrumentsPage = () => {
                         <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>Управление справочниками и генерация отчетов</p>
                     </div>
 
-                    {/* Переключатель режимов */}
                     <div style={{ background: '#e2e8f0', padding: '4px', borderRadius: '10px', display: 'flex', gap: '4px' }}>
                         <NavButton
                             active={viewMode === 'compare'}
@@ -505,7 +498,6 @@ const InstrumentsPage = () => {
                     </div>
                 </div>
 
-                {/* Контент */}
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                     {viewMode === 'compare' ? <ComparisonView /> : <ReportView />}
                 </div>

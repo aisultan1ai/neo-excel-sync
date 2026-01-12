@@ -256,19 +256,18 @@ const DepartmentsPage = () => {
                         <option value="Open">🔵 Новая</option><option value="In Progress">🟡 В работе</option><option value="Done">🟢 Выполнено</option>
                     </select>
 
-                    {/* --- ИСПРАВЛЕННАЯ ГРУППА КНОПОК --- */}
                     <div style={{display: 'flex', gap: '5px'}}>
                         {!isEditing ? (
                             <>
                                 <button onClick={() => setIsEditing(true)} className="icon-btn" title="Редактировать"><Edit2 size={18} color="#64748b"/></button>
                                 <button onClick={openDeleteTaskModal} className="icon-btn" title="Удалить задачу"><Trash2 size={18} color="#ef4444"/></button>
-                                {/* Кнопка закрытия панели видна ТОЛЬКО когда НЕ редактируем */}
+
                                 <button onClick={() => setExpandedTask(null)} className="icon-btn" style={{marginLeft: '10px'}} title="Закрыть"><X size={20}/></button>
                             </>
                         ) : (
                             <>
                                 <button onClick={handleSaveEdit} className="icon-btn" title="Сохранить"><Save size={18} color="#10b981"/></button>
-                                {/* Кнопка отмены редактирования - теперь единственная "X" в этом режиме */}
+
                                 <button onClick={() => setIsEditing(false)} className="icon-btn" title="Отмена"><X size={18} color="#64748b"/></button>
                             </>
                         )}

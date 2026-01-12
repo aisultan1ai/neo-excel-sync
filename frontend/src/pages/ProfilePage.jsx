@@ -182,10 +182,8 @@ const ProfilePage = ({ onLogout }) => {
         </button>
       </div>
 
-      {/* ОСНОВНОЙ КОНТЕНТ */}
       <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap', marginBottom: '40px' }}>
 
-        {/* ЛЕВАЯ КОЛОНКА (Инфо) */}
         <div style={{ flex: 1, minWidth: '300px' }}>
             <div className="card" style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '20px' }}>
                 <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #3b82f6' }}>
@@ -218,7 +216,7 @@ const ProfilePage = ({ onLogout }) => {
             </div>
         </div>
 
-        {/* ПРАВАЯ КОЛОНКА (Пароль) */}
+
         <div style={{ flex: 1, minWidth: '300px' }}>
             <div className="card" style={{ height: '100%' }}>
                 <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '10px', color: '#0f172a' }}>

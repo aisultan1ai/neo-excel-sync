@@ -34,7 +34,6 @@ const LoginPage = ({ onLogin }) => {
     e.preventDefault();
     setError('');
 
-    // 1. ПРОВЕРКА НА ПУСТЫЕ ПОЛЯ (Защита от белого экрана)
     if (!username || !password) {
         setError('Пожалуйста, введите логин и пароль');
         return;
@@ -61,7 +60,7 @@ const LoginPage = ({ onLogin }) => {
     } catch (err) {
       console.error(err);
 
-      // 2. БЕЗОПАСНАЯ ОБРАБОТКА ОШИБОК
+      // БЕЗОПАСНАЯ ОБРАБОТКА ОШИБОК
       if (err.response) {
           const data = err.response.data;
 

@@ -15,7 +15,6 @@ import {
   Search,
 } from "lucide-react";
 
-// --- КОМПОНЕНТ КАРТОЧКИ ФАЙЛА ---
 const FileSection = ({
   title,
   file,
@@ -74,7 +73,6 @@ const FileSection = ({
       }
     };
 
-    // readAsBinaryString иногда ругается в некоторых браузерах, но у тебя работает — оставим как есть
     reader.readAsBinaryString(selectedFile);
   };
 
@@ -279,7 +277,6 @@ const FileSection = ({
   );
 };
 
-// --- ОСНОВНАЯ СТРАНИЦА ---
 const SverkaPage = () => {
   const [file1, setFile1] = useState(null);
   const [file2, setFile2] = useState(null);
@@ -291,13 +288,11 @@ const SverkaPage = () => {
   const [results, setResults] = useState(null);
   const [activeTab, setActiveTab] = useState("matches");
 
-  // фильтр
   const [filterText, setFilterText] = useState("");
   const [filterCol, setFilterCol] = useState(""); // "" = по всем колонкам
 
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
 
-  // Восстановление данных
   useEffect(() => {
     const fetchLastResult = async () => {
       try {
@@ -344,7 +339,6 @@ const SverkaPage = () => {
       .catch(() => toast.error("Сервер недоступен"));
   }, []);
 
-  // сброс фильтра при переключении вкладок
   useEffect(() => {
     setFilterText("");
     setFilterCol("");

@@ -15,25 +15,22 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, sta
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.concurrency import run_in_threadpool  # Для запуска синхронного кода без блокировки
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from jose import JWTError, jwt
 
-# Локальные модули
 import processor
 import settings_manager
 import split_processor
 import excel_exporter
 import database_manager
 
-# Настройки Pandas
 pd.set_option('future.no_silent_downcasting', True)
 
-# Логирование
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    force=True # <--- ЭТО ВАЖНО, ЧТОБЫ ЛОГИ ПОЯВИЛИСЬ В ТЕРМИНАЛЕ
+    force=True
 )
 log = logging.getLogger(__name__)
 
@@ -43,21 +40,6 @@ app = FastAPI(title="NeoExcelSync API")
 SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key-change-this-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
-
-# --- CORS ---
-#origins = [
- #   "http://localhost:5173",
-  #  "http://127.0.0.1:5173",
-   # "http://localhost:3000",
-   # "http://192.168.0.198:5173"
-#]
-
-# origins = [
-  #  "http://localhost",           # <--- ВАЖНО ДЛЯ DOCKER (порт 80)
-  #  "http://127.0.0.1",           # <--- Тоже важно
-  #  "http://localhost:5173",      # Для локальной разработки без докера
-  #  "http://127.0.0.1:5173",
-#]
 
 cors_origins = os.getenv(
     "CORS_ORIGINS",
@@ -72,19 +54,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- ХРАНИЛИЩЕ ---
 TEMP_DIR = "temp_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-
 COMPARISON_CACHE: Dict[str, Any] = {}
 CACHE_LOCK = Lock()
-CACHE_TTL_MINUTES = int(os.getenv("CACHE_TTL_MINUTES", "60"))  # 60 минут по умолчанию
-CACHE_MAX_ITEMS = int(os.getenv("CACHE_MAX_ITEMS", "30"))      # лучше меньше, чем 50
-
+CACHE_TTL_MINUTES = int(os.getenv("CACHE_TTL_MINUTES", "60"))
+CACHE_MAX_ITEMS = int(os.getenv("CACHE_MAX_ITEMS", "30"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
-
 
 # --- МОДЕЛИ ---
 class UserCreate(BaseModel):
@@ -93,36 +71,28 @@ class UserCreate(BaseModel):
     department: str
     is_admin: bool = False
 
-
 class TaskCreate(BaseModel):
     title: str
     description: str
     to_department: str
 
-
 class TaskStatusUpdate(BaseModel):
     status: str
-
 
 class TaskUpdateContent(BaseModel):
     title: str
     description: str
 
-
 class CommentCreate(BaseModel):
     content: str
-
 
 class PasswordChange(BaseModel):
     old_password: str
     new_password: str
 
-
 class DeptCreate(BaseModel):
     name: str
 
-
-# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
 def verify_password(plain_password, hashed_password):
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
@@ -203,7 +173,6 @@ def cleanup_cache():
             oldest = min(COMPARISON_CACHE.keys(), key=lambda k: COMPARISON_CACHE[k]["created_at"])
             COMPARISON_CACHE.pop(oldest, None)
 
-
 # --- API ---
 
 @app.on_event("startup")
@@ -211,11 +180,9 @@ def startup_event():
     database_manager.init_database()
     log.info("Database initialized.")
 
-
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "NeoExcelSync Backend is running"}
-
 
 @app.post("/api/token")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -227,7 +194,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
     access_token = create_access_token(data={"sub": user[1]})
     return {"access_token": access_token, "token_type": "bearer"}
-
 
 # --- СВЕРКА ---
 
@@ -247,12 +213,10 @@ async def run_comparison(
 
         original_name_1 = file1.filename
         original_name_2 = file2.filename
-        # Сохранение файлов (синхронное I/O, но быстрое)
         f1_path = save_upload_file(file1)
         f2_path = save_upload_file(file2)
         settings = json.loads(settings_json)
 
-        # Запуск тяжелой обработки в пуле потоков
         results = await run_in_threadpool(
             _process_comparison_sync,
             f1_path, id_col_1, acc_col_1,
@@ -280,11 +244,11 @@ async def run_comparison(
                 json_response[key] = val.fillna("").to_dict(orient="records")
             elif isinstance(val, pd.Series):
                 json_response[key] = val.to_dict()
-            elif isinstance(val, list) or isinstance(val, set):  # found_overlaps
+            elif isinstance(val, list) or isinstance(val, set):
                 json_response[key] = list(val)
 
         json_response['status'] = 'success'
-        json_response['comparison_id'] = comparison_id  # <--- ОТДАЕМ ID ФРОНТЕНДУ
+        json_response['comparison_id'] = comparison_id
 
         return json_response
 
@@ -316,7 +280,7 @@ def _process_comparison_sync(f1_path, id_col_1, acc_col_1, f2_path, id_col_2, ac
         f2_path, id_col_2, acc_col_2,
         podft_settings,
         overlap_accounts,
-        display_name1=name1,  # <--- ВОТ ТУТ
+        display_name1=name1,
         display_name2=name2
     )
 
@@ -362,16 +326,10 @@ def _process_comparison_sync(f1_path, id_col_1, acc_col_1, f2_path, id_col_2, ac
     return results
 
 
-# --- ЭКСПОРТ (ИСПРАВЛЕННЫЙ) ---
-
 @app.get("/api/export/{comparison_id}")
 async def export_excel_file(comparison_id: str):
     """Экспорт по ID без передачи данных обратно."""
-
-    # 1) чистим просроченный кэш
     cleanup_cache()
-
-    # 2) читаем кэш под lock (чтобы не было гонок)
     with CACHE_LOCK:
         cached = COMPARISON_CACHE.get(comparison_id)
 
@@ -381,7 +339,7 @@ async def export_excel_file(comparison_id: str):
     results = cached["data"]
 
     try:
-        # 3) генерация Excel в потоке, чтобы не блочить event loop
+        # генерация Excel в потоке, чтобы не блочить event loop
         stream = await run_in_threadpool(excel_exporter.export_results_to_stream, results)
 
         filename = f"Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
@@ -397,19 +355,14 @@ async def export_excel_file(comparison_id: str):
         log.error(f"Export error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка генерации Excel")
 
-
-
-# --- СТАРЫЙ ENDPOINT ПОЛУЧЕНИЯ РЕЗУЛЬТАТА (для обратной совместимости, если нужно) ---
 @app.get("/api/last-result")
 def get_last_result():
-    # Лучше не использовать, но если фронт еще не обновлен:
     if not COMPARISON_CACHE:
         return {"status": "empty", "message": "No data"}
-    # Берем последний
+
     last_key = list(COMPARISON_CACHE.keys())[-1]
     results = COMPARISON_CACHE[last_key]["data"]
 
-    # Форматируем для JSON
     json_response = {}
     for key, val in results.items():
         if isinstance(val, pd.DataFrame):
@@ -422,25 +375,20 @@ def get_last_result():
     json_response['status'] = 'success'
     return json_response
 
-
-# --- ПРОЧИЕ ENDPOINTS (Клиенты, Задачи, Настройки) ---
-
 @app.get("/api/settings")
 def get_settings():
     return settings_manager.load_settings()
 
-
 @app.post("/api/settings")
 def update_settings(new_settings: dict):
     return settings_manager.save_settings(new_settings)
-
 
 @app.post("/api/settings/upload-split-list")
 async def upload_split_list_reference(file: UploadFile = File(...)):
     try:
         upload_dir = "data"
         os.makedirs(upload_dir, exist_ok=True)
-        # Защита пути
+
         safe_name = os.path.basename(file.filename)
         file_path = os.path.join(upload_dir, safe_name)
         with open(file_path, "wb") as buffer:
@@ -453,7 +401,6 @@ async def upload_split_list_reference(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/settings/split-list-content")
 def get_split_list_content():
     try:
@@ -462,7 +409,6 @@ def get_split_list_content():
         if not path or not os.path.exists(path):
             return {"status": "empty", "data": [], "message": "Файл не найден"}
 
-        # Читаем в потоке? Для маленьких файлов ок синхронно.
         df = pd.read_excel(path).fillna("")
         return {
             "status": "success",
@@ -497,9 +443,6 @@ async def check_splits(daily_file: UploadFile = File(...), settings_json: str = 
     finally:
         cleanup_files(daily_path)
 
-
-# --- КЛИЕНТЫ ---
-
 @app.get("/api/clients")
 def search_clients(search: str = ""):
     raw = database_manager.search_clients(search)
@@ -511,7 +454,6 @@ def get_client_details(client_id: int):
     details = database_manager.get_client_details(client_id)
     if not details: raise HTTPException(404, "Client not found")
 
-    # Список файлов
     folder = details.get("folder_path")
     files = []
     if folder and os.path.exists(folder):
@@ -601,7 +543,7 @@ def delete_client_file(client_id: int, filename: str):
 
 @app.post("/api/clients/reset-status")
 async def reset_all_clients_status(current_user: str = Depends(get_current_user)):
-    # ИСПРАВЛЕНО: использование менеджера БД вместо прямого подключения
+
     try:
         success = database_manager.reset_all_clients_statuses()  # Нужно добавить этот метод в database_manager!
         if success:
@@ -611,7 +553,7 @@ async def reset_all_clients_status(current_user: str = Depends(get_current_user)
         raise HTTPException(500, str(e))
 
 
-# --- ЗАДАЧИ ---
+# ЗАДАЧИ
 
 @app.get("/api/tasks/{department}")
 async def read_tasks(department: str, current_user: str = Depends(get_current_user)):
@@ -640,9 +582,6 @@ async def change_task_status(task_id: int, status_data: TaskStatusUpdate,
 
 @app.put("/api/tasks/{task_id}")
 async def update_task_endpoint(task_id: int, task: TaskUpdateContent):
-    # Вызываем вашу функцию из database_manager
-    # Обратите внимание: мы передаем только title и description,
-    # так как ваша функция в БД обновляет только их.
     success = database_manager.update_task(task_id, task.title, task.description)
 
     if not success:
@@ -654,7 +593,6 @@ async def update_task_endpoint(task_id: int, task: TaskUpdateContent):
 async def read_comments(task_id: int, current_user: str = Depends(get_current_user)):
     comments = database_manager.get_comments(task_id)
     return [dict(c) for c in comments]
-
 
 @app.post("/api/tasks/{task_id}/comments")
 async def create_new_comment(task_id: int, comment: CommentCreate, current_user: str = Depends(get_current_user)):
@@ -687,7 +625,6 @@ async def get_task_files(task_id: int, current_user: str = Depends(get_current_u
     return database_manager.get_task_attachments(task_id)
 
 
-
 @app.get("/api/attachments/{attachment_id}")
 async def download_attachment(attachment_id: int, current_user: str = Depends(get_current_user)):
     file_data = database_manager.get_attachment_by_id(attachment_id)
@@ -707,7 +644,7 @@ async def remove_attachment(attachment_id: int, current_user: str = Depends(get_
     raise HTTPException(500, "Error deleting attachment")
 
 
-# --- ПОЛЬЗОВАТЕЛИ И ПРОФИЛЬ ---
+# ПОЛЬЗОВАТЕЛИ И ПРОФИЛЬ
 
 @app.get("/api/profile")
 async def get_profile_info(current_user: str = Depends(get_current_user)):
@@ -726,7 +663,6 @@ async def get_profile_info(current_user: str = Depends(get_current_user)):
         "stats": stats
     }
 
-
 @app.post("/api/profile/change-password")
 async def change_password(data: PasswordChange, current_user: str = Depends(get_current_user)):
     user = database_manager.get_user_by_username(current_user)
@@ -742,11 +678,9 @@ async def change_password(data: PasswordChange, current_user: str = Depends(get_
         return {"status": "success"}
     raise HTTPException(500, "Error updating password")
 
-
 @app.get("/api/dashboard")
 async def get_dashboard_data(current_user: str = Depends(get_current_user)):
     return database_manager.get_dashboard_stats() or {"users": 0, "total_tasks": 0}
-
 
 @app.get("/api/admin/users")
 async def get_users_list(current_user: str = Depends(require_admin)):
@@ -759,7 +693,6 @@ async def admin_create_user(user: UserCreate, current_user: str = Depends(requir
     if database_manager.create_new_user(user.username, hashed, user.department, user.is_admin):
         return {"status": "success"}
     raise HTTPException(400, "User exists or error")
-
 
 
 @app.delete("/api/admin/users/{user_id}")
@@ -785,13 +718,11 @@ def create_department(dept: DeptCreate, current_user: str = Depends(require_admi
     return {"status": "success"}
 
 
-
 @app.delete("/api/admin/departments/{dept_id}")
 def remove_department(dept_id: int, current_user: str = Depends(require_admin)):
     if database_manager.delete_department(dept_id):
         return {"status": "success"}
     raise HTTPException(400, "Error deleting department")
-
 
 
 @app.put("/api/admin/departments/{dept_id}")
@@ -801,8 +732,7 @@ def rename_department_endpoint(dept_id: int, dept: DeptCreate, current_user: str
     raise HTTPException(400, "Error renaming")
 
 
-
-# --- ИНСТРУМЕНТЫ (Сравнение) ---
+# ИНСТРУМЕНТЫ
 
 def clean_instrument_name(raw_name):
     s = str(raw_name).strip()
@@ -818,7 +748,6 @@ def read_dataset(file_path):
         return pd.read_csv(file_path, sep=None, engine='python', dtype=str)
     return pd.read_excel(file_path, dtype=str)
 
-
 @app.post("/api/compare-instruments")
 async def compare_instruments(
         file1: UploadFile = File(...),
@@ -829,7 +758,7 @@ async def compare_instruments(
     f1_path = save_upload_file(file1)
     f2_path = save_upload_file(file2)
     try:
-        # Тяжелая обработка в потоке
+
         res = await run_in_threadpool(_process_instruments, f1_path, f2_path, col1, col2)
         return res
     except Exception as e:
@@ -881,7 +810,7 @@ async def remove_task(task_id: int, current_user: str = Depends(get_current_user
     success = database_manager.delete_task(task_id)
     if success:
         return {"status": "success"}
-    # Если delete_task вернул False, то вылетит 500
+
     raise HTTPException(status_code=500, detail="Failed to delete task")
 
 @app.get("/api/health")
@@ -898,14 +827,13 @@ def health_check():
     return {"api": api_status, "db": db_status}
 
 
-# --- ГЕНЕРАТОР ОТЧЕТОВ ПО СДЕЛКАМ (НОВЫЙ РАЗДЕЛ) ---
+# ГЕНЕРАТОР ОТЧЕТОВ ПО СДЕЛКАМ
 
 def format_report_number(num):
     """Форматирует число: пробел как разделитель тысяч, точка для дроби"""
     try:
-        # Округляем до 2 знаков
         val = float(num)
-        # Форматируем с запятой как разделителем тысяч, потом меняем на пробел
+
         return "{:,.2f}".format(val).replace(",", " ")
     except:
         return str(num)
@@ -918,10 +846,10 @@ def parse_ticker_from_instrument(instr_str):
     """
     s = str(instr_str)
     try:
-        # Если есть квадратная скобка, режем по ней
+
         if ']' in s:
             s = s.split(']')[1]
-        # Если есть точка, режем по ней
+
         if '.' in s:
             s = s.split('.')[0]
         return s.strip()
@@ -933,28 +861,21 @@ def parse_ticker_from_instrument(instr_str):
 async def generate_trade_report(file: UploadFile = File(...)):
     temp_path = save_upload_file(file)
     try:
-        # Читаем файл
-        df = pd.read_excel(temp_path)
 
-        # Нормализация имен колонок (убираем лишние пробелы)
+        df = pd.read_excel(temp_path)
         df.columns = [c.strip() for c in df.columns]
 
-        # Проверяем наличие колонок
         required = ['Instrument', 'Amount', 'Quote amount']
         missing = [c for c in required if c not in df.columns]
         if missing:
-            # Попытка найти похожие колонки, если точных нет
-            # (Для простоты требуем точные названия, но можно добавить логику поиска)
             raise HTTPException(400, f"В файле не найдены колонки: {missing}")
 
         report_lines = []
 
-        # 1. Подготовка данных
         df['Ticker'] = df['Instrument'].apply(parse_ticker_from_instrument)
         # Определяем тип: Лонг (Amount > 0) или Шорт (Amount < 0)
         df['Type'] = df['Amount'].apply(lambda x: 'лонг' if x > 0 else 'шорт')
 
-        # 2. Группировка
         # Группируем по Тикеру и Типу.
         # sort=False сохраняет порядок появления (если нужно), но лучше отсортировать по тикеру
         grouped = df.groupby(['Ticker', 'Type'])
@@ -962,20 +883,16 @@ async def generate_trade_report(file: UploadFile = File(...)):
         for (ticker, trade_type), group in grouped:
             count_parts = len(group)
 
-            # Списки значений для перечисления
             amounts = group['Amount'].tolist()
             quotes = group['Quote amount'].tolist()
 
-            # Формируем строки перечисления (соединяем через " и ")
-            # Для Amount просто числа, для Quote amount - с форматированием
             amounts_str = " и ".join([str(x) for x in amounts])
             quotes_str = " и ".join([format_report_number(x) for x in quotes])
 
-            # Суммы
+
             total_amount = sum(amounts)
             total_quote = sum(quotes)
 
-            # Сборка строки по шаблону
             line = (
                 f"{ticker} ({trade_type}) раздробился на {count_parts} частей "
                 f"по количеству — {amounts_str} "
@@ -985,7 +902,6 @@ async def generate_trade_report(file: UploadFile = File(...)):
             )
             report_lines.append(line)
 
-        # Объединяем весь отчет
         full_text = "\n".join(report_lines)
 
         return {"status": "success", "report": full_text}
@@ -996,90 +912,3 @@ async def generate_trade_report(file: UploadFile = File(...)):
     finally:
         cleanup_files(temp_path)
 
-@app.get("/api/crypto/accounts")
-async def api_get_crypto_accounts(current_user: str = Depends(get_current_user)):
-    return {"status": "success", "data": database_manager.get_crypto_accounts()}
-
-
-@app.post("/api/crypto/accounts")
-async def api_create_crypto_account(payload: dict, current_user: str = Depends(get_current_user)):
-    provider = (payload.get("provider") or "").strip()
-    name = (payload.get("name") or "").strip()
-    asset = (payload.get("asset") or "").strip().upper()
-
-    if not provider or not name:
-        raise HTTPException(400, "provider и name обязательны")
-
-    new_id = database_manager.create_crypto_account(provider, name, asset)
-    return {"status": "success", "id": new_id}
-
-
-@app.put("/api/crypto/accounts/{acc_id}")
-async def api_update_crypto_account(acc_id: int, payload: dict, current_user: str = Depends(get_current_user)):
-    provider = (payload.get("provider") or "").strip()
-    name = (payload.get("name") or "").strip()
-    asset = (payload.get("asset") or "").strip().upper()
-
-    if not provider or not name:
-        raise HTTPException(400, "provider и name обязательны")
-
-    ok = database_manager.update_crypto_account(acc_id, provider, name, asset)
-    if not ok:
-        raise HTTPException(500, "Не удалось обновить")
-    return {"status": "success"}
-
-
-@app.delete("/api/crypto/accounts/{acc_id}")
-async def api_delete_crypto_account(acc_id: int, current_user: str = Depends(get_current_user)):
-    ok = database_manager.delete_crypto_account(acc_id)
-    if not ok:
-        raise HTTPException(500, "Не удалось удалить")
-    return {"status": "success"}
-
-@app.get("/api/crypto/transfers")
-async def api_get_crypto_transfers(current_user: str = Depends(get_current_user)):
-    data = database_manager.get_crypto_transfers(limit=300)
-    return {"status": "success", "data": data}
-
-
-@app.post("/api/crypto/transfers")
-async def api_create_crypto_transfer(payload: dict, current_user: str = Depends(get_current_user)):
-    # payload: {date,type,fromId,toId,amount,asset,comment}
-    date = payload.get("date")
-    tx_type = payload.get("type")
-    from_id = payload.get("fromId")
-    to_id = payload.get("toId")
-    asset = (payload.get("asset") or "").strip().upper()
-    amount = payload.get("amount")
-    comment = payload.get("comment") or ""
-
-    if not date or not tx_type or not asset or amount is None:
-        raise HTTPException(400, "date/type/asset/amount обязательны")
-
-    # allow null from/to for deposit/withdraw
-    new_id = database_manager.create_crypto_transfer(date, tx_type, from_id or None, to_id or None, asset, amount, comment)
-    return {"status": "success", "id": new_id}
-
-@app.get("/api/crypto/schemes")
-async def api_get_crypto_schemes(current_user: str = Depends(get_current_user)):
-    return {"status": "success", "data": database_manager.get_crypto_flow_schemes()}
-
-
-@app.post("/api/crypto/schemes")
-async def api_create_crypto_scheme(payload: dict, current_user: str = Depends(get_current_user)):
-    name = (payload.get("name") or "").strip()
-    nodes = payload.get("nodes")
-    edges = payload.get("edges")
-    if not name or nodes is None or edges is None:
-        raise HTTPException(400, "name/nodes/edges обязательны")
-
-    new_id = database_manager.create_crypto_flow_scheme(name, nodes, edges)
-    return {"status": "success", "id": new_id}
-
-
-@app.delete("/api/crypto/schemes/{scheme_id}")
-async def api_delete_crypto_scheme(scheme_id: int, current_user: str = Depends(get_current_user)):
-    ok = database_manager.delete_crypto_flow_scheme(scheme_id)
-    if not ok:
-        raise HTTPException(500, "Не удалось удалить схему")
-    return {"status": "success"}

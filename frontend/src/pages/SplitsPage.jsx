@@ -20,10 +20,8 @@ const SplitsPage = () => {
   const [loadingView, setLoadingView] = useState(false);
   const [showTable, setShowTable] = useState(false);
 
-  // Новое: Поиск по таблице
   const [searchTerm, setSearchTerm] = useState("");
 
-  // 1. ПРОВЕРКА ФАЙЛА
   const handleCheck = async () => {
     if (!file) {
       toast.error("Пожалуйста, выберите файл для проверки.");
@@ -65,7 +63,6 @@ const SplitsPage = () => {
     setResult(null);
   };
 
-  // 2. ЗАГРУЗКА НОВОГО СПРАВОЧНИКА
   const handleUploadReference = async () => {
     if (!refFile) return;
 
@@ -94,7 +91,6 @@ const SplitsPage = () => {
     }
   };
 
-  // 3. ПРОСМОТР ТЕКУЩЕГО СПРАВОЧНИКА
   const handleViewCurrentList = async (forceUpdate = false) => {
     if (showTable && viewData && !forceUpdate) {
         setShowTable(false);
@@ -118,7 +114,6 @@ const SplitsPage = () => {
     }
   };
 
-  // Логика фильтрации таблицы
   const filteredData = viewData
     ? viewData.filter(row => {
         if (!searchTerm) return true;
@@ -135,7 +130,6 @@ const SplitsPage = () => {
          Проверка Сплитов
       </h1>
 
-      {/* --- ПРОВЕРКА ФАЙЛА --- */}
       <div className="card" style={{ padding: '30px' }}>
         <div style={{ marginBottom: '20px' }}>
             <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -244,7 +238,7 @@ const SplitsPage = () => {
                 </p>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {/* Скрытый инпут и кастомная кнопка */}
+
                     <input
                         id="ref-upload"
                         type="file"
@@ -282,7 +276,6 @@ const SplitsPage = () => {
                 </div>
             </div>
 
-            {/* 2. Блок просмотра текущего справочника */}
             <div className="card" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start' }}>
                 <h4 style={{ marginTop: 0, marginBottom: '5px' }}>Просмотр базы</h4>
                 <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '15px' }}>
@@ -299,7 +292,6 @@ const SplitsPage = () => {
             </div>
         </div>
 
-        {/* ТАБЛИЦА ПРОСМОТРА С ПОИСКОМ */}
         {showTable && viewData && (
             <div className="card" style={{ marginTop: '20px', overflow: 'hidden', padding: 0 }}>
 

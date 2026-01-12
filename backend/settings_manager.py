@@ -2,9 +2,8 @@ import json
 import os
 import logging
 
-# Настройка путей: файл всегда будет лежать в той же папке, где и этот скрипт (BackEnd/data)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Можно положить настройки в отдельную папку data, чтобы не мусорить в корне
+
 DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -57,14 +56,13 @@ def load_settings():
         with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
             content = f.read().strip()
             if not content:
-                # Если файл пустой, возвращаем дефолт
+
                 return save_settings(get_default_settings())
             loaded_settings = json.loads(content)
 
         default_settings = get_default_settings()
         missing_keys = False
 
-        # Проверяем, есть ли все необходимые ключи
         for key, value in default_settings.items():
             if key not in loaded_settings:
                 loaded_settings[key] = value
@@ -78,7 +76,7 @@ def load_settings():
 
     except json.JSONDecodeError:
         log.error(f"Файл настроек {SETTINGS_FILE} поврежден. Пересоздаю дефолтный.")
-        # Делаем бэкап битого файла, чтобы не потерять данные
+
         if os.path.exists(SETTINGS_FILE):
             os.rename(SETTINGS_FILE, SETTINGS_FILE + ".bak")
         return save_settings(get_default_settings())
@@ -96,6 +94,5 @@ def save_settings(settings):
         return settings
     except Exception as e:
         log.error(f"Не удалось сохранить настройки в {SETTINGS_FILE}: {e}", exc_info=True)
-        # Если не удалось сохранить, возвращаем то, что пытались сохранить,
-        # чтобы программа продолжила работать в памяти
+
         return settings

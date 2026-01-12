@@ -13,7 +13,6 @@ const SmartTable = ({ data, title, height = "500px" }) => {
     if (data && data.length > 0) {
       setRowData(data);
 
-      // Автоматически создаем заголовки на основе ключей первого объекта
       const keys = Object.keys(data[0]);
       const cols = keys.map(key => ({
         field: key,
