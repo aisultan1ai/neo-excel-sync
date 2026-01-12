@@ -44,7 +44,7 @@ services:
       - ./backend/uploads:/app/uploads
 
   frontend:
-    image: aisultan1a/neoexcelsync-frontend:1.0
+    image: aisultan1a/neoexcelsync-frontend:1.1
     # build: ./frontend
     container_name: neo_frontend
     restart: always
