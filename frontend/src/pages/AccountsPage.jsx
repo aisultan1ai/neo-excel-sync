@@ -1278,7 +1278,7 @@ const AccountsPage = () => {
           padding: 10px 14px;
           border-radius: 12px;
           cursor: pointer;
-          font-weight: 900;
+          font-weight: 600;
         }
         .btn-primary:disabled{ cursor: not-allowed; }
         .btn-secondary{
@@ -1288,7 +1288,7 @@ const AccountsPage = () => {
           padding: 10px 14px;
           border-radius: 12px;
           cursor: pointer;
-          font-weight: 900;
+          font-weight: 600;
         }
         .btn-secondary:hover{ background:#f8fafc; }
         .btn-secondary:disabled{ cursor: not-allowed; }

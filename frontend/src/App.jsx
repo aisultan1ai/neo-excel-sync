@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/App.jsx
+import React, { useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -8,6 +9,7 @@ import {
   Navigate,
   useNavigate,
   useSearchParams,
+  Outlet,
 } from "react-router-dom";
 import {
   FileDiff,
@@ -41,7 +43,6 @@ import AccountsPage from "./pages/AccountsPage";
 const getToken = () => localStorage.getItem("token");
 
 // Подсветка меню: активна и на вложенных роутах
-// пример: /crypto/123 тоже подсветит кнопку /crypto
 const isActivePath = (pathname, to) => {
   if (to === "/") return pathname === "/";
   return pathname === to || pathname.startsWith(to + "/");
@@ -59,8 +60,10 @@ const NavButton = ({ to, icon: Icon, label }) => {
   );
 };
 
-// Гард: если нет токена — кидаем на /login?next=...
-const ProtectedRoute = ({ children }) => {
+// ---------------------------
+// Protected guard (token check)
+// ---------------------------
+const ProtectedRoute = () => {
   const location = useLocation();
   const authed = !!getToken();
 
@@ -69,10 +72,50 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
   }
 
-  return children;
+  return <Outlet />;
 };
 
-// Обертка над LoginPage, чтобы редиректить туда, куда нужно
+// ---------------------------
+// App Layout (sidebar + outlet)
+// ---------------------------
+const AppLayout = ({ onLogout }) => {
+  return (
+    <div className="app-container">
+      {/* SIDEBAR */}
+      <aside className="sidebar">
+        <div className="logo-area">
+          <h2>NeoExcelSync</h2>
+        </div>
+
+        <nav className="nav-menu">
+          <NavButton to="/" icon={LayoutDashboard} label="Главная" />
+          <NavButton to="/sverka" icon={FileDiff} label="Сверка" />
+          <NavButton to="/splits" icon={Layers} label="Сплиты" />
+          <NavButton to="/reports" icon={FileSpreadsheet} label="Отчеты" />
+          <NavButton to="/departments" icon={Users} label="Департаменты" />
+          <NavButton to="/instruments" icon={Binary} label="Инструменты" />
+          <NavButton to="/crypto" icon={Wallet} label="Крипто-счета" />
+
+          <div className="spacer" style={{ flex: 1 }} />
+
+          <NavButton to="/profile" icon={User} label="Профиль" />
+          <NavButton to="/settings" icon={Settings} label="Настройки" />
+        </nav>
+      </aside>
+
+      {/* CONTENT */}
+      <main className="content-area">
+        <Outlet />
+      </main>
+
+      <ToastContainer position="bottom-right" theme="light" />
+    </div>
+  );
+};
+
+// ---------------------------
+// Login wrapper (redirect to next)
+// ---------------------------
 const LoginRoute = ({ onLogin }) => {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -80,9 +123,9 @@ const LoginRoute = ({ onLogin }) => {
   const handleLogin = () => {
     onLogin?.();
 
+    // ⚠️ next обычно уже декодирован useSearchParams
     const next = params.get("next");
-    // если next есть — идём туда, иначе на главную
-    navigate(next ? decodeURIComponent(next) : "/", { replace: true });
+    navigate(next || "/", { replace: true });
   };
 
   return (
@@ -112,73 +155,36 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     setAuthed(false);
-    // пусть роутер сам переведет на /login через ProtectedRoute
+    // роутер сам переведет на /login через ProtectedRoute
   };
 
-  const handleLoginState = () => {
-    setAuthed(true);
-  };
+  const handleLoginState = () => setAuthed(true);
 
   if (isLoading) return <div>Загрузка...</div>;
 
   return (
     <Router>
       <Routes>
-        {/* Публичный логин */}
+        {/* public */}
         <Route path="/login" element={<LoginRoute onLogin={handleLoginState} />} />
 
-        {/* Всё остальное — защищено */}
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <div className="app-container">
-                {/* САЙДБАР  */}
-                <aside className="sidebar">
-                  <div className="logo-area">
-                    <h2>NeoExcelSync</h2>
-                  </div>
+        {/* protected block */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout onLogout={handleLogout} />}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/sverka" element={<SverkaPage />} />
+            <Route path="/splits" element={<SplitsPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/departments" element={<DepartmentsPage />} />
+            <Route path="/instruments" element={<InstrumentsPage />} />
+            <Route path="/crypto" element={<AccountsPage />} />
+            <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
+            <Route path="/settings" element={<SettingsPage />} />
 
-                  <nav className="nav-menu">
-                    <NavButton to="/" icon={LayoutDashboard} label="Главная" />
-                    <NavButton to="/sverka" icon={FileDiff} label="Сверка" />
-                    <NavButton to="/splits" icon={Layers} label="Сплиты" />
-                    <NavButton to="/reports" icon={FileSpreadsheet} label="Отчеты" />
-                    <NavButton to="/departments" icon={Users} label="Департаменты" />
-                    <NavButton to="/instruments" icon={Binary} label="Инструменты" />
-                    <NavButton to="/crypto" icon={Wallet} label="Крипто-счета" />
-
-                    <div className="spacer" style={{ flex: 1 }} />
-
-                    <NavButton to="/profile" icon={User} label="Профиль" />
-                    <NavButton to="/settings" icon={Settings} label="Настройки" />
-                  </nav>
-                </aside>
-
-                {/* ПРАВАЯ ЧАСТЬ */}
-                <main className="content-area">
-                  <Routes>
-                    <Route path="/" element={<DashboardPage />} />
-                    <Route path="/sverka" element={<SverkaPage />} />
-                    <Route path="/splits" element={<SplitsPage />} />
-                    <Route path="/reports" element={<ReportsPage />} />
-                    <Route path="/departments" element={<DepartmentsPage />} />
-                    <Route path="/instruments" element={<InstrumentsPage />} />
-                    <Route path="/crypto" element={<AccountsPage />} />
-
-                    <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-
-                    {/* если ввели неизвестный путь */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </main>
-
-                <ToastContainer position="bottom-right" theme="light" />
-              </div>
-            </ProtectedRoute>
-          }
-        />
+            {/* fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Route>
       </Routes>
     </Router>
   );
