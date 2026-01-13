@@ -29,8 +29,6 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-const cx = (...arr) => arr.filter(Boolean).join(" ");
-
 const PROVIDERS = ["Binance", "ByBit", "OKX", "Kraken", "Ledger", "Metamask"];
 
 const TX_TYPES = [
@@ -67,52 +65,10 @@ const normalizeTransfer = (t) => ({
   toId: t.toId ?? t.to_account_id ?? t.toAccountId ?? null,
 });
 
-const safeJson = (v, fallback) => {
-  if (v == null) return fallback;
-  if (Array.isArray(v) || typeof v === "object") return v;
-  if (typeof v === "string") {
-    try {
-      return JSON.parse(v);
-    } catch {
-      return fallback;
-    }
-  }
-  return fallback;
-};
-
-const normalizeScheme = (s) => {
-  const nodes = safeJson(s.nodes, []);
-  const edges = safeJson(s.edges, []);
-
-  return {
-    ...s,
-    nodes: Array.isArray(nodes)
-      ? nodes.map((n) => ({
-          ...n,
-          id: String(n.id),
-          position: {
-            x: Number(n?.position?.x ?? 0),
-            y: Number(n?.position?.y ?? 0),
-          },
-        }))
-      : [],
-    edges: Array.isArray(edges)
-      ? edges.map((e, idx) => ({
-          ...e,
-          id: e.id ? String(e.id) : `e-${idx}`,
-          source: String(e.source),
-          target: String(e.target),
-        }))
-      : [],
-  };
-};
-
-
 // =====================================================
-// API CALLS
+// API CALLS (через api instance с Bearer токеном)
 // =====================================================
 const fetchCryptoAccounts = async () => unwrap((await api.get("/crypto/accounts")).data);
-
 const createCryptoAccount = async (payload) => unwrap((await api.post("/crypto/accounts", payload)).data);
 const updateCryptoAccount = async (id, payload) => unwrap((await api.put(`/crypto/accounts/${id}`, payload)).data);
 const deleteCryptoAccount = async (id) => unwrap((await api.delete(`/crypto/accounts/${id}`)).data);
@@ -350,7 +306,6 @@ const EdgeTxModal = ({ open, onClose, onSubmit, fromTitle, toTitle }) => {
     if (Number.isNaN(amount)) return toast.warning("Сумма должна быть числом");
     const asset = (form.asset || "").trim().toUpperCase();
     if (!asset) return toast.warning("Введите актив (например USDT)");
-    // В схеме всегда transfer
     onSubmit?.({ type: "transfer", amount, asset, comment: form.comment || "" });
   };
 
@@ -363,18 +318,13 @@ const EdgeTxModal = ({ open, onClose, onSubmit, fromTitle, toTitle }) => {
       width={720}
       footer={
         <>
-          <button className="btn-secondary" onClick={onClose}>
-            Отмена
-          </button>
-          <button className="btn-primary" onClick={submit}>
-            Создать стрелку
-          </button>
+          <button className="btn-secondary" onClick={onClose}>Отмена</button>
+          <button className="btn-primary" onClick={submit}>Создать стрелку</button>
         </>
       }
     >
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 14 }}>
         <Field label="Тип операции">
-          {/* В схеме оставляем только "Перевод" */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(1, 1fr)", gap: 10 }}>
             {EDGE_TX_TYPES.map((t) => {
               const Icon = t.icon;
@@ -407,47 +357,19 @@ const EdgeTxModal = ({ open, onClose, onSubmit, fromTitle, toTitle }) => {
         </Field>
 
         <Field label="Актив" hint="USDT, BTC, ETH...">
-          <input
-            className="text-input"
-            value={form.asset}
-            onChange={(e) => setForm((p) => ({ ...p, asset: (e.target.value || "").toUpperCase() }))}
-            placeholder="USDT"
-          />
+          <input className="text-input" value={form.asset} onChange={(e) => setForm((p) => ({ ...p, asset: (e.target.value || "").toUpperCase() }))} placeholder="USDT" />
         </Field>
 
         <Field label="Сумма" hint="Число">
-          <input
-            className="text-input"
-            type="number"
-            step="0.00000001"
-            value={form.amount}
-            onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
-            placeholder="1000"
-          />
+          <input className="text-input" type="number" step="0.00000001" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} placeholder="1000" />
         </Field>
 
         <Field label="Комментарий" hint="необязательно">
-          <input
-            className="text-input"
-            value={form.comment}
-            onChange={(e) => setForm((p) => ({ ...p, comment: e.target.value }))}
-            placeholder="Например: распределение маржи"
-          />
+          <input className="text-input" value={form.comment} onChange={(e) => setForm((p) => ({ ...p, comment: e.target.value }))} placeholder="Например: распределение маржи" />
         </Field>
 
-        <div
-          style={{
-            gridColumn: "1 / -1",
-            fontSize: 12,
-            color: "#64748b",
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            borderRadius: 12,
-            padding: 12,
-          }}
-        >
-          Подсказка: стрелки в схеме — это переводы между счетами. Пополнение/вывод добавляй через “Операция”
-          (External).
+        <div style={{ gridColumn: "1 / -1", fontSize: 12, color: "#64748b", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 12 }}>
+          Подсказка: стрелки в схеме — это переводы между счетами. Пополнение/вывод добавляй через “Операция” (External).
         </div>
       </div>
     </Modal>
@@ -477,9 +399,7 @@ const SaveSchemeModal = ({ open, onClose, onSave }) => {
       width={640}
       footer={
         <>
-          <button className="btn-secondary" onClick={onClose}>
-            Отмена
-          </button>
+          <button className="btn-secondary" onClick={onClose}>Отмена</button>
           <button className="btn-primary" onClick={submit} disabled={!name.trim()} style={{ opacity: !name.trim() ? 0.6 : 1 }}>
             Сохранить
           </button>
@@ -495,21 +415,28 @@ const SaveSchemeModal = ({ open, onClose, onSave }) => {
 };
 
 // =====================================================
-// VISUAL EDITOR
+// VISUAL EDITOR (FIXED: no infinite loop)
 // =====================================================
 const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSaveScheme }) => {
-  const computedNodes =
-    initialData?.nodes ||
-    (accounts || []).map((acc, index) => ({
-      id: acc.id.toString(),
+  // ✅ Стабильные базовые nodes/edges (useMemo)
+  const baseNodes = useMemo(() => {
+    if (initialData?.nodes && Array.isArray(initialData.nodes) && initialData.nodes.length > 0) {
+      return initialData.nodes;
+    }
+    return (accounts || []).map((acc, index) => ({
+      id: String(acc.id),
       type: "accountNode",
       position: { x: 120 + index * 240, y: 130 + (index % 2 ? 90 : 0) },
       data: { provider: acc.provider, name: acc.name, badge: acc.asset || "" },
     }));
+  }, [initialData?.id, accounts]);
 
-  const computedEdges = initialData?.edges || [];
+  const baseEdges = useMemo(() => {
+    if (initialData?.edges && Array.isArray(initialData.edges)) return initialData.edges;
+    return [];
+  }, [initialData?.id]);
 
-  // ВАЖНО: если схема старая, но аккаунт переименовали — подтянуть актуальные названия/провайдер/актив
+  // подтянуть актуальные названия/провайдер/актив в nodes
   const accountsById = useMemo(() => {
     const m = new Map();
     (accounts || []).forEach((a) => m.set(String(a.id), a));
@@ -517,7 +444,7 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
   }, [accounts]);
 
   const mergedNodes = useMemo(() => {
-    return (computedNodes || []).map((n) => {
+    return (baseNodes || []).map((n) => {
       const a = accountsById.get(String(n.id));
       if (!a) return n;
       return {
@@ -530,16 +457,16 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
         },
       };
     });
-  }, [computedNodes, accountsById]);
+  }, [baseNodes, accountsById]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(mergedNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(baseEdges);
 
+  // ✅ Синхронизация только когда реально поменялись memo-значения
   useEffect(() => {
     setNodes(mergedNodes);
-    setEdges(computedEdges);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData?.id, accounts, initialData?.nodes, initialData?.edges, mergedNodes]);
+    setEdges(baseEdges);
+  }, [mergedNodes, baseEdges, setNodes, setEdges]);
 
   const [pendingConnect, setPendingConnect] = useState(null);
   const [openEdgeModal, setOpenEdgeModal] = useState(false);
@@ -550,7 +477,6 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
       const sourceNode = nodes.find((n) => n.id === params.source);
       const targetNode = nodes.find((n) => n.id === params.target);
       if (!sourceNode || !targetNode) return;
-
       setPendingConnect({ params, fromNode: sourceNode, toNode: targetNode });
       setOpenEdgeModal(true);
     },
@@ -562,12 +488,14 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
 
     const { params, fromNode, toNode } = pendingConnect;
 
-    // На всякий случай: принудительно transfer
     const safeTx = { ...tx, type: "transfer" };
     const label = edgeLabelFromTx(safeTx);
 
+    const edgeId = `e-${params.source}-${params.target}-${Date.now()}`;
+
     const newEdge = {
       ...params,
+      id: params.id || edgeId,
       animated: true,
       label,
       data: { tx: safeTx },
@@ -627,11 +555,7 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
           <button onClick={() => setOpenSaveScheme(true)} className="btn-primary" style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center" }} disabled={nodes.length === 0}>
             <Save size={16} /> Сохранить схему
           </button>
-          <button
-            onClick={onClose}
-            style={{ border: "1px solid #e2e8f0", background: "white", borderRadius: 10, width: 40, height: 40, cursor: "pointer", display: "grid", placeItems: "center" }}
-            title="Закрыть"
-          >
+          <button onClick={onClose} style={{ border: "1px solid #e2e8f0", background: "white", borderRadius: 10, width: 40, height: 40, cursor: "pointer", display: "grid", placeItems: "center" }} title="Закрыть">
             <X size={18} />
           </button>
         </div>
@@ -640,29 +564,14 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
       <div style={{ flex: 1, background: "#f8fafc" }}>
         {(accounts || []).length === 0 ? (
           <div style={{ padding: 16 }}>
-            <EmptyState
-              title="Нет счетов для схемы"
-              text="Сначала добавь хотя бы один счет. Потом откроем редактор и нарисуем потоки."
-              action={<div style={{ color: "#94a3b8", fontSize: 12 }}>Закрой редактор и создай счет слева.</div>}
-            />
+            <EmptyState title="Нет счетов для схемы" text="Сначала добавь хотя бы один счет. Потом откроем редактор и нарисуем потоки." action={<div style={{ color: "#94a3b8", fontSize: 12 }}>Закрой редактор и создай счет слева.</div>} />
           </div>
         ) : (
-            <div style={{ width: "100%", height: "100%" }}>
-                      <ReactFlow
-                        nodes={nodes}
-                        edges={edges}
-                        onNodesChange={onNodesChange}
-                        onEdgesChange={onEdgesChange}
-                        onConnect={onConnect}
-                        nodeTypes={nodeTypes}
-                        fitView
-                        style={{ width: "100%", height: "100%" }}
-                      >
-                        <Controls />
-                        <MiniMap style={{ height: 120 }} />
-                        <Background color="#cbd5e1" variant="dots" gap={20} size={1} />
-                      </ReactFlow>
-            </div>
+          <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} nodeTypes={nodeTypes} fitView>
+            <Controls />
+            <MiniMap style={{ height: 120 }} />
+            <Background color="#cbd5e1" variant="dots" gap={20} size={1} />
+          </ReactFlow>
         )}
       </div>
     </div>
@@ -709,8 +618,7 @@ const CryptoTab = () => {
 
       const accs = Array.isArray(accsRaw) ? accsRaw : [];
       const txs = Array.isArray(txsRaw) ? txsRaw.map(normalizeTransfer) : [];
-      const sch = Array.isArray(schemesRaw) ? schemesRaw.map(normalizeScheme) : [];
-setSchemes(sch);
+      const sch = Array.isArray(schemesRaw) ? schemesRaw : [];
 
       setAccounts(accs);
       setTransfers(txs);
@@ -910,9 +818,7 @@ setSchemes(sch);
         onClose={() => setOpenAccModal(false)}
         footer={
           <>
-            <button className="btn-secondary" onClick={() => setOpenAccModal(false)}>
-              Отмена
-            </button>
+            <button className="btn-secondary" onClick={() => setOpenAccModal(false)}>Отмена</button>
             <button className="btn-primary" onClick={saveAccount} disabled={!accForm.provider.trim() || !accForm.name.trim()} style={{ opacity: !accForm.provider.trim() || !accForm.name.trim() ? 0.6 : 1 }}>
               {editingAcc ? "Сохранить" : "Создать"}
             </button>
@@ -945,9 +851,7 @@ setSchemes(sch);
         width={820}
         footer={
           <>
-            <button className="btn-secondary" onClick={() => setOpenTransferModal(false)}>
-              Отмена
-            </button>
+            <button className="btn-secondary" onClick={() => setOpenTransferModal(false)}>Отмена</button>
             <button
               className="btn-primary"
               onClick={saveTransfer}
@@ -1098,9 +1002,7 @@ setSchemes(sch);
         </div>
 
         <div className="card" style={{ padding: 12 }}>
-          <button className="btn-secondary" onClick={refreshCrypto} style={{ width: "100%" }}>
-            Обновить данные
-          </button>
+          <button className="btn-secondary" onClick={refreshCrypto} style={{ width: "100%" }}>Обновить данные</button>
           {loading ? <div style={{ marginTop: 10, fontSize: 12, color: "#64748b" }}>Загрузка...</div> : null}
         </div>
       </div>
@@ -1131,11 +1033,7 @@ setSchemes(sch);
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontWeight: 900, fontSize: 14, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{acc.name}</div>
                           <div style={{ fontSize: 12, color: "#64748b" }}>
-                            {acc.asset ? (
-                              <>Актив: <b>{acc.asset}</b></>
-                            ) : (
-                              <span style={{ color: "#94a3b8" }}>Актив: не указан</span>
-                            )}
+                            {acc.asset ? (<>Актив: <b>{acc.asset}</b></>) : (<span style={{ color: "#94a3b8" }}>Актив: не указан</span>)}
                           </div>
                         </div>
 
@@ -1229,7 +1127,7 @@ setSchemes(sch);
 };
 
 // =====================================================
-// MAIN PAGE (ONLY CRYPTO)
+// MAIN PAGE
 // =====================================================
 const AccountsPage = () => {
   return (
