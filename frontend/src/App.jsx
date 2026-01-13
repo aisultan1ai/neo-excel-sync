@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
@@ -121,12 +120,19 @@ const LoginRoute = ({ onLogin }) => {
   const [params] = useSearchParams();
 
   const handleLogin = () => {
-    onLogin?.();
+  onLogin?.();
 
-    // ⚠️ next обычно уже декодирован useSearchParams
-    const next = params.get("next");
-    navigate(next || "/", { replace: true });
-  };
+  const nextRaw = params.get("next");
+  const next = nextRaw ? decodeURIComponent(nextRaw) : "/";
+
+  const blockedPrefixes = ["/token", "/api", "/health", "/docs", "/openapi"];
+  const safeNext = blockedPrefixes.some((p) => next === p || next.startsWith(p + "/"))
+    ? "/"
+    : next;
+
+  navigate(safeNext, { replace: true });
+};
+
 
   return (
     <>
