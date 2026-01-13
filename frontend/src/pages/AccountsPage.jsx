@@ -67,6 +67,47 @@ const normalizeTransfer = (t) => ({
   toId: t.toId ?? t.to_account_id ?? t.toAccountId ?? null,
 });
 
+const safeJson = (v, fallback) => {
+  if (v == null) return fallback;
+  if (Array.isArray(v) || typeof v === "object") return v;
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+};
+
+const normalizeScheme = (s) => {
+  const nodes = safeJson(s.nodes, []);
+  const edges = safeJson(s.edges, []);
+
+  return {
+    ...s,
+    nodes: Array.isArray(nodes)
+      ? nodes.map((n) => ({
+          ...n,
+          id: String(n.id),
+          position: {
+            x: Number(n?.position?.x ?? 0),
+            y: Number(n?.position?.y ?? 0),
+          },
+        }))
+      : [],
+    edges: Array.isArray(edges)
+      ? edges.map((e, idx) => ({
+          ...e,
+          id: e.id ? String(e.id) : `e-${idx}`,
+          source: String(e.source),
+          target: String(e.target),
+        }))
+      : [],
+  };
+};
+
+
 // =====================================================
 // API CALLS
 // =====================================================
@@ -606,11 +647,22 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
             />
           </div>
         ) : (
-          <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} nodeTypes={nodeTypes} fitView>
-            <Controls />
-            <MiniMap style={{ height: 120 }} />
-            <Background color="#cbd5e1" variant="dots" gap={20} size={1} />
-          </ReactFlow>
+            <div style={{ width: "100%", height: "100%" }}>
+                      <ReactFlow
+                        nodes={nodes}
+                        edges={edges}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onConnect={onConnect}
+                        nodeTypes={nodeTypes}
+                        fitView
+                        style={{ width: "100%", height: "100%" }}
+                      >
+                        <Controls />
+                        <MiniMap style={{ height: 120 }} />
+                        <Background color="#cbd5e1" variant="dots" gap={20} size={1} />
+                      </ReactFlow>
+            </div>
         )}
       </div>
     </div>
@@ -657,7 +709,8 @@ const CryptoTab = () => {
 
       const accs = Array.isArray(accsRaw) ? accsRaw : [];
       const txs = Array.isArray(txsRaw) ? txsRaw.map(normalizeTransfer) : [];
-      const sch = Array.isArray(schemesRaw) ? schemesRaw : [];
+      const sch = Array.isArray(schemesRaw) ? schemesRaw.map(normalizeScheme) : [];
+setSchemes(sch);
 
       setAccounts(accs);
       setTransfers(txs);
