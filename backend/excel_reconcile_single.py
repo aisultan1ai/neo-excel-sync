@@ -199,11 +199,11 @@ def find_duplicates_one_file(df, paper_col, amount_col, min_repeats=2, round_to=
 def register_excel_reconcile(app: FastAPI) -> None:
     @app.post("/api/tools/excel-reconcile")
     async def excel_reconcile(
-        mode: str = Query(..., pattern="^(twofiles|duplicates)$"),
+        mode: str = Query(..., regex="^(twofiles|duplicates)$"),
         export: int = Query(0, ge=0, le=1),
 
         file1: UploadFile = File(...),
-        file2: UploadFile | None = File(None),
+        file2: Optional[UploadFile] = File(None),
 
         # twofiles
         col1: str = Form("Ценная бумага"),
