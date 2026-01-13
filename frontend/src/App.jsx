@@ -133,7 +133,7 @@ function App() {
           element={
             <ProtectedRoute>
               <div className="app-container">
-                {/* САЙДБАР */}
+                {/* САЙДБАР  */}
                 <aside className="sidebar">
                   <div className="logo-area">
                     <h2>NeoExcelSync</h2>

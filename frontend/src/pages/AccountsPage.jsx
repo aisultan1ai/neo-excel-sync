@@ -37,7 +37,7 @@ const TX_TYPES = [
   { id: "withdraw", label: "Вывод", icon: ArrowUpFromLine },
 ];
 
-// В схеме (стрелки) — только переводы между счетами
+// В схеме — только переводы между счетами
 const EDGE_TX_TYPES = [{ id: "transfer", label: "Перевод", icon: Shuffle }];
 
 const fmtAmount = (n) => {

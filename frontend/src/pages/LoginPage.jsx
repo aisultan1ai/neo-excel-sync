@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 // важно: используй свой axios instance с интерсепторами
-import { api } from "../api/api"; // <-- проверь путь: где у тебя лежит файл с api
+import { api } from "../api"; // <-- проверь путь: где у тебя лежит файл с api
 
 const LoginPage = () => {
   const navigate = useNavigate();
