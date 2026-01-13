@@ -1,34 +1,34 @@
 // src/pages/LoginPage.jsx
 import React, { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import {
-  ShieldCheck,
-  Zap,
-  BarChart3,
-  User,
-  Lock,
-  ArrowRight,
-} from "lucide-react";
-
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ShieldCheck, Zap, BarChart3, User, Lock, ArrowRight } from "lucide-react";
 import axios from "axios";
 
+// ВАЖНО:
+// - Мы бьёмся в /api/*, потому что backend у тебя: @app.post("/api/token")
+// - Если у тебя нет прокси /api -> backend, то настроим (скажу ниже)
+const http = axios.create({
+  baseURL: "/api",
+  timeout: 15000,
+});
 
-const LoginPage = () => {
+const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
-  const location = useLocation();
+  const [params] = useSearchParams();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
   const [systemStatus, setSystemStatus] = useState("CHECKING");
 
+  // Проверка доступности backend
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        // baseURL уже "/api", поэтому тут просто "/health"
-        await axios.get("/health", { timeout: 2000 });
+        // если у тебя health НЕ под /api/health, поменяй на "/health"
+        await http.get("/health", { timeout: 2500 });
         setSystemStatus("ONLINE");
       } catch {
         setSystemStatus("OFFLINE");
@@ -37,21 +37,25 @@ const LoginPage = () => {
     checkHealth();
   }, []);
 
-  // если уже есть токен — не показываем логин, сразу в приложение
+  // если токен уже есть — не показываем логин
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (token) {
-      const from = location.state?.from?.pathname || "/";
-      navigate(from, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!token) return;
+
+    const nextRaw = params.get("next");
+    const next = nextRaw ? decodeURIComponent(nextRaw) : "/";
+
+    const blockedPrefixes = ["/token", "/api", "/health", "/docs", "/openapi"];
+    const safeNext = blockedPrefixes.some((p) => next === p || next.startsWith(p + "/")) ? "/" : next;
+
+    navigate(safeNext, { replace: true });
+  }, [navigate, params]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
-    if (!username || !password) {
+    if (!username.trim() || !password) {
       setError("Пожалуйста, введите логин и пароль");
       return;
     }
@@ -59,40 +63,45 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      const params = new URLSearchParams();
-      params.append("username", username);
-      params.append("password", password);
+      const body = new URLSearchParams();
+      body.append("username", username.trim());
+      body.append("password", password);
 
-      // token endpoint обычно без Bearer (и у тебя так было)
-      // baseURL "/api" => "/token" => "/api/token"
-      const res = await axios.post("/token", params, {
+      // ✅ твой endpoint: POST /api/token
+      const res = await http.post("/token", body, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
 
       const token = res?.data?.access_token;
       if (!token) {
-        setError("Не удалось получить токен. Проверь backend /api/token.");
+        setError("Не удалось получить токен (нет access_token в ответе).");
         return;
       }
 
       localStorage.setItem("token", token);
+      onLogin?.();
 
-      // куда вернуть после логина (если пытался зайти в защищенный роут)
-      const from = location.state?.from?.pathname || "/";
-      navigate(from, { replace: true });
+      const nextRaw = params.get("next");
+      const next = nextRaw ? decodeURIComponent(nextRaw) : "/";
+
+      const blockedPrefixes = ["/token", "/api", "/health", "/docs", "/openapi"];
+      const safeNext = blockedPrefixes.some((p) => next === p || next.startsWith(p + "/")) ? "/" : next;
+
+      navigate(safeNext, { replace: true });
     } catch (err) {
       console.error(err);
 
-      if (err.response) {
-        const data = err.response.data;
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
 
-        if (err.response.status === 422) {
-          setError("Ошибка: поля заполнены неверно");
-        } else if (data && typeof data.detail === "string") {
-          setError(data.detail);
-        } else {
-          setError("Неверный логин или пароль");
-        }
+      if (status === 401) {
+        setError(typeof detail === "string" ? detail : "Неверный логин или пароль");
+      } else if (status === 405) {
+        setError("Ошибка 405: неверный адрес запроса. Проверь, что фронт шлёт POST на /api/token.");
+      } else if (status === 422) {
+        setError("Ошибка 422: backend не принял форму. Проверь формат x-www-form-urlencoded.");
+      } else if (status) {
+        setError(typeof detail === "string" ? detail : `Ошибка сервера (${status})`);
       } else {
         setError("Ошибка соединения с сервером");
       }
@@ -103,7 +112,7 @@ const LoginPage = () => {
 
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw", fontFamily: "Inter, sans-serif" }}>
-      {/* --- ЛЕВАЯ ЧАСТЬ (БРЕНДИНГ) --- */}
+      {/* --- LEFT --- */}
       <div
         style={{
           flex: 1,
@@ -159,11 +168,7 @@ const LoginPage = () => {
                 height: "8px",
                 borderRadius: "50%",
                 background:
-                  systemStatus === "ONLINE"
-                    ? "#4ade80"
-                    : systemStatus === "CHECKING"
-                    ? "#fbbf24"
-                    : "#ef4444",
+                  systemStatus === "ONLINE" ? "#4ade80" : systemStatus === "CHECKING" ? "#fbbf24" : "#ef4444",
                 boxShadow: systemStatus === "ONLINE" ? "0 0 10px #4ade80" : "none",
               }}
             />
@@ -193,7 +198,7 @@ const LoginPage = () => {
         </div>
       </div>
 
-      {/* --- ПРАВАЯ ЧАСТЬ (ФОРМА ВХОДА) --- */}
+      {/* --- RIGHT --- */}
       <div
         style={{
           flex: 1,
@@ -216,8 +221,7 @@ const LoginPage = () => {
               background: "white",
               padding: "40px",
               borderRadius: "16px",
-              boxShadow:
-                "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+              boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
             }}
           >
             <div style={{ marginBottom: "20px" }}>
@@ -231,6 +235,7 @@ const LoginPage = () => {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="name"
+                  autoComplete="username"
                   style={{
                     width: "100%",
                     padding: "10px 10px 10px 40px",
@@ -258,6 +263,7 @@ const LoginPage = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
+                  autoComplete="current-password"
                   style={{
                     width: "100%",
                     padding: "10px 10px 10px 40px",
@@ -324,7 +330,7 @@ const LoginPage = () => {
           </form>
 
           <div style={{ marginTop: "20px", textAlign: "center", fontSize: "12px", color: "#94a3b8" }}>
-            © 2025 NeoExcelSync Corp. All rights reserved.
+            © 2025 NeoExcelSync. All rights reserved.
           </div>
         </div>
       </div>

@@ -80,7 +80,6 @@ const ProtectedRoute = () => {
 const AppLayout = ({ onLogout }) => {
   return (
     <div className="app-container">
-      {/* SIDEBAR */}
       <aside className="sidebar">
         <div className="logo-area">
           <h2>NeoExcelSync</h2>
@@ -102,11 +101,11 @@ const AppLayout = ({ onLogout }) => {
         </nav>
       </aside>
 
-      {/* CONTENT */}
       <main className="content-area">
         <Outlet />
       </main>
 
+      {/* ОДИН toast container на всё приложение */}
       <ToastContainer position="bottom-right" theme="light" />
     </div>
   );
@@ -119,27 +118,29 @@ const LoginRoute = ({ onLogin }) => {
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
+  // если уже авторизован — не показываем логин
+  useEffect(() => {
+    if (getToken()) navigate("/", { replace: true });
+  }, [navigate]);
+
   const handleLogin = () => {
-  onLogin?.();
+    onLogin?.();
 
-  const nextRaw = params.get("next");
-  const next = nextRaw ? decodeURIComponent(nextRaw) : "/";
+    const nextRaw = params.get("next");
+    const next = nextRaw ? decodeURIComponent(nextRaw) : "/";
 
-  const blockedPrefixes = ["/token", "/api", "/health", "/docs", "/openapi"];
-  const safeNext = blockedPrefixes.some((p) => next === p || next.startsWith(p + "/"))
-    ? "/"
-    : next;
+    // блокируем редиректы на API/служебные маршруты
+    const blockedPrefixes = ["/token", "/api", "/health", "/docs", "/openapi"];
+    const safeNext = blockedPrefixes.some(
+      (p) => next === p || next.startsWith(p + "/")
+    )
+      ? "/"
+      : next;
 
-  navigate(safeNext, { replace: true });
-};
+    navigate(safeNext, { replace: true });
+  };
 
-
-  return (
-    <>
-      <LoginPage onLogin={handleLogin} />
-      <ToastContainer position="bottom-right" />
-    </>
-  );
+  return <LoginPage onLogin={handleLogin} />;
 };
 
 function App() {
@@ -150,7 +151,6 @@ function App() {
     setAuthed(!!getToken());
     setIsLoading(false);
 
-    // если токен поменялся в другой вкладке
     const onStorage = (e) => {
       if (e.key === "token") setAuthed(!!getToken());
     };
@@ -161,7 +161,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     setAuthed(false);
-    // роутер сам переведет на /login через ProtectedRoute
+    // ProtectedRoute сам перекинет на /login
   };
 
   const handleLoginState = () => setAuthed(true);
@@ -174,7 +174,7 @@ function App() {
         {/* public */}
         <Route path="/login" element={<LoginRoute onLogin={handleLoginState} />} />
 
-        {/* protected block */}
+        {/* protected */}
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout onLogout={handleLogout} />}>
             <Route path="/" element={<DashboardPage />} />
@@ -187,7 +187,6 @@ function App() {
             <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
             <Route path="/settings" element={<SettingsPage />} />
 
-            {/* fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Route>
