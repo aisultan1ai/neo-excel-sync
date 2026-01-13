@@ -20,7 +20,7 @@ services:
       retries: 10
 
   backend:
-    image: aisultan1a/neoexcelsync-backend:1.0
+    image: aisultan1a/neoexcelsync-backend:1.1
     # build: ./backend
     container_name: neo_backend
     restart: always

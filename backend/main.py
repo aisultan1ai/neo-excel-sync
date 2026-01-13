@@ -18,6 +18,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from jose import JWTError, jwt
+from excel_reconcile_single import register_excel_reconcile
 
 import processor
 import settings_manager
@@ -35,6 +36,8 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 app = FastAPI(title="NeoExcelSync API")
+
+register_excel_reconcile(app)
 
 # --- КОНФИГУРАЦИЯ БЕЗОПАСНОСТИ ---
 SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key-change-this-in-production")
@@ -651,7 +654,6 @@ async def get_profile_info(current_user: str = Depends(get_current_user)):
     user = database_manager.get_user_by_username(current_user)
     if not user: raise HTTPException(404, "User not found")
 
-    # user tuple: id, username, hash, dept, is_admin
     is_admin = user[4] if len(user) > 4 else False
     stats = database_manager.get_user_stats(user[0])
 

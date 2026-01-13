@@ -15,8 +15,6 @@ import DepartmentsPage  from "./pages/DepartmentsPage.jsx";
 import ProfilePage from './pages/ProfilePage';
 import InstrumentsPage from './pages/InstrumentsPage';
 
-// import AccountsPage from "./pages/AccountsPage.jsx";
-
 const NavButton = ({ to, icon: Icon, label }) => {
   const location = useLocation();
   const isActive = location.pathname === to;
