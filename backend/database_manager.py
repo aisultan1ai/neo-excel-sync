@@ -223,6 +223,45 @@ def init_database():
                            )
                        ''')
 
+        # --- CRYPTO ACCOUNTS ---
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS crypto_accounts (
+                id SERIAL PRIMARY KEY,
+                provider TEXT NOT NULL,
+                name TEXT NOT NULL,
+                asset TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # --- CRYPTO TRANSFERS ---
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS crypto_transfers (
+                id SERIAL PRIMARY KEY,
+                date DATE NOT NULL,
+                type TEXT NOT NULL CHECK (type IN ('transfer','deposit','withdraw')),
+                from_account_id INTEGER REFERENCES crypto_accounts(id) ON DELETE SET NULL,
+                to_account_id   INTEGER REFERENCES crypto_accounts(id) ON DELETE SET NULL,
+                amount NUMERIC NOT NULL,
+                asset TEXT NOT NULL,
+                comment TEXT,
+                label TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # --- CRYPTO SCHEMES (ReactFlow) ---
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS crypto_schemes (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                nodes JSONB NOT NULL,
+                edges JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+
         conn.commit()
         log.info("БД инициализирована успешно.")
     except Exception as e:
@@ -731,3 +770,168 @@ def get_user_tasks(user_id):
     finally:
         conn.close()
 
+# =========================
+# CRYPTO: ACCOUNTS
+# =========================
+def get_crypto_accounts():
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM crypto_accounts ORDER BY created_at DESC, id DESC")
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+def create_crypto_account(provider: str, name: str, asset: str = None):
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            INSERT INTO crypto_accounts(provider, name, asset)
+            VALUES (%s, %s, %s)
+            RETURNING *
+        """, (provider, name, asset))
+        row = cursor.fetchone()
+        conn.commit()
+        return row
+    except Exception as e:
+        log.error(f"create_crypto_account error: {e}")
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+def update_crypto_account(account_id: int, provider: str, name: str, asset: str = None):
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            UPDATE crypto_accounts
+            SET provider=%s, name=%s, asset=%s
+            WHERE id=%s
+            RETURNING *
+        """, (provider, name, asset, account_id))
+        row = cursor.fetchone()
+        conn.commit()
+        return row
+    except Exception as e:
+        log.error(f"update_crypto_account error: {e}")
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+def delete_crypto_account(account_id: int):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM crypto_accounts WHERE id=%s", (account_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        log.error(f"delete_crypto_account error: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def crypto_account_exists(account_id: int):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM crypto_accounts WHERE id=%s", (account_id,))
+        return cursor.fetchone() is not None
+    finally:
+        conn.close()
+
+
+# =========================
+# CRYPTO: TRANSFERS
+# =========================
+def get_crypto_transfers():
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM crypto_transfers ORDER BY date DESC, id DESC")
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+def create_crypto_transfer(date, type_: str, from_id, to_id, amount, asset: str, comment: str = "", label: str = ""):
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            INSERT INTO crypto_transfers(date, type, from_account_id, to_account_id, amount, asset, comment, label)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+        """, (date, type_, from_id, to_id, amount, asset, comment or None, label or None))
+        row = cursor.fetchone()
+        conn.commit()
+        return row
+    except Exception as e:
+        log.error(f"create_crypto_transfer error: {e}")
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+
+# =========================
+# CRYPTO: SCHEMES (ReactFlow)
+# =========================
+def get_crypto_schemes():
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM crypto_schemes ORDER BY created_at DESC, id DESC")
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+def create_crypto_scheme(name: str, nodes, edges):
+    """
+    nodes/edges — это питоновские dict/list (из ReactFlow)
+    сохраняем через psycopg2.extras.Json
+    """
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            INSERT INTO crypto_schemes(name, nodes, edges)
+            VALUES (%s, %s, %s)
+            RETURNING *
+        """, (name, Json(nodes), Json(edges)))
+        row = cursor.fetchone()
+        conn.commit()
+        return row
+    except Exception as e:
+        log.error(f"create_crypto_scheme error: {e}")
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+def delete_crypto_scheme(scheme_id: int):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM crypto_schemes WHERE id=%s", (scheme_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        log.error(f"delete_crypto_scheme error: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()

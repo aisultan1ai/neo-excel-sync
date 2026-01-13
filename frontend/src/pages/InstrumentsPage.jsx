@@ -889,7 +889,7 @@ const InstrumentsPage = () => {
                           active={viewMode === 'reconcile'}
                           onClick={() => setViewMode('reconcile')}
                           icon={ClipboardCheck}
-                          label="Сверка сделок / Дубликаты"
+                          label="Сверка Transaction/Trade"
                         />
                         <NavButton
                             active={viewMode === 'report'}

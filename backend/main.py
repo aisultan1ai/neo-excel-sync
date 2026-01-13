@@ -11,6 +11,9 @@ from datetime import datetime, timedelta
 from typing import Dict, Any
 from threading import Lock
 
+from datetime import date
+from typing import Optional, Any
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -96,6 +99,30 @@ class PasswordChange(BaseModel):
 class DeptCreate(BaseModel):
     name: str
 
+class CryptoAccountCreate(BaseModel):
+    provider: str
+    name: str
+    asset: Optional[str] = None
+
+class CryptoAccountUpdate(BaseModel):
+    provider: str
+    name: str
+    asset: Optional[str] = None
+
+class CryptoTransferCreate(BaseModel):
+    date: date
+    type: str  # transfer | deposit | withdraw
+    fromId: Optional[int] = None
+    toId: Optional[int] = None
+    amount: float
+    asset: str
+    comment: Optional[str] = ""
+    label: Optional[str] = ""
+
+class CryptoSchemeCreate(BaseModel):
+    name: str
+    nodes: Any
+    edges: Any
 
 def verify_password(plain_password, hashed_password):
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
@@ -914,3 +941,111 @@ async def generate_trade_report(file: UploadFile = File(...)):
     finally:
         cleanup_files(temp_path)
 
+# =========================
+# CRYPTO API
+# =========================
+
+@app.get("/api/crypto/accounts")
+def api_get_crypto_accounts(current_user: str = Depends(get_current_user)):
+    return database_manager.get_crypto_accounts()
+
+@app.post("/api/crypto/accounts")
+def api_create_crypto_account(payload: CryptoAccountCreate, current_user: str = Depends(get_current_user)):
+    provider = (payload.provider or "").strip()
+    name = (payload.name or "").strip()
+    asset = (payload.asset or "").strip().upper() or None
+
+    if not provider or not name:
+        raise HTTPException(400, "provider and name required")
+
+    row = database_manager.create_crypto_account(provider, name, asset)
+    if not row:
+        raise HTTPException(500, "DB error creating account")
+    return row
+
+@app.put("/api/crypto/accounts/{account_id}")
+def api_update_crypto_account(account_id: int, payload: CryptoAccountUpdate, current_user: str = Depends(get_current_user)):
+    if not database_manager.crypto_account_exists(account_id):
+        raise HTTPException(404, "Account not found")
+
+    provider = (payload.provider or "").strip()
+    name = (payload.name or "").strip()
+    asset = (payload.asset or "").strip().upper() or None
+
+    if not provider or not name:
+        raise HTTPException(400, "provider and name required")
+
+    row = database_manager.update_crypto_account(account_id, provider, name, asset)
+    if not row:
+        raise HTTPException(500, "DB error updating account")
+    return row
+
+@app.delete("/api/crypto/accounts/{account_id}")
+def api_delete_crypto_account(account_id: int, current_user: str = Depends(get_current_user)):
+    ok = database_manager.delete_crypto_account(account_id)
+    if not ok:
+        raise HTTPException(500, "DB error deleting account")
+    return {"ok": True}
+
+
+@app.get("/api/crypto/transfers")
+def api_get_crypto_transfers(current_user: str = Depends(get_current_user)):
+    return database_manager.get_crypto_transfers()
+
+@app.post("/api/crypto/transfers")
+def api_create_crypto_transfer(payload: CryptoTransferCreate, current_user: str = Depends(get_current_user)):
+    t = (payload.type or "").strip().lower()
+    if t not in ("transfer", "deposit", "withdraw"):
+        raise HTTPException(400, "Invalid type")
+
+    asset = (payload.asset or "").strip().upper()
+    if not asset:
+        raise HTTPException(400, "asset required")
+
+    # правила как у твоего фронта
+    if t == "transfer":
+        if not payload.fromId or not payload.toId:
+            raise HTTPException(400, "fromId and toId required for transfer")
+        if payload.fromId == payload.toId:
+            raise HTTPException(400, "fromId and toId cannot be same")
+    if t == "deposit" and not payload.toId:
+        raise HTTPException(400, "toId required for deposit")
+    if t == "withdraw" and not payload.fromId:
+        raise HTTPException(400, "fromId required for withdraw")
+
+    row = database_manager.create_crypto_transfer(
+        date=payload.date,
+        type_=t,
+        from_id=payload.fromId,
+        to_id=payload.toId,
+        amount=payload.amount,
+        asset=asset,
+        comment=(payload.comment or "").strip(),
+        label=(payload.label or "").strip(),
+    )
+    if not row:
+        raise HTTPException(500, "DB error creating transfer")
+    return row
+
+
+@app.get("/api/crypto/schemes")
+def api_get_crypto_schemes(current_user: str = Depends(get_current_user)):
+    return database_manager.get_crypto_schemes()
+
+@app.post("/api/crypto/schemes")
+def api_create_crypto_scheme(payload: CryptoSchemeCreate, current_user: str = Depends(get_current_user)):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(400, "name required")
+
+    row = database_manager.create_crypto_scheme(name=name, nodes=payload.nodes, edges=payload.edges)
+    if not row:
+        raise HTTPException(500, "DB error creating scheme")
+    return row
+
+@app.delete("/api/crypto/schemes/{scheme_id}")
+def api_delete_crypto_scheme(scheme_id: int, current_user: str = Depends(get_current_user)):
+    ok = database_manager.delete_crypto_scheme(scheme_id)
+    if not ok:
+        raise HTTPException(500, "DB error deleting scheme")
+    return {"ok": True}

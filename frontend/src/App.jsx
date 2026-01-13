@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { FileDiff, Settings, FileSpreadsheet, Layers, Users, User, LayoutDashboard, Binary} from 'lucide-react';
+import { FileDiff, Settings, FileSpreadsheet, Layers, Users, User, LayoutDashboard, Binary, Wallet } from 'lucide-react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
@@ -14,6 +14,9 @@ import LoginPage from './pages/LoginPage';
 import DepartmentsPage  from "./pages/DepartmentsPage.jsx";
 import ProfilePage from './pages/ProfilePage';
 import InstrumentsPage from './pages/InstrumentsPage';
+
+import AccountsPage from "./pages/AccountsPage";
+
 
 const NavButton = ({ to, icon: Icon, label }) => {
   const location = useLocation();
@@ -79,6 +82,7 @@ function App() {
             <NavButton to="/reports" icon={FileSpreadsheet} label="Отчеты" />
               <NavButton to="/departments" icon={Users} label="Департаменты" />
               <NavButton to="/instruments" icon={Binary} label="Инструменты" />
+              <NavButton to="/crypto" icon={Wallet} label="Крипто-счета" />
 
             {/* Распорка (всё, что ниже неё, прижмется к низу экрана) */}
             <div className="spacer" style={{ flex: 1 }} />
@@ -98,6 +102,8 @@ function App() {
             <Route path="/reports" element={<ReportsPage />} />
               <Route path="/departments" element={<DepartmentsPage />} />
               <Route path="/instruments" element={<InstrumentsPage />} />
+              <Route path="/crypto" element={<AccountsPage />} />
+
 
               <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
 
