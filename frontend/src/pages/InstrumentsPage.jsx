@@ -424,7 +424,7 @@ const ReconcileView = () => {
   const [instCol2, setInstCol2] = useState('Instrument');
   const [sideCol2, setSideCol2] = useState('Side');
 
-  const [target, setTarget] = useState('PPLT');
+  const [target, setTarget] = useState('Name Instruments');
 
   const [twoRes, setTwoRes] = useState(null);
 
@@ -572,8 +572,8 @@ const ReconcileView = () => {
       {/* переключатель подрежима */}
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
         <div style={{ background: '#e2e8f0', padding: 4, borderRadius: 10, display: 'flex', gap: 4 }}>
-          <NavButton active={subMode === 'twofiles'} onClick={() => setSubMode('twofiles')} icon={ArrowRightLeft} label="2 файла" />
-          <NavButton active={subMode === 'duplicates'} onClick={() => setSubMode('duplicates')} icon={List} label="Дубликаты" />
+          <NavButton active={subMode === 'twofiles'} onClick={() => setSubMode('twofiles')} icon={ArrowRightLeft} label="АИС / Unity" />
+          <NavButton active={subMode === 'duplicates'} onClick={() => setSubMode('duplicates')} icon={List} label="Дубликаты АИС" />
         </div>
       </div>
 
@@ -582,8 +582,8 @@ const ReconcileView = () => {
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 16 }}>
             <div style={{ flex: 1, minWidth: 320 }}>
               <SimpleFileBlock
-                title="Файл 1"
-                description="Unity/брокерский отчет"
+                title="АИС"
+                description="Операции ФИ"
                 color="#3b82f6"
                 file={f1} setFile={setF1}
                 headers={h1} setHeaders={setH1}
@@ -591,7 +591,7 @@ const ReconcileView = () => {
               />
               <div style={{ marginTop: 10 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6, display: 'block' }}>
-                  🧾 Колонка типа операции
+                  🧾 Колонка типа операции / Списание / Зачисление
                 </label>
                 <Select value={opCol1} onChange={setOpCol1} headers={h1} placeholder="-- Выберите колонку --" />
               </div>
@@ -605,8 +605,8 @@ const ReconcileView = () => {
 
             <div style={{ flex: 1, minWidth: 320 }}>
               <SimpleFileBlock
-                title="Файл 2"
-                description="Провайдер/внешний файл"
+                title="Unity Trades"
+                description="Сделки"
                 color="#8b5cf6"
                 file={f2} setFile={setF2}
                 headers={h2} setHeaders={setH2}
@@ -625,7 +625,7 @@ const ReconcileView = () => {
             <input
               value={target}
               onChange={e => setTarget(e.target.value)}
-              placeholder="Инструмент для быстрого просмотра (например PPLT)"
+              placeholder="Инструмент для быстрого просмотра"
               style={{
                 width: 420, maxWidth: '90%',
                 padding: '12px 14px',
@@ -700,8 +700,8 @@ const ReconcileView = () => {
         <>
           <div style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
             <SimpleFileBlock
-              title="Файл"
-              description="Один файл для поиска дубликатов"
+              title="АИС"
+              description="Файл для поиска дубликатов Операции ФИ"
               color="#f59e0b"
               file={fd} setFile={setFd}
               headers={hd} setHeaders={setHd}
