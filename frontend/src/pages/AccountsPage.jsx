@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from "react";
-import axios from "axios";
+import { api } from "../api";
 import { toast } from "react-toastify";
 import {
   Wallet,
@@ -70,17 +70,18 @@ const normalizeTransfer = (t) => ({
 // =====================================================
 // API CALLS
 // =====================================================
-const fetchCryptoAccounts = async () => unwrap((await axios.get("/api/crypto/accounts")).data);
-const createCryptoAccount = async (payload) => unwrap((await axios.post("/api/crypto/accounts", payload)).data);
-const updateCryptoAccount = async (id, payload) => unwrap((await axios.put(`/api/crypto/accounts/${id}`, payload)).data);
-const deleteCryptoAccount = async (id) => unwrap((await axios.delete(`/api/crypto/accounts/${id}`)).data);
+const fetchCryptoAccounts = async () => unwrap((await api.get("/crypto/accounts")).data);
 
-const fetchTransfers = async () => unwrap((await axios.get("/api/crypto/transfers")).data);
-const createTransfer = async (payload) => unwrap((await axios.post("/api/crypto/transfers", payload)).data);
+const createCryptoAccount = async (payload) => unwrap((await api.post("/crypto/accounts", payload)).data);
+const updateCryptoAccount = async (id, payload) => unwrap((await api.put(`/crypto/accounts/${id}`, payload)).data);
+const deleteCryptoAccount = async (id) => unwrap((await api.delete(`/crypto/accounts/${id}`)).data);
 
-const fetchSchemes = async () => unwrap((await axios.get("/api/crypto/schemes")).data);
-const createSchemeApi = async (payload) => unwrap((await axios.post("/api/crypto/schemes", payload)).data);
-const deleteSchemeApi = async (id) => unwrap((await axios.delete(`/api/crypto/schemes/${id}`)).data);
+const fetchTransfers = async () => unwrap((await api.get("/crypto/transfers")).data);
+const createTransfer = async (payload) => unwrap((await api.post("/crypto/transfers", payload)).data);
+
+const fetchSchemes = async () => unwrap((await api.get("/crypto/schemes")).data);
+const createSchemeApi = async (payload) => unwrap((await api.post("/crypto/schemes", payload)).data);
+const deleteSchemeApi = async (id) => unwrap((await api.delete(`/crypto/schemes/${id}`)).data);
 
 // =====================================================
 // UI PRIMITIVES
