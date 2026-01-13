@@ -935,3 +935,20 @@ def delete_crypto_scheme(scheme_id: int):
         return False
     finally:
         conn.close()
+
+def delete_crypto_transfer(transfer_id: int):
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM crypto_transfers WHERE id=%s", (transfer_id,))
+        conn.commit()
+        return cursor.rowcount > 0  # True если реально удалилось
+    except Exception as e:
+        log.error(f"delete_crypto_transfer error: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+

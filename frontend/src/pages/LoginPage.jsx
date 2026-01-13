@@ -10,8 +10,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-// важно: используй свой axios instance с интерсепторами
-import { api } from "../api"; // <-- проверь путь: где у тебя лежит файл с api
+import axios from "axios";
+
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -28,7 +28,7 @@ const LoginPage = () => {
     const checkHealth = async () => {
       try {
         // baseURL уже "/api", поэтому тут просто "/health"
-        await api.get("/health", { timeout: 2000 });
+        await axios.get("/health", { timeout: 2000 });
         setSystemStatus("ONLINE");
       } catch {
         setSystemStatus("OFFLINE");
@@ -65,7 +65,7 @@ const LoginPage = () => {
 
       // token endpoint обычно без Bearer (и у тебя так было)
       // baseURL "/api" => "/token" => "/api/token"
-      const res = await api.post("/token", params, {
+      const res = await axios.post("/token", params, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
 

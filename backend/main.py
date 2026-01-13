@@ -1049,3 +1049,11 @@ def api_delete_crypto_scheme(scheme_id: int, current_user: str = Depends(get_cur
     if not ok:
         raise HTTPException(500, "DB error deleting scheme")
     return {"ok": True}
+
+@app.delete("/api/crypto/transfers/{transfer_id}")
+def api_delete_crypto_transfer(transfer_id: int, current_user: str = Depends(get_current_user)):
+    ok = database_manager.delete_crypto_transfer(transfer_id)
+    if not ok:
+        # если хочешь отличать "не найдено" от "ошибка" — см. ниже вариант 404
+        raise HTTPException(404, "Transfer not found")
+    return {"ok": True}
