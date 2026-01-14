@@ -12,7 +12,7 @@ from typing import Dict, Any
 from threading import Lock
 
 from datetime import date
-from typing import Optional, Any
+from typing import Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,12 +29,10 @@ import split_processor
 import excel_exporter
 import database_manager
 
-pd.set_option('future.no_silent_downcasting', True)
+pd.set_option("future.no_silent_downcasting", True)
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    force=True
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", force=True
 )
 log = logging.getLogger(__name__)
 
@@ -49,7 +47,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 cors_origins = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173"
+    "http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173",
 ).split(",")
 
 app.add_middleware(
@@ -70,6 +68,7 @@ CACHE_MAX_ITEMS = int(os.getenv("CACHE_MAX_ITEMS", "30"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
+
 # --- МОДЕЛИ ---
 class UserCreate(BaseModel):
     username: str
@@ -77,37 +76,46 @@ class UserCreate(BaseModel):
     department: str
     is_admin: bool = False
 
+
 class TaskCreate(BaseModel):
     title: str
     description: str
     to_department: str
 
+
 class TaskStatusUpdate(BaseModel):
     status: str
+
 
 class TaskUpdateContent(BaseModel):
     title: str
     description: str
 
+
 class CommentCreate(BaseModel):
     content: str
+
 
 class PasswordChange(BaseModel):
     old_password: str
     new_password: str
 
+
 class DeptCreate(BaseModel):
     name: str
+
 
 class CryptoAccountCreate(BaseModel):
     provider: str
     name: str
     asset: Optional[str] = None
 
+
 class CryptoAccountUpdate(BaseModel):
     provider: str
     name: str
     asset: Optional[str] = None
+
 
 class CryptoTransferCreate(BaseModel):
     date: date
@@ -119,13 +127,17 @@ class CryptoTransferCreate(BaseModel):
     comment: Optional[str] = ""
     label: Optional[str] = ""
 
+
 class CryptoSchemeCreate(BaseModel):
     name: str
     nodes: Any
     edges: Any
 
+
 def verify_password(plain_password, hashed_password):
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    return bcrypt.checkpw(
+        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+    )
 
 
 def create_access_token(data: dict):
@@ -149,6 +161,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
     return username
+
 
 async def require_admin(current_user: str = Depends(get_current_user)):
     user = database_manager.get_user_by_username(current_user)
@@ -184,6 +197,7 @@ def cleanup_files(*file_paths):
             except Exception as e:
                 log.warning(f"Failed to remove temp file {path}: {e}")
 
+
 def cleanup_cache():
     """Удаляет просроченные элементы и ограничивает размер кэша."""
     now = datetime.now()
@@ -192,7 +206,8 @@ def cleanup_cache():
     with CACHE_LOCK:
         # 1) удалить просроченные
         expired_keys = [
-            k for k, v in COMPARISON_CACHE.items()
+            k
+            for k, v in COMPARISON_CACHE.items()
             if (now - v.get("created_at", now)) > ttl
         ]
         for k in expired_keys:
@@ -200,19 +215,25 @@ def cleanup_cache():
 
         # 2) ограничить размер (удаляем самые старые)
         while len(COMPARISON_CACHE) > CACHE_MAX_ITEMS:
-            oldest = min(COMPARISON_CACHE.keys(), key=lambda k: COMPARISON_CACHE[k]["created_at"])
+            oldest = min(
+                COMPARISON_CACHE.keys(), key=lambda k: COMPARISON_CACHE[k]["created_at"]
+            )
             COMPARISON_CACHE.pop(oldest, None)
 
+
 # --- API ---
+
 
 @app.on_event("startup")
 def startup_event():
     database_manager.init_database()
     log.info("Database initialized.")
 
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "NeoExcelSync Backend is running"}
+
 
 @app.post("/api/token")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -225,22 +246,23 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     access_token = create_access_token(data={"sub": user[1]})
     return {"access_token": access_token, "token_type": "bearer"}
 
+
 # --- СВЕРКА ---
+
 
 @app.post("/api/compare")
 async def run_comparison(
-        file1: UploadFile = File(...),
-        file2: UploadFile = File(...),
-        settings_json: str = Form(...),
-        id_col_1: str = Form(...),
-        acc_col_1: str = Form(...),
-        id_col_2: str = Form(...),
-        acc_col_2: str = Form(...)
+    file1: UploadFile = File(...),
+    file2: UploadFile = File(...),
+    settings_json: str = Form(...),
+    id_col_1: str = Form(...),
+    acc_col_1: str = Form(...),
+    id_col_2: str = Form(...),
+    acc_col_2: str = Form(...),
 ):
     f1_path = None
     f2_path = None
     try:
-
         original_name_1 = file1.filename
         original_name_2 = file2.filename
         f1_path = save_upload_file(file1)
@@ -249,11 +271,15 @@ async def run_comparison(
 
         results = await run_in_threadpool(
             _process_comparison_sync,
-            f1_path, id_col_1, acc_col_1,
-            f2_path, id_col_2, acc_col_2,
+            f1_path,
+            id_col_1,
+            acc_col_1,
+            f2_path,
+            id_col_2,
+            acc_col_2,
             settings,
             original_name_1,
-            original_name_2
+            original_name_2,
         )
 
         # Сохраняем результат в кэш
@@ -262,7 +288,7 @@ async def run_comparison(
         with CACHE_LOCK:
             COMPARISON_CACHE[comparison_id] = {
                 "data": results,
-                "created_at": datetime.now()
+                "created_at": datetime.now(),
             }
 
         cleanup_cache()
@@ -277,8 +303,8 @@ async def run_comparison(
             elif isinstance(val, list) or isinstance(val, set):
                 json_response[key] = list(val)
 
-        json_response['status'] = 'success'
-        json_response['comparison_id'] = comparison_id
+        json_response["status"] = "success"
+        json_response["comparison_id"] = comparison_id
 
         return json_response
 
@@ -289,52 +315,73 @@ async def run_comparison(
         cleanup_files(f1_path, f2_path)
 
 
-def _process_comparison_sync(f1_path, id_col_1, acc_col_1, f2_path, id_col_2, acc_col_2, settings, name1, name2):
+def _process_comparison_sync(
+    f1_path, id_col_1, acc_col_1, f2_path, id_col_2, acc_col_2, settings, name1, name2
+):
     """Синхронная функция обработки, запускаемая в треде."""
     podft_settings = {
-        'column': settings.get("podft_sum_col", "Сумма тг"),
-        'threshold': settings.get("podft_threshold", "7000000"),
-        'filter_enabled': settings.get("podft_filter_enabled", True),
-        'filter_column': settings.get("podft_filter_col", "Рынок ЦБ"),
-        'filter_values': settings.get("podft_filter_values", ""),
-        'bo_enabled': settings.get("bo_enabled", True),
-        'bo_unity_instrument_col': settings.get("bo_unity_instrument_col", "Instrument"),
-        'bo_ais_sum_col': settings.get("bo_ais_sum_col", "Сумма тг"),
-        'bo_threshold': settings.get("bo_threshold", "45000000"),
-        'bo_prefixes': settings.get("bo_prefixes", "[BO],[OP]"),
+        "column": settings.get("podft_sum_col", "Сумма тг"),
+        "threshold": settings.get("podft_threshold", "7000000"),
+        "filter_enabled": settings.get("podft_filter_enabled", True),
+        "filter_column": settings.get("podft_filter_col", "Рынок ЦБ"),
+        "filter_values": settings.get("podft_filter_values", ""),
+        "bo_enabled": settings.get("bo_enabled", True),
+        "bo_unity_instrument_col": settings.get(
+            "bo_unity_instrument_col", "Instrument"
+        ),
+        "bo_ais_sum_col": settings.get("bo_ais_sum_col", "Сумма тг"),
+        "bo_threshold": settings.get("bo_threshold", "45000000"),
+        "bo_prefixes": settings.get("bo_prefixes", "[BO],[OP]"),
     }
     overlap_accounts = settings.get("overlap_accounts", [])
 
     results, found_overlaps = processor.process_files(
-        f1_path, id_col_1, acc_col_1,
-        f2_path, id_col_2, acc_col_2,
+        f1_path,
+        id_col_1,
+        acc_col_1,
+        f2_path,
+        id_col_2,
+        acc_col_2,
         podft_settings,
         overlap_accounts,
         display_name1=name1,
-        display_name2=name2
+        display_name2=name2,
     )
 
     # Фильтр MISX
-    if 'podft_7m_deals' in results and not results['podft_7m_deals'].empty:
-        df_7m = results['podft_7m_deals']
-        if 'Рынок ЦБ' in df_7m.columns:
-            results['podft_7m_deals'] = df_7m[df_7m['Рынок ЦБ'] != 'MISX']
+    if "podft_7m_deals" in results and not results["podft_7m_deals"].empty:
+        df_7m = results["podft_7m_deals"]
+        if "Рынок ЦБ" in df_7m.columns:
+            results["podft_7m_deals"] = df_7m[df_7m["Рынок ЦБ"] != "MISX"]
 
     # Логика Crypto
-    if 'crypto_deals' in results and not results['crypto_deals'].empty:
-        df_crypto = results['crypto_deals'].drop_duplicates()
+    if "crypto_deals" in results and not results["crypto_deals"].empty:
+        df_crypto = results["crypto_deals"].drop_duplicates()
 
         # Фильтры... (ваш код crypto логики)
-        inst_cols = [c for c in df_crypto.columns if "инструмент" in c.lower() or "instrument" in c.lower()]
+        inst_cols = [
+            c
+            for c in df_crypto.columns
+            if "инструмент" in c.lower() or "instrument" in c.lower()
+        ]
         if inst_cols:
-            df_crypto = df_crypto[~df_crypto[inst_cols[0]].astype(str).str.startswith("FU")]
+            df_crypto = df_crypto[
+                ~df_crypto[inst_cols[0]].astype(str).str.startswith("FU")
+            ]
 
-        sum_cols = [c for c in df_crypto.columns if "сумма" in c.lower() and "тг" in c.lower()]
+        sum_cols = [
+            c for c in df_crypto.columns if "сумма" in c.lower() and "тг" in c.lower()
+        ]
         target_sum_col = "Сумма тг"
 
         def clean_sum(df, col):
-            temp_series = df[col].astype(str).str.replace(r'\s+', '', regex=True).str.replace(',', '.')
-            return pd.to_numeric(temp_series, errors='coerce')
+            temp_series = (
+                df[col]
+                .astype(str)
+                .str.replace(r"\s+", "", regex=True)
+                .str.replace(",", ".")
+            )
+            return pd.to_numeric(temp_series, errors="coerce")
 
         if target_sum_col in df_crypto.columns:
             df_crypto = df_crypto[clean_sum(df_crypto, target_sum_col) >= 5000000]
@@ -345,14 +392,20 @@ def _process_comparison_sync(f1_path, id_col_1, acc_col_1, f2_path, id_col_2, ac
         crypto_col = settings.get("crypto_col", "")
         if settings.get("crypto_enabled", False) and crypto_keywords and crypto_col:
             if crypto_col in df_crypto.columns:
-                keywords = [k.strip().upper() for k in crypto_keywords.split(',') if k.strip()]
-                pattern = '|'.join([re.escape(k) for k in keywords])
+                keywords = [
+                    k.strip().upper() for k in crypto_keywords.split(",") if k.strip()
+                ]
+                pattern = "|".join([re.escape(k) for k in keywords])
                 df_crypto = df_crypto[
-                    df_crypto[crypto_col].astype(str).str.upper().str.contains(pattern, regex=True, na=False)]
+                    df_crypto[crypto_col]
+                    .astype(str)
+                    .str.upper()
+                    .str.contains(pattern, regex=True, na=False)
+                ]
 
-        results['crypto_deals'] = df_crypto
+        results["crypto_deals"] = df_crypto
 
-    results['found_overlaps'] = found_overlaps  # Добавляем в общий словарь для кэша
+    results["found_overlaps"] = found_overlaps  # Добавляем в общий словарь для кэша
     return results
 
 
@@ -364,13 +417,18 @@ async def export_excel_file(comparison_id: str):
         cached = COMPARISON_CACHE.get(comparison_id)
 
     if not cached:
-        raise HTTPException(status_code=404, detail="Результаты устарели или не найдены. Повторите сверку.")
+        raise HTTPException(
+            status_code=404,
+            detail="Результаты устарели или не найдены. Повторите сверку.",
+        )
 
     results = cached["data"]
 
     try:
         # генерация Excel в потоке, чтобы не блочить event loop
-        stream = await run_in_threadpool(excel_exporter.export_results_to_stream, results)
+        stream = await run_in_threadpool(
+            excel_exporter.export_results_to_stream, results
+        )
 
         filename = f"Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
@@ -378,12 +436,13 @@ async def export_excel_file(comparison_id: str):
         return StreamingResponse(
             stream,
             headers=headers,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
     except Exception as e:
         log.error(f"Export error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка генерации Excel")
+
 
 @app.get("/api/last-result")
 def get_last_result():
@@ -402,16 +461,19 @@ def get_last_result():
         elif isinstance(val, set):
             json_response[key] = list(val)
 
-    json_response['status'] = 'success'
+    json_response["status"] = "success"
     return json_response
+
 
 @app.get("/api/settings")
 def get_settings():
     return settings_manager.load_settings()
 
+
 @app.post("/api/settings")
 def update_settings(new_settings: dict):
     return settings_manager.save_settings(new_settings)
+
 
 @app.post("/api/settings/upload-split-list")
 async def upload_split_list_reference(file: UploadFile = File(...)):
@@ -425,11 +487,12 @@ async def upload_split_list_reference(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
 
         current_settings = settings_manager.load_settings()
-        current_settings['split_list_path'] = file_path
+        current_settings["split_list_path"] = file_path
         settings_manager.save_settings(current_settings)
         return {"status": "success", "new_path": file_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/settings/split-list-content")
 def get_split_list_content():
@@ -443,20 +506,24 @@ def get_split_list_content():
         return {
             "status": "success",
             "data": df.to_dict(orient="records"),
-            "filename": os.path.basename(path)
+            "filename": os.path.basename(path),
         }
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
 @app.post("/api/check-splits")
-async def check_splits(daily_file: UploadFile = File(...), settings_json: str = Form(...)):
+async def check_splits(
+    daily_file: UploadFile = File(...), settings_json: str = Form(...)
+):
     daily_path = None
     try:
         daily_path = save_upload_file(daily_file)
         settings = json.loads(settings_json)
 
-        success, result = await run_in_threadpool(split_processor.find_splits, daily_path, settings)
+        success, result = await run_in_threadpool(
+            split_processor.find_splits, daily_path, settings
+        )
 
         if not success:
             return {"status": "error", "message": result}
@@ -466,12 +533,13 @@ async def check_splits(daily_file: UploadFile = File(...), settings_json: str = 
         return {
             "status": "success",
             "data": result.fillna("").to_dict(orient="records"),
-            "message": f"Found {len(result)} splits"
+            "message": f"Found {len(result)} splits",
         }
     except Exception as e:
         raise HTTPException(500, str(e))
     finally:
         cleanup_files(daily_path)
+
 
 @app.get("/api/clients")
 def search_clients(search: str = ""):
@@ -482,7 +550,8 @@ def search_clients(search: str = ""):
 @app.get("/api/clients/{client_id}")
 def get_client_details(client_id: int):
     details = database_manager.get_client_details(client_id)
-    if not details: raise HTTPException(404, "Client not found")
+    if not details:
+        raise HTTPException(404, "Client not found")
 
     folder = details.get("folder_path")
     files = []
@@ -491,7 +560,9 @@ def get_client_details(client_id: int):
             with os.scandir(folder) as entries:
                 for entry in entries:
                     if entry.is_file():
-                        files.append({"name": entry.name, "modified": entry.stat().st_mtime})
+                        files.append(
+                            {"name": entry.name, "modified": entry.stat().st_mtime}
+                        )
             files.sort(key=lambda x: x["name"])
         except Exception as e:
             log.error(f"Error listing files: {e}")
@@ -500,9 +571,17 @@ def get_client_details(client_id: int):
 
 
 @app.post("/api/clients")
-def add_new_client(name: str = Form(...), email: str = Form(""), account: str = Form(""), folder_path: str = Form("")):
-    success, msg = database_manager.add_client(name, email, account, folder_path_override=folder_path)
-    if not success: raise HTTPException(400, msg)
+def add_new_client(
+    name: str = Form(...),
+    email: str = Form(""),
+    account: str = Form(""),
+    folder_path: str = Form(""),
+):
+    success, msg = database_manager.add_client(
+        name, email, account, folder_path_override=folder_path
+    )
+    if not success:
+        raise HTTPException(400, msg)
     return {"status": "success", "message": msg}
 
 
@@ -515,25 +594,36 @@ def update_status(client_id: int, status_data: dict):
 @app.delete("/api/clients/{client_id}")
 def delete_client(client_id: int):
     success, msg = database_manager.delete_client(client_id)
-    if not success: raise HTTPException(400, msg)
+    if not success:
+        raise HTTPException(400, msg)
     return {"status": "success"}
 
 
 @app.put("/api/clients/{client_id}")
-def update_client_details(client_id: int, name: str = Form(...), email: str = Form(""), account: str = Form(""),
-                          folder_path: str = Form("")):
-    success, msg = database_manager.update_client(client_id, name, email, account, folder_path)
-    if not success: raise HTTPException(400, msg)
+def update_client_details(
+    client_id: int,
+    name: str = Form(...),
+    email: str = Form(""),
+    account: str = Form(""),
+    folder_path: str = Form(""),
+):
+    success, msg = database_manager.update_client(
+        client_id, name, email, account, folder_path
+    )
+    if not success:
+        raise HTTPException(400, msg)
     return {"status": "success"}
 
 
 @app.post("/api/clients/{client_id}/upload")
 def upload_file_to_client(client_id: int, file: UploadFile = File(...)):
     details = database_manager.get_client_details(client_id)
-    if not details: raise HTTPException(404, "Client not found")
+    if not details:
+        raise HTTPException(404, "Client not found")
 
     folder = details.get("folder_path")
-    if not os.path.exists(folder): os.makedirs(folder, exist_ok=True)
+    if not os.path.exists(folder):
+        os.makedirs(folder, exist_ok=True)
 
     safe_name = os.path.basename(file.filename)  # Path traversal fix
     dest = os.path.join(folder, safe_name)
@@ -548,19 +638,22 @@ def upload_file_to_client(client_id: int, file: UploadFile = File(...)):
 @app.get("/api/clients/{client_id}/files/{filename}")
 def download_client_file(client_id: int, filename: str):
     details = database_manager.get_client_details(client_id)
-    if not details: raise HTTPException(404, "Client not found")
+    if not details:
+        raise HTTPException(404, "Client not found")
 
     safe_name = os.path.basename(filename)  # Fix
     path = os.path.join(details.get("folder_path"), safe_name)
 
-    if not os.path.exists(path): raise HTTPException(404, "File not found")
+    if not os.path.exists(path):
+        raise HTTPException(404, "File not found")
     return FileResponse(path, filename=safe_name)
 
 
 @app.delete("/api/clients/{client_id}/files/{filename}")
 def delete_client_file(client_id: int, filename: str):
     details = database_manager.get_client_details(client_id)
-    if not details: raise HTTPException(404, "Client not found")
+    if not details:
+        raise HTTPException(404, "Client not found")
 
     safe_name = os.path.basename(filename)
     path = os.path.join(details.get("folder_path"), safe_name)
@@ -573,9 +666,10 @@ def delete_client_file(client_id: int, filename: str):
 
 @app.post("/api/clients/reset-status")
 async def reset_all_clients_status(current_user: str = Depends(get_current_user)):
-
     try:
-        success = database_manager.reset_all_clients_statuses()  # Нужно добавить этот метод в database_manager!
+        success = (
+            database_manager.reset_all_clients_statuses()
+        )  # Нужно добавить этот метод в database_manager!
         if success:
             return {"status": "success", "message": "Statuses reset"}
         raise HTTPException(500, "DB Error")
@@ -585,6 +679,7 @@ async def reset_all_clients_status(current_user: str = Depends(get_current_user)
 
 # ЗАДАЧИ
 
+
 @app.get("/api/tasks/{department}")
 async def read_tasks(department: str, current_user: str = Depends(get_current_user)):
     tasks = database_manager.get_tasks_by_dept(department)
@@ -592,19 +687,27 @@ async def read_tasks(department: str, current_user: str = Depends(get_current_us
 
 
 @app.post("/api/tasks")
-async def create_new_task(task: TaskCreate, current_user: str = Depends(get_current_user)):
+async def create_new_task(
+    task: TaskCreate, current_user: str = Depends(get_current_user)
+):
     user = database_manager.get_user_by_username(current_user)
-    if not user: raise HTTPException(404, "User not found")
+    if not user:
+        raise HTTPException(404, "User not found")
 
-    task_id = database_manager.create_task(task.title, task.description, user[0], task.to_department)
+    task_id = database_manager.create_task(
+        task.title, task.description, user[0], task.to_department
+    )
     if task_id:
         return {"status": "success", "id": task_id}
     raise HTTPException(500, "Error creating task")
 
 
 @app.put("/api/tasks/{task_id}/status")
-async def change_task_status(task_id: int, status_data: TaskStatusUpdate,
-                             current_user: str = Depends(get_current_user)):
+async def change_task_status(
+    task_id: int,
+    status_data: TaskStatusUpdate,
+    current_user: str = Depends(get_current_user),
+):
     if database_manager.update_task_status(task_id, status_data.status):
         return {"status": "success"}
     raise HTTPException(500, "Error updating status")
@@ -619,13 +722,17 @@ async def update_task_endpoint(task_id: int, task: TaskUpdateContent):
 
     return {"status": "success", "message": "Task updated"}
 
+
 @app.get("/api/tasks/{task_id}/comments")
 async def read_comments(task_id: int, current_user: str = Depends(get_current_user)):
     comments = database_manager.get_comments(task_id)
     return [dict(c) for c in comments]
 
+
 @app.post("/api/tasks/{task_id}/comments")
-async def create_new_comment(task_id: int, comment: CommentCreate, current_user: str = Depends(get_current_user)):
+async def create_new_comment(
+    task_id: int, comment: CommentCreate, current_user: str = Depends(get_current_user)
+):
     user = database_manager.get_user_by_username(current_user)
     if database_manager.add_comment(task_id, user[0], comment.content):
         return {"status": "success"}
@@ -633,8 +740,11 @@ async def create_new_comment(task_id: int, comment: CommentCreate, current_user:
 
 
 @app.post("/api/tasks/{task_id}/attachments")
-async def upload_task_attachment(task_id: int, file: UploadFile = File(...),
-                                 current_user: str = Depends(get_current_user)):
+async def upload_task_attachment(
+    task_id: int,
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user),
+):
     base_dir = os.path.join(os.getcwd(), "task_files")
     os.makedirs(base_dir, exist_ok=True)
 
@@ -656,18 +766,22 @@ async def get_task_files(task_id: int, current_user: str = Depends(get_current_u
 
 
 @app.get("/api/attachments/{attachment_id}")
-async def download_attachment(attachment_id: int, current_user: str = Depends(get_current_user)):
+async def download_attachment(
+    attachment_id: int, current_user: str = Depends(get_current_user)
+):
     file_data = database_manager.get_attachment_by_id(attachment_id)
-    if not file_data or not os.path.exists(file_data['file_path']):
+    if not file_data or not os.path.exists(file_data["file_path"]):
         raise HTTPException(404, "File not found")
-    return FileResponse(file_data['file_path'], filename=file_data['filename'])
+    return FileResponse(file_data["file_path"], filename=file_data["filename"])
 
 
 @app.delete("/api/attachments/{attachment_id}")
-async def remove_attachment(attachment_id: int, current_user: str = Depends(get_current_user)):
+async def remove_attachment(
+    attachment_id: int, current_user: str = Depends(get_current_user)
+):
     file_data = database_manager.get_attachment_by_id(attachment_id)
-    if file_data and os.path.exists(file_data['file_path']):
-        os.remove(file_data['file_path'])
+    if file_data and os.path.exists(file_data["file_path"]):
+        os.remove(file_data["file_path"])
 
     if database_manager.delete_task_attachment(attachment_id):
         return {"status": "success"}
@@ -676,10 +790,12 @@ async def remove_attachment(attachment_id: int, current_user: str = Depends(get_
 
 # ПОЛЬЗОВАТЕЛИ И ПРОФИЛЬ
 
+
 @app.get("/api/profile")
 async def get_profile_info(current_user: str = Depends(get_current_user)):
     user = database_manager.get_user_by_username(current_user)
-    if not user: raise HTTPException(404, "User not found")
+    if not user:
+        raise HTTPException(404, "User not found")
 
     is_admin = user[4] if len(user) > 4 else False
     stats = database_manager.get_user_stats(user[0])
@@ -689,43 +805,56 @@ async def get_profile_info(current_user: str = Depends(get_current_user)):
         "username": current_user,
         "department": user[3],
         "is_admin": is_admin,
-        "stats": stats
+        "stats": stats,
     }
 
+
 @app.post("/api/profile/change-password")
-async def change_password(data: PasswordChange, current_user: str = Depends(get_current_user)):
+async def change_password(
+    data: PasswordChange, current_user: str = Depends(get_current_user)
+):
     user = database_manager.get_user_by_username(current_user)
-    if not user: raise HTTPException(404, "User not found")
+    if not user:
+        raise HTTPException(404, "User not found")
 
     if not verify_password(data.old_password, user[2]):
         raise HTTPException(400, "Old password incorrect")
 
     salt = bcrypt.gensalt()
-    new_hash = bcrypt.hashpw(data.new_password.encode('utf-8'), salt).decode('utf-8')
+    new_hash = bcrypt.hashpw(data.new_password.encode("utf-8"), salt).decode("utf-8")
 
     if database_manager.update_user_password(user[0], new_hash):
         return {"status": "success"}
     raise HTTPException(500, "Error updating password")
 
+
 @app.get("/api/dashboard")
 async def get_dashboard_data(current_user: str = Depends(get_current_user)):
     return database_manager.get_dashboard_stats() or {"users": 0, "total_tasks": 0}
+
 
 @app.get("/api/admin/users")
 async def get_users_list(current_user: str = Depends(require_admin)):
     return database_manager.get_all_users()
 
+
 @app.post("/api/admin/users")
-async def admin_create_user(user: UserCreate, current_user: str = Depends(require_admin)):
+async def admin_create_user(
+    user: UserCreate, current_user: str = Depends(require_admin)
+):
     salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(user.password.encode('utf-8'), salt).decode('utf-8')
-    if database_manager.create_new_user(user.username, hashed, user.department, user.is_admin):
+    hashed = bcrypt.hashpw(user.password.encode("utf-8"), salt).decode("utf-8")
+    if database_manager.create_new_user(
+        user.username, hashed, user.department, user.is_admin
+    ):
         return {"status": "success"}
     raise HTTPException(400, "User exists or error")
 
 
 @app.delete("/api/admin/users/{user_id}")
-async def admin_delete_user(user_id: int, current_user: str = Depends(get_current_user)):
+async def admin_delete_user(
+    user_id: int, current_user: str = Depends(get_current_user)
+):
     caller = database_manager.get_user_by_username(current_user)
     if caller and caller[0] == user_id:
         raise HTTPException(400, "Cannot delete yourself")
@@ -743,7 +872,8 @@ def get_departments_list():
 @app.post("/api/admin/departments")
 def create_department(dept: DeptCreate, current_user: str = Depends(require_admin)):
     success, msg = database_manager.add_department(dept.name)
-    if not success: raise HTTPException(400, msg)
+    if not success:
+        raise HTTPException(400, msg)
     return {"status": "success"}
 
 
@@ -755,7 +885,9 @@ def remove_department(dept_id: int, current_user: str = Depends(require_admin)):
 
 
 @app.put("/api/admin/departments/{dept_id}")
-def rename_department_endpoint(dept_id: int, dept: DeptCreate, current_user: str = Depends(require_admin)):
+def rename_department_endpoint(
+    dept_id: int, dept: DeptCreate, current_user: str = Depends(require_admin)
+):
     if database_manager.rename_department(dept_id, dept.name):
         return {"status": "success"}
     raise HTTPException(400, "Error renaming")
@@ -763,32 +895,38 @@ def rename_department_endpoint(dept_id: int, dept: DeptCreate, current_user: str
 
 # ИНСТРУМЕНТЫ
 
+
 def clean_instrument_name(raw_name):
     s = str(raw_name).strip()
-    if ']' in s: s = s.split(']')[1]
-    if '.' in s: s = s.split('.')[0]
-    if '::' in s: s = s.split('::')[0]
+    if "]" in s:
+        s = s.split("]")[1]
+    if "." in s:
+        s = s.split(".")[0]
+    if "::" in s:
+        s = s.split("::")[0]
     return s.strip()
 
 
 def read_dataset(file_path):
     ext = os.path.splitext(file_path)[1].lower()
-    if ext == '.csv':
-        return pd.read_csv(file_path, sep=None, engine='python', dtype=str)
+    if ext == ".csv":
+        return pd.read_csv(file_path, sep=None, engine="python", dtype=str)
     return pd.read_excel(file_path, dtype=str)
+
 
 @app.post("/api/compare-instruments")
 async def compare_instruments(
-        file1: UploadFile = File(...),
-        file2: UploadFile = File(...),
-        col1: str = Form(...),
-        col2: str = Form(...)
+    file1: UploadFile = File(...),
+    file2: UploadFile = File(...),
+    col1: str = Form(...),
+    col2: str = Form(...),
 ):
     f1_path = save_upload_file(file1)
     f2_path = save_upload_file(file2)
     try:
-
-        res = await run_in_threadpool(_process_instruments, f1_path, f2_path, col1, col2)
+        res = await run_in_threadpool(
+            _process_instruments, f1_path, f2_path, col1, col2
+        )
         return res
     except Exception as e:
         raise HTTPException(400, str(e))
@@ -800,14 +938,16 @@ def _process_instruments(f1, f2, c1, c2):
     df1 = read_dataset(f1)
     df2 = read_dataset(f2)
 
-    if c1 not in df1.columns: raise Exception(f"Column {c1} missing in file 1")
-    if c2 not in df2.columns: raise Exception(f"Column {c2} missing in file 2")
+    if c1 not in df1.columns:
+        raise Exception(f"Column {c1} missing in file 1")
+    if c2 not in df2.columns:
+        raise Exception(f"Column {c2} missing in file 2")
 
-    df1['clean'] = df1[c1].apply(clean_instrument_name)
-    set1 = set(df1['clean'].dropna().unique())
+    df1["clean"] = df1[c1].apply(clean_instrument_name)
+    set1 = set(df1["clean"].dropna().unique())
 
-    df2['clean'] = df2[c2].astype(str).str.strip()
-    set2 = set(df2['clean'].dropna().unique())
+    df2["clean"] = df2[c2].astype(str).str.strip()
+    set2 = set(df2["clean"].dropna().unique())
 
     common = sorted(list(set1 & set2))
     missing_in_2 = sorted(list(set1 - set2))
@@ -816,12 +956,17 @@ def _process_instruments(f1, f2, c1, c2):
     return {
         "status": "success",
         "stats": {
-            "total_file1": len(set1), "total_file2": len(set2),
-            "matches": len(common), "only_in_1": len(missing_in_2), "only_in_2": len(missing_in_1)
+            "total_file1": len(set1),
+            "total_file2": len(set2),
+            "matches": len(common),
+            "only_in_1": len(missing_in_2),
+            "only_in_2": len(missing_in_1),
         },
         "data": {
-            "matches": common, "only_in_unity": missing_in_2, "only_in_ais": missing_in_1
-        }
+            "matches": common,
+            "only_in_unity": missing_in_2,
+            "only_in_ais": missing_in_1,
+        },
     }
 
 
@@ -834,6 +979,7 @@ async def read_my_tasks(current_user: str = Depends(get_current_user)):
     tasks = database_manager.get_user_tasks(user[0])  # user[0] is ID
     return [dict(t) for t in tasks]
 
+
 @app.delete("/api/tasks/{task_id}")
 async def remove_task(task_id: int, current_user: str = Depends(get_current_user)):
     success = database_manager.delete_task(task_id)
@@ -842,21 +988,31 @@ async def remove_task(task_id: int, current_user: str = Depends(get_current_user
 
     raise HTTPException(status_code=500, detail="Failed to delete task")
 
+
 @app.get("/api/health")
 def health_check():
     api_status = "Online"
     db_status = "Disconnected"
+
+    conn = None
     try:
         conn = database_manager.get_db_connection()
-        if conn:
+        if conn is not None:
             db_status = "Connected"
-            conn.close()
     except Exception:
-        pass
+        log.debug("DB healthcheck failed", exc_info=True)
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                log.debug("Failed to close DB connection in healthcheck", exc_info=True)
+
     return {"api": api_status, "db": db_status}
 
 
 # ГЕНЕРАТОР ОТЧЕТОВ ПО СДЕЛКАМ
+
 
 def format_report_number(num):
     """Форматирует число: пробел как разделитель тысяч, точка для дроби"""
@@ -875,12 +1031,11 @@ def parse_ticker_from_instrument(instr_str):
     """
     s = str(instr_str)
     try:
+        if "]" in s:
+            s = s.split("]")[1]
 
-        if ']' in s:
-            s = s.split(']')[1]
-
-        if '.' in s:
-            s = s.split('.')[0]
+        if "." in s:
+            s = s.split(".")[0]
         return s.strip()
     except:
         return s
@@ -890,34 +1045,32 @@ def parse_ticker_from_instrument(instr_str):
 async def generate_trade_report(file: UploadFile = File(...)):
     temp_path = save_upload_file(file)
     try:
-
         df = pd.read_excel(temp_path)
         df.columns = [c.strip() for c in df.columns]
 
-        required = ['Instrument', 'Amount', 'Quote amount']
+        required = ["Instrument", "Amount", "Quote amount"]
         missing = [c for c in required if c not in df.columns]
         if missing:
             raise HTTPException(400, f"В файле не найдены колонки: {missing}")
 
         report_lines = []
 
-        df['Ticker'] = df['Instrument'].apply(parse_ticker_from_instrument)
+        df["Ticker"] = df["Instrument"].apply(parse_ticker_from_instrument)
         # Определяем тип: Лонг (Amount > 0) или Шорт (Amount < 0)
-        df['Type'] = df['Amount'].apply(lambda x: 'лонг' if x > 0 else 'шорт')
+        df["Type"] = df["Amount"].apply(lambda x: "лонг" if x > 0 else "шорт")
 
         # Группируем по Тикеру и Типу.
         # sort=False сохраняет порядок появления (если нужно), но лучше отсортировать по тикеру
-        grouped = df.groupby(['Ticker', 'Type'])
+        grouped = df.groupby(["Ticker", "Type"])
 
         for (ticker, trade_type), group in grouped:
             count_parts = len(group)
 
-            amounts = group['Amount'].tolist()
-            quotes = group['Quote amount'].tolist()
+            amounts = group["Amount"].tolist()
+            quotes = group["Quote amount"].tolist()
 
             amounts_str = " и ".join([str(x) for x in amounts])
             quotes_str = " и ".join([format_report_number(x) for x in quotes])
-
 
             total_amount = sum(amounts)
             total_quote = sum(quotes)
@@ -941,16 +1094,21 @@ async def generate_trade_report(file: UploadFile = File(...)):
     finally:
         cleanup_files(temp_path)
 
+
 # =========================
 # CRYPTO API
 # =========================
+
 
 @app.get("/api/crypto/accounts")
 def api_get_crypto_accounts(current_user: str = Depends(get_current_user)):
     return database_manager.get_crypto_accounts()
 
+
 @app.post("/api/crypto/accounts")
-def api_create_crypto_account(payload: CryptoAccountCreate, current_user: str = Depends(get_current_user)):
+def api_create_crypto_account(
+    payload: CryptoAccountCreate, current_user: str = Depends(get_current_user)
+):
     provider = (payload.provider or "").strip()
     name = (payload.name or "").strip()
     asset = (payload.asset or "").strip().upper() or None
@@ -963,8 +1121,13 @@ def api_create_crypto_account(payload: CryptoAccountCreate, current_user: str = 
         raise HTTPException(500, "DB error creating account")
     return row
 
+
 @app.put("/api/crypto/accounts/{account_id}")
-def api_update_crypto_account(account_id: int, payload: CryptoAccountUpdate, current_user: str = Depends(get_current_user)):
+def api_update_crypto_account(
+    account_id: int,
+    payload: CryptoAccountUpdate,
+    current_user: str = Depends(get_current_user),
+):
     if not database_manager.crypto_account_exists(account_id):
         raise HTTPException(404, "Account not found")
 
@@ -980,8 +1143,11 @@ def api_update_crypto_account(account_id: int, payload: CryptoAccountUpdate, cur
         raise HTTPException(500, "DB error updating account")
     return row
 
+
 @app.delete("/api/crypto/accounts/{account_id}")
-def api_delete_crypto_account(account_id: int, current_user: str = Depends(get_current_user)):
+def api_delete_crypto_account(
+    account_id: int, current_user: str = Depends(get_current_user)
+):
     ok = database_manager.delete_crypto_account(account_id)
     if not ok:
         raise HTTPException(500, "DB error deleting account")
@@ -992,8 +1158,11 @@ def api_delete_crypto_account(account_id: int, current_user: str = Depends(get_c
 def api_get_crypto_transfers(current_user: str = Depends(get_current_user)):
     return database_manager.get_crypto_transfers()
 
+
 @app.post("/api/crypto/transfers")
-def api_create_crypto_transfer(payload: CryptoTransferCreate, current_user: str = Depends(get_current_user)):
+def api_create_crypto_transfer(
+    payload: CryptoTransferCreate, current_user: str = Depends(get_current_user)
+):
     t = (payload.type or "").strip().lower()
     if t not in ("transfer", "deposit", "withdraw"):
         raise HTTPException(400, "Invalid type")
@@ -1032,26 +1201,37 @@ def api_create_crypto_transfer(payload: CryptoTransferCreate, current_user: str 
 def api_get_crypto_schemes(current_user: str = Depends(get_current_user)):
     return database_manager.get_crypto_schemes()
 
+
 @app.post("/api/crypto/schemes")
-def api_create_crypto_scheme(payload: CryptoSchemeCreate, current_user: str = Depends(get_current_user)):
+def api_create_crypto_scheme(
+    payload: CryptoSchemeCreate, current_user: str = Depends(get_current_user)
+):
     name = (payload.name or "").strip()
     if not name:
         raise HTTPException(400, "name required")
 
-    row = database_manager.create_crypto_scheme(name=name, nodes=payload.nodes, edges=payload.edges)
+    row = database_manager.create_crypto_scheme(
+        name=name, nodes=payload.nodes, edges=payload.edges
+    )
     if not row:
         raise HTTPException(500, "DB error creating scheme")
     return row
 
+
 @app.delete("/api/crypto/schemes/{scheme_id}")
-def api_delete_crypto_scheme(scheme_id: int, current_user: str = Depends(get_current_user)):
+def api_delete_crypto_scheme(
+    scheme_id: int, current_user: str = Depends(get_current_user)
+):
     ok = database_manager.delete_crypto_scheme(scheme_id)
     if not ok:
         raise HTTPException(500, "DB error deleting scheme")
     return {"ok": True}
 
+
 @app.delete("/api/crypto/transfers/{transfer_id}")
-def api_delete_crypto_transfer(transfer_id: int, current_user: str = Depends(get_current_user)):
+def api_delete_crypto_transfer(
+    transfer_id: int, current_user: str = Depends(get_current_user)
+):
     ok = database_manager.delete_crypto_transfer(transfer_id)
     if not ok:
         # если хочешь отличать "не найдено" от "ошибка" — см. ниже вариант 404

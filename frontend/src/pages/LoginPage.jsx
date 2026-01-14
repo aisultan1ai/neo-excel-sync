@@ -30,7 +30,8 @@ const LoginPage = ({ onLogin }) => {
         // если у тебя health НЕ под /api/health, поменяй на "/health"
         await http.get("/health", { timeout: 2500 });
         setSystemStatus("ONLINE");
-      } catch {
+      } catch (err) {
+        console.error("Health check failed", err);
         setSystemStatus("OFFLINE");
       }
     };
@@ -46,7 +47,9 @@ const LoginPage = ({ onLogin }) => {
     const next = nextRaw ? decodeURIComponent(nextRaw) : "/";
 
     const blockedPrefixes = ["/token", "/api", "/health", "/docs", "/openapi"];
-    const safeNext = blockedPrefixes.some((p) => next === p || next.startsWith(p + "/")) ? "/" : next;
+    const safeNext = blockedPrefixes.some((p) => next === p || next.startsWith(p + "/"))
+      ? "/"
+      : next;
 
     navigate(safeNext, { replace: true });
   }, [navigate, params]);
@@ -85,7 +88,9 @@ const LoginPage = ({ onLogin }) => {
       const next = nextRaw ? decodeURIComponent(nextRaw) : "/";
 
       const blockedPrefixes = ["/token", "/api", "/health", "/docs", "/openapi"];
-      const safeNext = blockedPrefixes.some((p) => next === p || next.startsWith(p + "/")) ? "/" : next;
+      const safeNext = blockedPrefixes.some((p) => next === p || next.startsWith(p + "/"))
+        ? "/"
+        : next;
 
       navigate(safeNext, { replace: true });
     } catch (err) {
@@ -111,7 +116,9 @@ const LoginPage = ({ onLogin }) => {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", width: "100vw", fontFamily: "Inter, sans-serif" }}>
+    <div
+      style={{ display: "flex", height: "100vh", width: "100vw", fontFamily: "Inter, sans-serif" }}
+    >
       {/* --- LEFT --- */}
       <div
         style={{
@@ -168,32 +175,54 @@ const LoginPage = ({ onLogin }) => {
                 height: "8px",
                 borderRadius: "50%",
                 background:
-                  systemStatus === "ONLINE" ? "#4ade80" : systemStatus === "CHECKING" ? "#fbbf24" : "#ef4444",
+                  systemStatus === "ONLINE"
+                    ? "#4ade80"
+                    : systemStatus === "CHECKING"
+                      ? "#fbbf24"
+                      : "#ef4444",
                 boxShadow: systemStatus === "ONLINE" ? "0 0 10px #4ade80" : "none",
               }}
             />
-            <span style={{ fontSize: "12px", letterSpacing: "1px", fontWeight: 600, color: "white" }}>
+            <span
+              style={{ fontSize: "12px", letterSpacing: "1px", fontWeight: 600, color: "white" }}
+            >
               {systemStatus === "ONLINE"
                 ? "SYSTEM ONLINE"
                 : systemStatus === "CHECKING"
-                ? "CHECKING SYSTEM..."
-                : "SYSTEM OFFLINE"}
+                  ? "CHECKING SYSTEM..."
+                  : "SYSTEM OFFLINE"}
             </span>
           </div>
 
-          <h1 style={{ fontSize: "60px", fontWeight: 800, marginBottom: "20px", lineHeight: "1.1" }}>
+          <h1
+            style={{ fontSize: "60px", fontWeight: 800, marginBottom: "20px", lineHeight: "1.1" }}
+          >
             NeoExcelSync <span style={{ color: "#60a5fa" }}>Platform</span>
           </h1>
 
-          <p style={{ fontSize: "18px", color: "#94a3b8", marginBottom: "40px", lineHeight: "1.6" }}>
-            Автоматизированная система сверки брокерских отчетов. Единое пространство для обработки данных Unity и АИС с
-            поддержкой сплитов и алгоритмов нечеткого поиска.
+          <p
+            style={{ fontSize: "18px", color: "#94a3b8", marginBottom: "40px", lineHeight: "1.6" }}
+          >
+            Автоматизированная система сверки брокерских отчетов. Единое пространство для обработки
+            данных Unity и АИС с поддержкой сплитов и алгоритмов нечеткого поиска.
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            <FeatureItem icon={Zap} title="Молниеносная обработка" desc="Парсинг тысяч строк Excel за секунды" />
-            <FeatureItem icon={ShieldCheck} title="Безопасность данных" desc="Локальная обработка и защищенный доступ" />
-            <FeatureItem icon={BarChart3} title="Умная аналитика" desc="Автоматическое выявление расхождений" />
+            <FeatureItem
+              icon={Zap}
+              title="Молниеносная обработка"
+              desc="Парсинг тысяч строк Excel за секунды"
+            />
+            <FeatureItem
+              icon={ShieldCheck}
+              title="Безопасность данных"
+              desc="Локальная обработка и защищенный доступ"
+            />
+            <FeatureItem
+              icon={BarChart3}
+              title="Умная аналитика"
+              desc="Автоматическое выявление расхождений"
+            />
           </div>
         </div>
       </div>
@@ -211,7 +240,9 @@ const LoginPage = ({ onLogin }) => {
       >
         <div style={{ width: "100%", maxWidth: "400px" }}>
           <div style={{ marginBottom: "30px", textAlign: "center" }}>
-            <h2 style={{ fontSize: "28px", color: "#0f172a", marginBottom: "10px" }}>Добро пожаловать!</h2>
+            <h2 style={{ fontSize: "28px", color: "#0f172a", marginBottom: "10px" }}>
+              Добро пожаловать!
+            </h2>
             <p style={{ color: "#64748b" }}>Пожалуйста, войдите в свой аккаунт</p>
           </div>
 
@@ -225,11 +256,22 @@ const LoginPage = ({ onLogin }) => {
             }}
           >
             <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "8px", fontWeight: 500, color: "#334155", fontSize: "14px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  fontWeight: 500,
+                  color: "#334155",
+                  fontSize: "14px",
+                }}
+              >
                 Логин
               </label>
               <div style={{ position: "relative" }}>
-                <User size={18} style={{ position: "absolute", left: "12px", top: "12px", color: "#94a3b8" }} />
+                <User
+                  size={18}
+                  style={{ position: "absolute", left: "12px", top: "12px", color: "#94a3b8" }}
+                />
                 <input
                   type="text"
                   value={username}
@@ -253,11 +295,22 @@ const LoginPage = ({ onLogin }) => {
             </div>
 
             <div style={{ marginBottom: "25px" }}>
-              <label style={{ display: "block", marginBottom: "8px", fontWeight: 500, color: "#334155", fontSize: "14px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  fontWeight: 500,
+                  color: "#334155",
+                  fontSize: "14px",
+                }}
+              >
                 Пароль
               </label>
               <div style={{ position: "relative" }}>
-                <Lock size={18} style={{ position: "absolute", left: "12px", top: "12px", color: "#94a3b8" }} />
+                <Lock
+                  size={18}
+                  style={{ position: "absolute", left: "12px", top: "12px", color: "#94a3b8" }}
+                />
                 <input
                   type="password"
                   value={password}
@@ -329,7 +382,9 @@ const LoginPage = ({ onLogin }) => {
             </button>
           </form>
 
-          <div style={{ marginTop: "20px", textAlign: "center", fontSize: "12px", color: "#94a3b8" }}>
+          <div
+            style={{ marginTop: "20px", textAlign: "center", fontSize: "12px", color: "#94a3b8" }}
+          >
             © 2025 NeoExcelSync. All rights reserved.
           </div>
         </div>

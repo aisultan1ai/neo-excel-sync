@@ -1,8 +1,8 @@
 import sys
 import os
 
-def resource_path(relative_path):
 
+def resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
     except Exception:
@@ -11,4 +11,4 @@ def resource_path(relative_path):
 
 
 def extract_numbers_from_series(series):
-    return series.astype(str).str.extract(r'(\d+)')[0].fillna('')
+    return series.astype(str).str.extract(r"(\d+)")[0].fillna("")

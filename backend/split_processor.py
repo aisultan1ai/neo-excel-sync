@@ -1,7 +1,6 @@
 import pandas as pd
 import logging
 import os
-import re
 
 log = logging.getLogger(__name__)
 
@@ -12,7 +11,7 @@ def read_split_file(file_path):
     """
     log.debug("Чтение файла: %s", file_path)
     try:
-        if file_path.endswith('.csv'):
+        if file_path.endswith(".csv"):
             return pd.read_csv(file_path)
         else:
             return pd.read_excel(file_path)
@@ -37,7 +36,15 @@ def find_splits(daily_file_path, settings):
     daily_acc_col = settings.get("default_acc_name_ais")
     daily_qty_col = settings.get("split_daily_qty_col")
 
-    if not all([split_file_path, split_isin_col, daily_security_col, daily_acc_col, daily_qty_col]):
+    if not all(
+        [
+            split_file_path,
+            split_isin_col,
+            daily_security_col,
+            daily_acc_col,
+            daily_qty_col,
+        ]
+    ):
         msg = "Проверка сплитов включена, но не все настройки заполнены (Путь/Столбцы) в Настройках."
         log.warning(msg)
         return (False, msg)
@@ -53,7 +60,6 @@ def find_splits(daily_file_path, settings):
         return (False, msg)
 
     try:
-
         df_splits = read_split_file(split_file_path)
         if df_splits is None:
             return (False, "Не удалось прочитать файл сплитов.")
@@ -66,14 +72,24 @@ def find_splits(daily_file_path, settings):
             return (False, f"Столбец '{split_isin_col}' не найден в файле сплитов.")
 
         required_daily_cols = [daily_security_col, daily_acc_col, daily_qty_col]
-        missing_cols = [col for col in required_daily_cols if col not in df_daily.columns]
+        missing_cols = [
+            col for col in required_daily_cols if col not in df_daily.columns
+        ]
         if missing_cols:
-            return (False, f"Столбцы {missing_cols} не найдены в ежедневном файле (АИС).")
+            return (
+                False,
+                f"Столбцы {missing_cols} не найдены в ежедневном файле (АИС).",
+            )
 
         split_isin_set = set(df_splits[split_isin_col].dropna().astype(str))
-        df_daily['ISIN_clean'] = df_daily[daily_security_col].dropna().astype(str).str.extract(r'^([A-Z0-9]+)')[0]
+        df_daily["ISIN_clean"] = (
+            df_daily[daily_security_col]
+            .dropna()
+            .astype(str)
+            .str.extract(r"^([A-Z0-9]+)")[0]
+        )
 
-        df_matches = df_daily[df_daily['ISIN_clean'].isin(split_isin_set)].copy()
+        df_matches = df_daily[df_daily["ISIN_clean"].isin(split_isin_set)].copy()
 
         if df_matches.empty:
             log.debug("Сплиты не обнаружены.")
@@ -81,19 +97,18 @@ def find_splits(daily_file_path, settings):
 
         log.info("Обнаружено %d сделок со сплитами.", len(df_matches))
 
-        df_report = df_matches[[
-            'ISIN_clean',
-            daily_acc_col,
-            daily_qty_col,
-            daily_security_col
-        ]]
+        df_report = df_matches[
+            ["ISIN_clean", daily_acc_col, daily_qty_col, daily_security_col]
+        ]
 
-        df_report = df_report.rename(columns={
-            'ISIN_clean': 'ISIN',
-            daily_acc_col: 'Счет',
-            daily_qty_col: 'Количество',
-            daily_security_col: 'Полное название ЦБ'
-        })
+        df_report = df_report.rename(
+            columns={
+                "ISIN_clean": "ISIN",
+                daily_acc_col: "Счет",
+                daily_qty_col: "Количество",
+                daily_security_col: "Полное название ЦБ",
+            }
+        )
 
         return (True, df_report)
 

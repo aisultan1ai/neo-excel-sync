@@ -49,10 +49,7 @@ const FileSection = ({
 
           if (defaultIdName) {
             const foundId = foundHeaders.find((h) =>
-              String(h)
-                .toLowerCase()
-                .trim()
-                .includes(String(defaultIdName).toLowerCase().trim())
+              String(h).toLowerCase().trim().includes(String(defaultIdName).toLowerCase().trim())
             );
             if (foundId) setIdCol(foundId);
           }
@@ -60,8 +57,7 @@ const FileSection = ({
           const foundAcc = foundHeaders.find((h) => {
             const hs = String(h || "").toLowerCase();
             return (
-              (defaultAccName &&
-                hs.includes(String(defaultAccName).toLowerCase())) ||
+              (defaultAccName && hs.includes(String(defaultAccName).toLowerCase())) ||
               hs.includes("account") ||
               hs.includes("счет")
             );
@@ -176,11 +172,7 @@ const FileSection = ({
               top: 0,
             }}
           >
-            <UploadCloud
-              size={32}
-              color="#94a3b8"
-              style={{ marginBottom: "10px" }}
-            />
+            <UploadCloud size={32} color="#94a3b8" style={{ marginBottom: "10px" }} />
             <div style={{ textAlign: "center" }}>
               <span
                 style={{
@@ -428,18 +420,21 @@ const SverkaPage = () => {
     const headers = Object.keys(data[0] || {});
     const normalizedQuery = (filterText || "").trim().toLowerCase();
 
-    const filtered =
-      !normalizedQuery
-        ? data
-        : data.filter((row) => {
-            if (filterCol) {
-              const v = row?.[filterCol];
-              return String(v ?? "").toLowerCase().includes(normalizedQuery);
-            }
-            return headers.some((h) =>
-              String(row?.[h] ?? "").toLowerCase().includes(normalizedQuery)
-            );
-          });
+    const filtered = !normalizedQuery
+      ? data
+      : data.filter((row) => {
+          if (filterCol) {
+            const v = row?.[filterCol];
+            return String(v ?? "")
+              .toLowerCase()
+              .includes(normalizedQuery);
+          }
+          return headers.some((h) =>
+            String(row?.[h] ?? "")
+              .toLowerCase()
+              .includes(normalizedQuery)
+          );
+        });
 
     return (
       <div
@@ -452,13 +447,17 @@ const SverkaPage = () => {
       >
         <table className="styled-table">
           <thead style={{ position: "sticky", top: 0, zIndex: 5 }}>
-            <tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr>
+            <tr>
+              {headers.map((h) => (
+                <th key={h}>{h}</th>
+              ))}
+            </tr>
           </thead>
           <tbody>
             {filtered.slice(0, 2000).map((row, i) => (
               <tr key={i}>
                 {headers.map((h) => (
-                  <td key={h}>{String(row?.[h] === null ? "" : row?.[h] ?? "")}</td>
+                  <td key={h}>{String(row?.[h] === null ? "" : (row?.[h] ?? ""))}</td>
                 ))}
               </tr>
             ))}
@@ -500,9 +499,7 @@ const SverkaPage = () => {
 
       {/* Верхняя часть НЕ уменьшаем */}
       <div style={{ flexShrink: 0, overflowY: "auto", paddingBottom: "20px" }}>
-        <h1 style={{ marginBottom: "20px", fontSize: "28px", color: "#1e293b" }}>
-          Сверка данных
-        </h1>
+        <h1 style={{ marginBottom: "20px", fontSize: "28px", color: "#1e293b" }}>Сверка данных</h1>
 
         <div
           className="card"
@@ -561,7 +558,9 @@ const SverkaPage = () => {
                 cursor: loading ? "not-allowed" : "pointer",
               }}
             >
-              {loading ? "Обработка..." : (
+              {loading ? (
+                "Обработка..."
+              ) : (
                 <>
                   <Play size={24} fill="white" /> Запустить сверку
                 </>

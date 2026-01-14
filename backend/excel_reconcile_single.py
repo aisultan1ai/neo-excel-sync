@@ -67,7 +67,7 @@ def parse_amount(x: object) -> Optional[float]:
     if not s:
         return None
 
-    s = s.replace("\u00A0", " ").replace(" ", "")
+    s = s.replace("\u00a0", " ").replace(" ", "")
     s = re.sub(r"[^0-9\-\.,]", "", s)
     if not s:
         return None
@@ -103,9 +103,13 @@ def reconcile_two_files(df1, df2, col1, op1_col, col2, side2_col, target=None):
     missing_1 = [c for c in [col1, op1_col] if c not in df1.columns]
     missing_2 = [c for c in [col2, side2_col] if c not in df2.columns]
     if missing_1:
-        raise ValueError(f"В файле 1 нет колонок: {missing_1}. Есть: {list(df1.columns)}")
+        raise ValueError(
+            f"В файле 1 нет колонок: {missing_1}. Есть: {list(df1.columns)}"
+        )
     if missing_2:
-        raise ValueError(f"В файле 2 нет колонок: {missing_2}. Есть: {list(df2.columns)}")
+        raise ValueError(
+            f"В файле 2 нет колонок: {missing_2}. Есть: {list(df2.columns)}"
+        )
 
     df1 = df1.copy()
     df2 = df2.copy()
@@ -125,7 +129,9 @@ def reconcile_two_files(df1, df2, col1, op1_col, col2, side2_col, target=None):
     summary = pd.concat([c1, c2], axis=1).fillna(0).astype(int).reset_index()
     summary = summary.rename(columns={"_inst": "InstrumentKey", "_dir": "Direction"})
     summary["diff_file1_minus_file2"] = summary["count_file1"] - summary["count_file2"]
-    summary = summary.sort_values(by=["InstrumentKey", "Direction"], ascending=[True, True])
+    summary = summary.sort_values(
+        by=["InstrumentKey", "Direction"], ascending=[True, True]
+    )
 
     target_df = pd.DataFrame()
     if target:
@@ -142,16 +148,28 @@ def reconcile_two_files(df1, df2, col1, op1_col, col2, side2_col, target=None):
     return summary, target_df, stats
 
 
-def find_duplicates_one_file(df, paper_col, amount_col, min_repeats=2, round_to=2, chosen_paper_key=None, chosen_amount=None):
+def find_duplicates_one_file(
+    df,
+    paper_col,
+    amount_col,
+    min_repeats=2,
+    round_to=2,
+    chosen_paper_key=None,
+    chosen_amount=None,
+):
     if paper_col not in df.columns:
         raise ValueError(f"В файле нет колонки '{paper_col}'. Есть: {list(df.columns)}")
     if amount_col not in df.columns:
-        raise ValueError(f"В файле нет колонки '{amount_col}'. Есть: {list(df.columns)}")
+        raise ValueError(
+            f"В файле нет колонки '{amount_col}'. Есть: {list(df.columns)}"
+        )
 
     df = df.copy()
     df["_paper_key"] = df[paper_col].map(norm_from_file1)
     df["_amount"] = df[amount_col].map(parse_amount)
-    df["_amount_rounded"] = df["_amount"].map(lambda v: round(v, int(round_to)) if v is not None else None)
+    df["_amount_rounded"] = df["_amount"].map(
+        lambda v: round(v, int(round_to)) if v is not None else None
+    )
 
     base = df[(df["_paper_key"] != "") & (df["_amount_rounded"].notna())].copy()
 
@@ -170,8 +188,12 @@ def find_duplicates_one_file(df, paper_col, amount_col, min_repeats=2, round_to=
     if chosen_paper_key is not None and chosen_amount is not None:
         k = str(chosen_paper_key).strip().upper()
         a = float(chosen_amount)
-        chosen_rows = base[(base["_paper_key"] == k) & (base["_amount_rounded"] == a)].copy()
-        chosen_rows = chosen_rows.drop(columns=["_amount", "_amount_rounded"], errors="ignore")
+        chosen_rows = base[
+            (base["_paper_key"] == k) & (base["_amount_rounded"] == a)
+        ].copy()
+        chosen_rows = chosen_rows.drop(
+            columns=["_amount", "_amount_rounded"], errors="ignore"
+        )
 
     export_rows = pd.DataFrame()
     if not dup_pairs.empty:
@@ -182,7 +204,9 @@ def find_duplicates_one_file(df, paper_col, amount_col, min_repeats=2, round_to=
             right_on=["PaperKey", "Amount"],
             how="inner",
         )
-        export_rows = export_rows.drop(columns=["_amount", "_amount_rounded"], errors="ignore")
+        export_rows = export_rows.drop(
+            columns=["_amount", "_amount_rounded"], errors="ignore"
+        )
 
     stats = {
         "rows_total": int(len(df)),
@@ -201,17 +225,14 @@ def register_excel_reconcile(app: FastAPI) -> None:
     async def excel_reconcile(
         mode: str = Query(..., regex="^(twofiles|duplicates)$"),
         export: int = Query(0, ge=0, le=1),
-
         file1: UploadFile = File(...),
         file2: Optional[UploadFile] = File(None),
-
         # twofiles
         col1: str = Form("Ценная бумага"),
         op1_col: str = Form("Тип операции ФИ"),
         col2: str = Form("Instrument"),
         side2_col: str = Form("Side"),
         target: str = Form(""),
-
         # duplicates
         paper_col: str = Form("Ценная бумага"),
         amount_col: str = Form("Сумма в валюте"),
@@ -225,7 +246,9 @@ def register_excel_reconcile(app: FastAPI) -> None:
 
             if mode == "twofiles":
                 if file2 is None:
-                    raise HTTPException(status_code=400, detail="Для режима twofiles нужен file2")
+                    raise HTTPException(
+                        status_code=400, detail="Для режима twofiles нужен file2"
+                    )
                 df2 = await read_table(file2)
 
                 summary, target_df, stats = reconcile_two_files(
@@ -243,7 +266,9 @@ def register_excel_reconcile(app: FastAPI) -> None:
                     return StreamingResponse(
                         BytesIO(xlsx),
                         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        headers={"Content-Disposition": 'attachment; filename="export.xlsx"'},
+                        headers={
+                            "Content-Disposition": 'attachment; filename="export.xlsx"'
+                        },
                     )
 
                 return {
@@ -265,14 +290,18 @@ def register_excel_reconcile(app: FastAPI) -> None:
             )
 
             if export == 1:
-                xlsx = to_excel_bytes_sheets({
-                    "DuplicatesSummary": dup_pairs,
-                    "DuplicatedRows": export_rows_df,
-                })
+                xlsx = to_excel_bytes_sheets(
+                    {
+                        "DuplicatesSummary": dup_pairs,
+                        "DuplicatedRows": export_rows_df,
+                    }
+                )
                 return StreamingResponse(
                     BytesIO(xlsx),
                     media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    headers={"Content-Disposition": 'attachment; filename="duplicates_export.xlsx"'},
+                    headers={
+                        "Content-Disposition": 'attachment; filename="duplicates_export.xlsx"'
+                    },
                 )
 
             return {

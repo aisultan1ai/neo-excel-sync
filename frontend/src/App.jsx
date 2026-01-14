@@ -20,6 +20,7 @@ import {
   LayoutDashboard,
   Binary,
   Wallet,
+  LogOut,
 } from "lucide-react";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -62,9 +63,9 @@ const NavButton = ({ to, icon: Icon, label }) => {
 // ---------------------------
 // Protected guard (token check)
 // ---------------------------
-const ProtectedRoute = () => {
+const ProtectedRoute = ({ token }) => {
   const location = useLocation();
-  const authed = !!getToken();
+  const authed = !!token;
 
   if (!authed) {
     const next = location.pathname + location.search + location.hash;
@@ -98,6 +99,12 @@ const AppLayout = ({ onLogout }) => {
 
           <NavButton to="/profile" icon={User} label="Профиль" />
           <NavButton to="/settings" icon={Settings} label="Настройки" />
+
+          {/* logout: чтобы onLogout использовался и было удобно юзеру */}
+          <button className="nav-btn" type="button" onClick={onLogout}>
+            <LogOut size={20} style={{ marginRight: "10px" }} />
+            Выйти
+          </button>
         </nav>
       </aside>
 
@@ -114,14 +121,14 @@ const AppLayout = ({ onLogout }) => {
 // ---------------------------
 // Login wrapper (redirect to next)
 // ---------------------------
-const LoginRoute = ({ onLogin }) => {
+const LoginRoute = ({ token, onLogin }) => {
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
   // если уже авторизован — не показываем логин
   useEffect(() => {
-    if (getToken()) navigate("/", { replace: true });
-  }, [navigate]);
+    if (token) navigate("/", { replace: true });
+  }, [token, navigate]);
 
   const handleLogin = () => {
     onLogin?.();
@@ -131,9 +138,7 @@ const LoginRoute = ({ onLogin }) => {
 
     // блокируем редиректы на API/служебные маршруты
     const blockedPrefixes = ["/token", "/api", "/health", "/docs", "/openapi"];
-    const safeNext = blockedPrefixes.some(
-      (p) => next === p || next.startsWith(p + "/")
-    )
+    const safeNext = blockedPrefixes.some((p) => next === p || next.startsWith(p + "/"))
       ? "/"
       : next;
 
@@ -145,14 +150,16 @@ const LoginRoute = ({ onLogin }) => {
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
-  const [authed, setAuthed] = useState(false);
+
+  // источник истины: token
+  const [token, setToken] = useState(() => getToken());
 
   useEffect(() => {
-    setAuthed(!!getToken());
     setIsLoading(false);
 
+    // изменения token из другой вкладки
     const onStorage = (e) => {
-      if (e.key === "token") setAuthed(!!getToken());
+      if (e.key === "token") setToken(e.newValue);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
@@ -160,11 +167,13 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
-    setAuthed(false);
-    // ProtectedRoute сам перекинет на /login
+    setToken(null);
   };
 
-  const handleLoginState = () => setAuthed(true);
+  const handleLoginState = () => {
+    // LoginPage сохраняет token в localStorage → подтягиваем сюда
+    setToken(getToken());
+  };
 
   if (isLoading) return <div>Загрузка...</div>;
 
@@ -172,10 +181,10 @@ function App() {
     <Router>
       <Routes>
         {/* public */}
-        <Route path="/login" element={<LoginRoute onLogin={handleLoginState} />} />
+        <Route path="/login" element={<LoginRoute token={token} onLogin={handleLoginState} />} />
 
         {/* protected */}
-        <Route element={<ProtectedRoute />}>
+        <Route element={<ProtectedRoute token={token} />}>
           <Route element={<AppLayout onLogout={handleLogout} />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/sverka" element={<SverkaPage />} />

@@ -20,29 +20,25 @@ def get_default_settings():
         "podft_filter_enabled": True,
         "podft_filter_col": "Рынок ЦБ",
         "podft_filter_values": "COMMODITY, CRYPTO, FOREX",
-
         "bo_enabled": True,
         "bo_unity_instrument_col": "Instrument",
         "bo_ais_sum_col": "Сумма тг",
         "bo_threshold": "45000000",
         "bo_prefixes": "[BO], [OP]",
-
         "default_id_names": ["Execution ID", "ID сделки на бирже"],
         "default_acc_name_unity": "Account",
         "default_acc_name_ais": "Субсчет в учетной организации",
         "overlap_accounts": [],
-
         # --- БЛОК ДЛЯ СПЛИТОВ ---
         "split_check_enabled": False,
         "split_list_path": "",
         "split_list_isin_col": "ID_ISIN",
         "daily_file_security_col": "Ценная бумага",
         "split_daily_qty_col": "Количество",
-
         # --- БЛОК КРИПТО ---
         "crypto_enabled": True,
         "crypto_keywords": "USDT",
-        "crypto_col": "Валюта"
+        "crypto_col": "Валюта",
     }
 
 
@@ -53,10 +49,9 @@ def load_settings():
         return save_settings(get_default_settings())
 
     try:
-        with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
             content = f.read().strip()
             if not content:
-
                 return save_settings(get_default_settings())
             loaded_settings = json.loads(content)
 
@@ -89,10 +84,12 @@ def load_settings():
 def save_settings(settings):
     """Сохраняет словарь настроек в JSON-файл."""
     try:
-        with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=4, ensure_ascii=False)
         return settings
     except Exception as e:
-        log.error(f"Не удалось сохранить настройки в {SETTINGS_FILE}: {e}", exc_info=True)
+        log.error(
+            f"Не удалось сохранить настройки в {SETTINGS_FILE}: {e}", exc_info=True
+        )
 
         return settings

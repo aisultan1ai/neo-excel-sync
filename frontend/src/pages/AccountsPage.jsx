@@ -1,5 +1,5 @@
 // src/pages/AccountsPage.jsx
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { api } from "../api";
 import { toast } from "react-toastify";
 import {
@@ -66,23 +66,50 @@ const normalizeTransfer = (t) => ({
   toId: t.toId ?? t.to_account_id ?? t.toAccountId ?? null,
 });
 
+const normalizeEdge = (e) => {
+  // чтобы при загрузке схемы стрелки всегда были "как реальные"
+  const id = e?.id ?? `e-${e?.source}-${e?.target}-${Date.now()}`;
+  const label = e?.label ?? "";
+  return {
+    ...e,
+    id,
+    animated: e?.animated ?? true,
+    label,
+    style: {
+      stroke: "#7c3aed",
+      strokeWidth: 2.5,
+      filter: "drop-shadow(0 6px 10px rgba(124,58,237,0.25))",
+      ...(e?.style || {}),
+    },
+    labelStyle: { fill: "#7c3aed", fontWeight: 600, ...(e?.labelStyle || {}) },
+    markerEnd: { type: MarkerType.ArrowClosed, color: "#7c3aed", ...(e?.markerEnd || {}) },
+    data: e?.data || {},
+  };
+};
+
 // =====================================================
 // API CALLS
 // =====================================================
 const fetchCryptoAccounts = async () => unwrap((await api.get("/crypto/accounts")).data);
-const createCryptoAccount = async (payload) => unwrap((await api.post("/crypto/accounts", payload)).data);
-const updateCryptoAccount = async (id, payload) => unwrap((await api.put(`/crypto/accounts/${id}`, payload)).data);
-const deleteCryptoAccount = async (id) => unwrap((await api.delete(`/crypto/accounts/${id}`)).data);
+const createCryptoAccount = async (payload) =>
+  unwrap((await api.post("/crypto/accounts", payload)).data);
+const updateCryptoAccount = async (id, payload) =>
+  unwrap((await api.put(`/crypto/accounts/${id}`, payload)).data);
+const deleteCryptoAccount = async (id) =>
+  unwrap((await api.delete(`/crypto/accounts/${id}`)).data);
 
 const fetchTransfers = async () => unwrap((await api.get("/crypto/transfers")).data);
-const createTransfer = async (payload) => unwrap((await api.post("/crypto/transfers", payload)).data);
+const createTransfer = async (payload) =>
+  unwrap((await api.post("/crypto/transfers", payload)).data);
 
 // ВАЖНО: этот endpoint должен быть добавлен на backend:
 // DELETE /api/crypto/transfers/{transfer_id}
-const deleteTransferApi = async (id) => unwrap((await api.delete(`/crypto/transfers/${id}`)).data);
+const deleteTransferApi = async (id) =>
+  unwrap((await api.delete(`/crypto/transfers/${id}`)).data);
 
 const fetchSchemes = async () => unwrap((await api.get("/crypto/schemes")).data);
-const createSchemeApi = async (payload) => unwrap((await api.post("/crypto/schemes", payload)).data);
+const createSchemeApi = async (payload) =>
+  unwrap((await api.post("/crypto/schemes", payload)).data);
 const deleteSchemeApi = async (id) => unwrap((await api.delete(`/crypto/schemes/${id}`)).data);
 
 // =====================================================
@@ -140,8 +167,10 @@ const Modal = ({ open, title, subtitle, children, onClose, footer, width = 860 }
           }}
         >
           <div>
-            <div style={{ fontWeight: 900, color: "#0f172a", fontSize: 16 }}>{title}</div>
-            {subtitle ? <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>{subtitle}</div> : null}
+            <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 16 }}>{title}</div>
+            {subtitle ? (
+              <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>{subtitle}</div>
+            ) : null}
           </div>
           <button
             onClick={onClose}
@@ -183,10 +212,99 @@ const Modal = ({ open, title, subtitle, children, onClose, footer, width = 860 }
   );
 };
 
+// =====================================================
+// CONFIRM DIALOG (custom вместо window.confirm)
+// =====================================================
+const useConfirm = () => {
+  const [cfg, setCfg] = useState(null);
+  const resolverRef = useRef(null);
+
+  const confirm = useCallback((options) => {
+    return new Promise((resolve) => {
+      resolverRef.current = resolve;
+      setCfg({
+        open: true,
+        title: options?.title || "Подтверждение",
+        subtitle: options?.subtitle || "",
+        confirmText: options?.confirmText || "Да",
+        cancelText: options?.cancelText || "Отмена",
+        danger: !!options?.danger,
+      });
+    });
+  }, []);
+
+  const close = useCallback((result) => {
+    setCfg(null);
+    const r = resolverRef.current;
+    resolverRef.current = null;
+    r?.(result);
+  }, []);
+
+  const ConfirmDialog = useCallback(() => {
+    if (!cfg?.open) return null;
+
+    return (
+      <Modal
+        open={cfg.open}
+        title={cfg.title}
+        subtitle={cfg.subtitle}
+        onClose={() => close(false)}
+        width={560}
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => close(false)}>
+              {cfg.cancelText}
+            </button>
+
+            <button
+              className="btn-primary"
+              onClick={() => close(true)}
+              style={{
+                background: cfg.danger ? "#ef4444" : undefined,
+                borderColor: cfg.danger ? "#ef4444" : undefined,
+              }}
+            >
+              {cfg.confirmText}
+            </button>
+          </>
+        }
+      >
+        <div
+          style={{
+            fontSize: 13,
+            color: "#64748b",
+            lineHeight: 1.45,
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: 12,
+            padding: 12,
+          }}
+        >
+          {cfg.danger ? (
+            <div style={{ fontWeight: 700, color: "#b91c1c", marginBottom: 6 }}>
+              Действие необратимо.
+            </div>
+          ) : null}
+          <div>Подтвердить действие?</div>
+        </div>
+      </Modal>
+    );
+  }, [cfg, close]);
+
+  return { confirm, ConfirmDialog };
+};
+
 const Field = ({ label, hint, children }) => (
   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-      <div style={{ fontSize: 12, fontWeight: 900, color: "#475569" }}>{label}</div>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>{label}</div>
       {hint ? <div style={{ fontSize: 11, color: "#94a3b8" }}>{hint}</div> : null}
     </div>
     {children}
@@ -195,16 +313,27 @@ const Field = ({ label, hint, children }) => (
 
 const EmptyState = ({ title, text, action }) => (
   <div className="card" style={{ padding: 18, textAlign: "center" }}>
-    <div style={{ fontWeight: 900, color: "#0f172a", fontSize: 16 }}>{title}</div>
+    <div style={{ fontWeight: 700, color: "#0f172a", fontSize: 16 }}>{title}</div>
     <div style={{ marginTop: 8, color: "#64748b", fontSize: 13, lineHeight: 1.4 }}>{text}</div>
     {action ? <div style={{ marginTop: 14 }}>{action}</div> : null}
   </div>
 );
 
-const ProviderInput = ({ value, onChange, listId = "providers-any", placeholder = "Например: Binance / Ledger / Kaspi" }) => {
+const ProviderInput = ({
+  value,
+  onChange,
+  listId = "providers-any",
+  placeholder = "Например: Binance / Ledger / Kaspi",
+}) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <input className="text-input" list={listId} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      <input
+        className="text-input"
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
       <datalist id={listId}>
         {PROVIDERS.map((p) => (
           <option key={p} value={p} />
@@ -219,7 +348,7 @@ const ProviderInput = ({ value, onChange, listId = "providers-any", placeholder 
             onClick={() => onChange(p)}
             style={{
               fontSize: 12,
-              fontWeight: 900,
+              fontWeight: 600,
               padding: "6px 10px",
               borderRadius: 999,
               border: "1px solid #e2e8f0",
@@ -234,7 +363,9 @@ const ProviderInput = ({ value, onChange, listId = "providers-any", placeholder 
         ))}
       </div>
 
-      <div style={{ fontSize: 12, color: "#94a3b8" }}>Можно выбрать из подсказок или написать свой провайдер вручную.</div>
+      <div style={{ fontSize: 12, color: "#94a3b8" }}>
+        Можно выбрать из подсказок или написать свой провайдер вручную.
+      </div>
     </div>
   );
 };
@@ -254,15 +385,26 @@ const AccountNode = ({ data }) => {
         minWidth: 200,
       }}
     >
-      <Handle type="target" position={Position.Top} style={{ background: "#7c3aed", width: 10, height: 10 }} />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+      <Handle
+        type="target"
+        position={Position.Top}
+        style={{ background: "#7c3aed", width: 10, height: 10 }}
+      />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+        }}
+      >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 900, color: "#7c3aed", textTransform: "uppercase" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", textTransform: "uppercase" }}>
             {data.provider || "Provider"}
           </div>
           <div
             style={{
-              fontWeight: 900,
+              fontWeight: 700,
               color: "#0f172a",
               fontSize: 14,
               whiteSpace: "nowrap",
@@ -277,7 +419,7 @@ const AccountNode = ({ data }) => {
           <div
             style={{
               fontSize: 11,
-              fontWeight: 900,
+              fontWeight: 600,
               color: "#0ea5e9",
               background: "#e0f2fe",
               padding: "4px 8px",
@@ -290,7 +432,11 @@ const AccountNode = ({ data }) => {
           </div>
         ) : null}
       </div>
-      <Handle type="source" position={Position.Bottom} style={{ background: "#7c3aed", width: 10, height: 10 }} />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        style={{ background: "#7c3aed", width: 10, height: 10 }}
+      />
     </div>
   );
 };
@@ -325,8 +471,12 @@ const EdgeTxModal = ({ open, onClose, onSubmit, fromTitle, toTitle }) => {
       width={720}
       footer={
         <>
-          <button className="btn-secondary" onClick={onClose}>Отмена</button>
-          <button className="btn-primary" onClick={submit}>Создать стрелку</button>
+          <button className="btn-secondary" onClick={onClose}>
+            Отмена
+          </button>
+          <button className="btn-primary" onClick={submit}>
+            Создать стрелку
+          </button>
         </>
       }
     >
@@ -351,7 +501,7 @@ const EdgeTxModal = ({ open, onClose, onSubmit, fromTitle, toTitle }) => {
                     gap: 8,
                     alignItems: "center",
                     justifyContent: "center",
-                    fontWeight: 900,
+                    fontWeight: 600,
                     color: active ? "#2563eb" : "#334155",
                   }}
                 >
@@ -392,8 +542,19 @@ const EdgeTxModal = ({ open, onClose, onSubmit, fromTitle, toTitle }) => {
           />
         </Field>
 
-        <div style={{ gridColumn: "1 / -1", fontSize: 12, color: "#64748b", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 12 }}>
-          Подсказка: стрелки в схеме — это переводы между счетами. Пополнение/вывод добавляй через “Операция” (External).
+        <div
+          style={{
+            gridColumn: "1 / -1",
+            fontSize: 12,
+            color: "#64748b",
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: 12,
+            padding: 12,
+          }}
+        >
+          Подсказка: стрелки в схеме — это переводы между счетами. Пополнение/вывод добавляй через
+          “Операция” (External).
         </div>
       </div>
     </Modal>
@@ -423,26 +584,42 @@ const SaveSchemeModal = ({ open, onClose, onSave }) => {
       width={640}
       footer={
         <>
-          <button className="btn-secondary" onClick={onClose}>Отмена</button>
-          <button className="btn-primary" onClick={submit} disabled={!name.trim()} style={{ opacity: !name.trim() ? 0.6 : 1 }}>
+          <button className="btn-secondary" onClick={onClose}>
+            Отмена
+          </button>
+          <button
+            className="btn-primary"
+            onClick={submit}
+            disabled={!name.trim()}
+            style={{ opacity: !name.trim() ? 0.6 : 1 }}
+          >
             Сохранить
           </button>
         </>
       }
     >
       <Field label="Название схемы">
-        <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Например: Основной поток / Январь 2026" autoFocus />
+        <input
+          className="text-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Например: Основной поток / Январь 2026"
+          autoFocus
+        />
       </Field>
-      <div style={{ marginTop: 10, fontSize: 12, color: "#94a3b8" }}>Схема сохраняет расположение узлов и стрелки (edges).</div>
+      <div style={{ marginTop: 10, fontSize: 12, color: "#94a3b8" }}>
+        Схема сохраняет расположение узлов и стрелки (edges).
+      </div>
     </Modal>
   );
 };
 
 // =====================================================
 // VISUAL EDITOR
-// - красивый edge (анимация) + стрелка + подсветка
-// - FIX: без бесконечных перерендеров
-// - можно удалять стрелку прямо в редакторе (Del/Backspace)
+// FIX для "сохранил схему — не видно стрелки":
+// 1) при загрузке схемы нормализуем edges (markerEnd/style/labelStyle)
+// 2) при добавлении edge сохраняем data.tx + label
+// 3) при сохранении схемы сохраняем ТЕКУЩИЕ edges из state (уже с нормальными стилями)
 // =====================================================
 const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSaveScheme }) => {
   const baseNodes = useMemo(() => {
@@ -458,7 +635,9 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
   }, [initialData?.id, accounts]);
 
   const baseEdges = useMemo(() => {
-    if (initialData?.edges && Array.isArray(initialData.edges)) return initialData.edges;
+    if (initialData?.edges && Array.isArray(initialData.edges)) {
+      return initialData.edges.map(normalizeEdge);
+    }
     return [];
   }, [initialData?.id]);
 
@@ -517,17 +696,12 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
 
     const edgeId = `e-${params.source}-${params.target}-${Date.now()}`;
 
-    // красивый стиль + анимация + стрелка + glow
-    const newEdge = {
+    const newEdge = normalizeEdge({
       ...params,
       id: params.id || edgeId,
-      animated: true,
       label,
       data: { tx: safeTx },
-      style: { stroke: "#7c3aed", strokeWidth: 2.5, filter: "drop-shadow(0 6px 10px rgba(124,58,237,0.25))" },
-      labelStyle: { fill: "#7c3aed", fontWeight: 900 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: "#7c3aed" },
-    };
+    });
 
     setEdges((eds) => addEdge(newEdge, eds));
 
@@ -552,20 +726,34 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
   };
 
   const doSaveScheme = (name) => {
-    onSaveScheme?.(name, nodes, edges);
+    const safeEdges = (edges || []).map(normalizeEdge);
+    const safeNodes = nodes || [];
+    onSaveScheme?.(name, safeNodes, safeEdges);
     setOpenSaveScheme(false);
   };
 
-  // удаление edge в редакторе (только визуально), чтобы “история операций” не трогалась
-  const onKeyDown = useCallback((e) => {
-    if (e.key === "Delete" || e.key === "Backspace") {
-      // ReactFlow сам удаляет selected elements, если включить deleteKeyCode
-      // но мы сделаем аккуратно: пусть ReactFlow это делает сам.
-    }
-  }, []);
+  const defaultEdgeOptions = useMemo(
+    () =>
+      normalizeEdge({
+        animated: true,
+        data: {},
+        label: "",
+      }),
+    []
+  );
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "white", zIndex: 2100, display: "flex", flexDirection: "column" }} onKeyDown={onKeyDown} tabIndex={-1}>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "white",
+        zIndex: 2100,
+        display: "flex",
+        flexDirection: "column",
+      }}
+      tabIndex={-1}
+    >
       <EdgeTxModal
         open={openEdgeModal}
         onClose={() => {
@@ -573,17 +761,40 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
           setPendingConnect(null);
         }}
         onSubmit={confirmEdge}
-        fromTitle={pendingConnect ? `${pendingConnect.fromNode.data.provider} — ${pendingConnect.fromNode.data.name}` : ""}
-        toTitle={pendingConnect ? `${pendingConnect.toNode.data.provider} — ${pendingConnect.toNode.data.name}` : ""}
+        fromTitle={
+          pendingConnect
+            ? `${pendingConnect.fromNode.data.provider} — ${pendingConnect.fromNode.data.name}`
+            : ""
+        }
+        toTitle={
+          pendingConnect
+            ? `${pendingConnect.toNode.data.provider} — ${pendingConnect.toNode.data.name}`
+            : ""
+        }
       />
 
-      <SaveSchemeModal open={openSaveScheme} onClose={() => setOpenSaveScheme(false)} onSave={doSaveScheme} />
+      <SaveSchemeModal
+        open={openSaveScheme}
+        onClose={() => setOpenSaveScheme(false)}
+        onSave={doSaveScheme}
+      />
 
-      <div style={{ padding: "14px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc" }}>
+      <div
+        style={{
+          padding: "14px 18px",
+          borderBottom: "1px solid #e2e8f0",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: "#f8fafc",
+        }}
+      >
         <div>
-          <div style={{ fontWeight: 900, fontSize: 16, color: "#0f172a" }}>Визуальный редактор потоков</div>
+          <div style={{ fontWeight: 700, fontSize: 16, color: "#0f172a" }}>
+            Визуальный редактор потоков
+          </div>
           <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>
-            Соединяй счета стрелками. Сумма вводится в модалке. (Удалить стрелку в редакторе: выдели → Del)
+            Соединяй счета стрелками. Сумма вводится в модалке. (Удалить стрелку: выдели → Del)
           </div>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -591,11 +802,24 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
             onClick={() => setOpenSaveScheme(true)}
             className="btn-primary"
             style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center" }}
-            disabled={nodes.length === 0}
+            disabled={(nodes || []).length === 0}
           >
             <Save size={16} /> Сохранить схему
           </button>
-          <button onClick={onClose} style={{ border: "1px solid #e2e8f0", background: "white", borderRadius: 10, width: 40, height: 40, cursor: "pointer", display: "grid", placeItems: "center" }} title="Закрыть">
+          <button
+            onClick={onClose}
+            style={{
+              border: "1px solid #e2e8f0",
+              background: "white",
+              borderRadius: 10,
+              width: 40,
+              height: 40,
+              cursor: "pointer",
+              display: "grid",
+              placeItems: "center",
+            }}
+            title="Закрыть"
+          >
             <X size={18} />
           </button>
         </div>
@@ -607,7 +831,9 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
             <EmptyState
               title="Нет счетов для схемы"
               text="Сначала добавь хотя бы один счет. Потом откроем редактор и нарисуем потоки."
-              action={<div style={{ color: "#94a3b8", fontSize: 12 }}>Закрой редактор и создай счет слева.</div>}
+              action={
+                <div style={{ color: "#94a3b8", fontSize: 12 }}>Закрой редактор и создай счет слева.</div>
+              }
             />
           </div>
         ) : (
@@ -621,12 +847,7 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
             fitView
             deleteKeyCode={["Backspace", "Delete"]}
             selectionKeyCode={["Shift"]}
-            defaultEdgeOptions={{
-              animated: true,
-              style: { stroke: "#7c3aed", strokeWidth: 2.5, filter: "drop-shadow(0 6px 10px rgba(124,58,237,0.25))" },
-              markerEnd: { type: MarkerType.ArrowClosed, color: "#7c3aed" },
-              labelStyle: { fill: "#7c3aed", fontWeight: 900 },
-            }}
+            defaultEdgeOptions={defaultEdgeOptions}
           >
             <Controls />
             <MiniMap style={{ height: 120 }} />
@@ -642,6 +863,8 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
 // CRYPTO TAB
 // =====================================================
 const CryptoTab = () => {
+  const { confirm, ConfirmDialog } = useConfirm();
+
   const [showVisualEditor, setShowVisualEditor] = useState(false);
 
   const [accounts, setAccounts] = useState([]);
@@ -719,7 +942,8 @@ const CryptoTab = () => {
   };
 
   const saveAccount = async () => {
-    if (!accForm.provider.trim() || !accForm.name.trim()) return toast.warning("Заполните провайдер и название счета");
+    if (!accForm.provider.trim() || !accForm.name.trim())
+      return toast.warning("Заполните провайдер и название счета");
 
     const payload = {
       provider: accForm.provider.trim(),
@@ -742,8 +966,17 @@ const CryptoTab = () => {
     }
   };
 
+  // ✅ custom confirm
   const deleteAccount = async (id) => {
-    if (!window.confirm("Удалить счет?")) return;
+    const ok = await confirm({
+      title: "Удалить счет?",
+      subtitle: "Счет будет удален навсегда.",
+      confirmText: "Удалить",
+      cancelText: "Отмена",
+      danger: true,
+    });
+    if (!ok) return;
+
     try {
       await deleteCryptoAccount(id);
       toast.info("Счет удален");
@@ -810,8 +1043,17 @@ const CryptoTab = () => {
     }
   };
 
+  // ✅ custom confirm
   const deleteTransfer = async (id) => {
-    if (!window.confirm("Удалить операцию навсегда?")) return;
+    const ok = await confirm({
+      title: "Удалить операцию?",
+      subtitle: "Операция будет удалена навсегда и исчезнет из истории.",
+      confirmText: "Удалить",
+      cancelText: "Отмена",
+      danger: true,
+    });
+    if (!ok) return;
+
     try {
       await deleteTransferApi(id);
       toast.info("Операция удалена");
@@ -832,8 +1074,17 @@ const CryptoTab = () => {
     }
   };
 
+  // ✅ custom confirm
   const deleteScheme = async (id) => {
-    if (!window.confirm("Удалить схему?")) return;
+    const ok = await confirm({
+      title: "Удалить схему?",
+      subtitle: "Схема потоков будет удалена навсегда. Счета и операции не удаляются.",
+      confirmText: "Удалить",
+      cancelText: "Отмена",
+      danger: true,
+    });
+    if (!ok) return;
+
     try {
       await deleteSchemeApi(id);
       toast.info("Схема удалена");
@@ -863,380 +1114,617 @@ const CryptoTab = () => {
   };
 
   const loadScheme = (s) => {
-    setSchemeToLoad(s);
+    const safe = {
+      ...s,
+      nodes: Array.isArray(s?.nodes) ? s.nodes : [],
+      edges: Array.isArray(s?.edges) ? s.edges.map(normalizeEdge) : [],
+    };
+    setSchemeToLoad(safe);
     setShowVisualEditor(true);
   };
 
   const hasAccounts = (accounts || []).length > 0;
 
   return (
-    <div style={{ display: "flex", gap: 16, height: "100%", overflow: "hidden" }}>
-      {showVisualEditor ? (
-        <VisualEditorModal
-          accounts={accounts}
-          initialData={schemeToLoad}
-          onAddTransfer={addTransferFromVisual}
-          onSaveScheme={saveScheme}
-          onClose={() => setShowVisualEditor(false)}
-        />
-      ) : null}
+    <>
+      <ConfirmDialog />
 
-      {/* MODAL: account */}
-      <Modal
-        open={openAccModal}
-        title={editingAcc ? "Редактировать крипто-счет" : "Новый крипто-счет"}
-        subtitle="Счет провайдера (биржа/кошелек). Он станет узлом в схеме."
-        onClose={() => setOpenAccModal(false)}
-        footer={
-          <>
-            <button className="btn-secondary" onClick={() => setOpenAccModal(false)}>Отмена</button>
-            <button
-              className="btn-primary"
-              onClick={saveAccount}
-              disabled={!accForm.provider.trim() || !accForm.name.trim()}
-              style={{ opacity: !accForm.provider.trim() || !accForm.name.trim() ? 0.6 : 1 }}
-            >
-              {editingAcc ? "Сохранить" : "Создать"}
-            </button>
-          </>
-        }
-      >
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="Провайдер" hint="Выбери из подсказок или напиши свой">
-            <ProviderInput
-              value={accForm.provider}
-              onChange={(v) => setAccForm((p) => ({ ...p, provider: v }))}
-              listId="providers-crypto"
-              placeholder="Например: Binance / Ledger / Metamask"
-            />
-          </Field>
+      <div style={{ display: "flex", gap: 16, height: "100%", overflow: "hidden" }}>
+        {showVisualEditor ? (
+          <VisualEditorModal
+            accounts={accounts}
+            initialData={schemeToLoad}
+            onAddTransfer={addTransferFromVisual}
+            onSaveScheme={saveScheme}
+            onClose={() => setShowVisualEditor(false)}
+          />
+        ) : null}
 
-          <Field label="Актив (необязательно)" hint="USDT / BTC / ETH...">
-            <input
-              className="text-input"
-              value={accForm.asset}
-              onChange={(e) => setAccForm((p) => ({ ...p, asset: (e.target.value || "").toUpperCase() }))}
-              placeholder="USDT"
-            />
-          </Field>
+        {/* MODAL: account */}
+        <Modal
+          open={openAccModal}
+          title={editingAcc ? "Редактировать крипто-счет" : "Новый крипто-счет"}
+          subtitle="Счет провайдера (биржа/кошелек). Он станет узлом в схеме."
+          onClose={() => setOpenAccModal(false)}
+          footer={
+            <>
+              <button className="btn-secondary" onClick={() => setOpenAccModal(false)}>
+                Отмена
+              </button>
+              <button
+                className="btn-primary"
+                onClick={saveAccount}
+                disabled={!accForm.provider.trim() || !accForm.name.trim()}
+                style={{ opacity: !accForm.provider.trim() || !accForm.name.trim() ? 0.6 : 1 }}
+              >
+                {editingAcc ? "Сохранить" : "Создать"}
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Field label="Провайдер" hint="Выбери из подсказок или напиши свой">
+              <ProviderInput
+                value={accForm.provider}
+                onChange={(v) => setAccForm((p) => ({ ...p, provider: v }))}
+                listId="providers-crypto"
+                placeholder="Например: Binance / Ledger / Metamask"
+              />
+            </Field>
 
-          <div style={{ gridColumn: "1 / -1" }}>
-            <Field label="Название счета" hint="Spot / Futures / Cold Storage...">
+            <Field label="Актив (необязательно)" hint="USDT / BTC / ETH...">
               <input
                 className="text-input"
-                value={accForm.name}
-                onChange={(e) => setAccForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="Spot Wallet"
+                value={accForm.asset}
+                onChange={(e) =>
+                  setAccForm((p) => ({ ...p, asset: (e.target.value || "").toUpperCase() }))
+                }
+                placeholder="USDT"
               />
             </Field>
-          </div>
-        </div>
-      </Modal>
 
-      {/* MODAL: transfer */}
-      <Modal
-        open={openTransferModal}
-        title="Добавить операцию"
-        subtitle="Запись попадет в историю. Для визуализации — используй схему потоков."
-        onClose={() => setOpenTransferModal(false)}
-        width={820}
-        footer={
-          <>
-            <button className="btn-secondary" onClick={() => setOpenTransferModal(false)}>Отмена</button>
-            <button
-              className="btn-primary"
-              onClick={saveTransfer}
-              disabled={
-                !transferForm.amount ||
-                !transferForm.asset.trim() ||
-                (transferForm.type === "transfer" && (!transferForm.fromId || !transferForm.toId)) ||
-                (transferForm.type === "deposit" && !transferForm.toId) ||
-                (transferForm.type === "withdraw" && !transferForm.fromId)
-              }
-              style={{
-                opacity:
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Field label="Название счета" hint="Spot / Futures / Cold Storage...">
+                <input
+                  className="text-input"
+                  value={accForm.name}
+                  onChange={(e) => setAccForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="Spot Wallet"
+                />
+              </Field>
+            </div>
+          </div>
+        </Modal>
+
+        {/* MODAL: transfer */}
+        <Modal
+          open={openTransferModal}
+          title="Добавить операцию"
+          subtitle="Запись попадет в историю. Для визуализации — используй схему потоков."
+          onClose={() => setOpenTransferModal(false)}
+          width={820}
+          footer={
+            <>
+              <button className="btn-secondary" onClick={() => setOpenTransferModal(false)}>
+                Отмена
+              </button>
+              <button
+                className="btn-primary"
+                onClick={saveTransfer}
+                disabled={
                   !transferForm.amount ||
                   !transferForm.asset.trim() ||
-                  (transferForm.type === "transfer" && (!transferForm.fromId || !transferForm.toId)) ||
+                  (transferForm.type === "transfer" &&
+                    (!transferForm.fromId || !transferForm.toId)) ||
                   (transferForm.type === "deposit" && !transferForm.toId) ||
                   (transferForm.type === "withdraw" && !transferForm.fromId)
-                    ? 0.6
-                    : 1,
+                }
+                style={{
+                  opacity:
+                    !transferForm.amount ||
+                    !transferForm.asset.trim() ||
+                    (transferForm.type === "transfer" &&
+                      (!transferForm.fromId || !transferForm.toId)) ||
+                    (transferForm.type === "deposit" && !transferForm.toId) ||
+                    (transferForm.type === "withdraw" && !transferForm.fromId)
+                      ? 0.6
+                      : 1,
+                }}
+              >
+                Записать
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Field label="Дата">
+              <input
+                type="date"
+                className="text-input"
+                value={transferForm.date}
+                onChange={(e) => setTransferForm((p) => ({ ...p, date: e.target.value }))}
+              />
+            </Field>
+
+            <Field label="Тип операции">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                {TX_TYPES.map((t) => {
+                  const Icon = t.icon;
+                  const active = transferForm.type === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setTransferForm((p) => ({ ...p, type: t.id }))}
+                      style={{
+                        borderRadius: 12,
+                        border: `1px solid ${active ? "#3b82f6" : "#e2e8f0"}`,
+                        background: active ? "#eff6ff" : "#fff",
+                        padding: "10px 10px",
+                        cursor: "pointer",
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: 600,
+                        color: active ? "#2563eb" : "#334155",
+                      }}
+                    >
+                      <Icon size={16} />
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+
+            <Field label="Сумма">
+              <input
+                className="text-input"
+                type="number"
+                step="0.00000001"
+                value={transferForm.amount}
+                onChange={(e) => setTransferForm((p) => ({ ...p, amount: e.target.value }))}
+                placeholder="1000"
+              />
+            </Field>
+
+            <Field label="Актив">
+              <input
+                className="text-input"
+                value={transferForm.asset}
+                onChange={(e) =>
+                  setTransferForm((p) => ({ ...p, asset: (e.target.value || "").toUpperCase() }))
+                }
+                placeholder="USDT"
+              />
+            </Field>
+
+            <Field
+              label="Откуда"
+              hint={transferForm.type === "deposit" ? "Для пополнения можно оставить External" : ""}
+            >
+              <select
+                className="text-input"
+                value={transferForm.fromId}
+                onChange={(e) => setTransferForm((p) => ({ ...p, fromId: e.target.value }))}
+              >
+                <option value="">(External)</option>
+                {(accounts || []).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.provider} — {a.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field
+              label="Куда"
+              hint={transferForm.type === "withdraw" ? "Для вывода можно оставить External" : ""}
+            >
+              <select
+                className="text-input"
+                value={transferForm.toId}
+                onChange={(e) => setTransferForm((p) => ({ ...p, toId: e.target.value }))}
+              >
+                <option value="">(External)</option>
+                {(accounts || []).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.provider} — {a.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Field label="Комментарий (необязательно)">
+                <input
+                  className="text-input"
+                  value={transferForm.comment}
+                  onChange={(e) => setTransferForm((p) => ({ ...p, comment: e.target.value }))}
+                  placeholder="Например: распределение маржи"
+                />
+              </Field>
+            </div>
+          </div>
+        </Modal>
+
+        {/* LEFT */}
+        <div
+          style={{
+            width: 360,
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+            flexShrink: 0,
+            overflowY: "auto",
+          }}
+        >
+          <div className="card" style={{ padding: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              className="btn-primary"
+              onClick={openCreateAccount}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flex: 1,
+                justifyContent: "center",
               }}
             >
-              Записать
+              <Plus size={18} /> Добавить счет
             </button>
-          </>
-        }
-      >
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Field label="Дата">
-            <input type="date" className="text-input" value={transferForm.date} onChange={(e) => setTransferForm((p) => ({ ...p, date: e.target.value }))} />
-          </Field>
+            <button
+              className="btn-secondary"
+              onClick={openTransfer}
+              disabled={!hasAccounts}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flex: 1,
+                justifyContent: "center",
+                opacity: !hasAccounts ? 0.6 : 1,
+              }}
+              title={!hasAccounts ? "Сначала добавьте счет" : ""}
+            >
+              <History size={18} /> Операция
+            </button>
+          </div>
 
-          <Field label="Тип операции">
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-              {TX_TYPES.map((t) => {
-                const Icon = t.icon;
-                const active = transferForm.type === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setTransferForm((p) => ({ ...p, type: t.id }))}
+          <div
+            className="card-gradient"
+            onClick={() => (hasAccounts ? openEmptyEditor() : toast.info("Сначала добавь хотя бы один счет"))}
+            style={{
+              cursor: "pointer",
+              padding: 16,
+              color: "white",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              opacity: hasAccounts ? 1 : 0.75,
+            }}
+            title={!hasAccounts ? "Добавьте счет, затем откройте схему" : ""}
+          >
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>Схема потоков</div>
+              <div style={{ marginTop: 4, opacity: 0.85, fontSize: 12 }}>
+                Открыть визуальный редактор
+              </div>
+            </div>
+            <Maximize2 size={22} />
+          </div>
+
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <div
+              style={{
+                padding: 12,
+                borderBottom: "1px solid #e2e8f0",
+                background: "#f1f5f9",
+                fontWeight: 700,
+                color: "#475569",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <FolderOpen size={18} /> Схемы
+            </div>
+
+            <div>
+              {schemes.length === 0 ? (
+                <div style={{ padding: 12 }}>
+                  <EmptyState
+                    title="Схем пока нет"
+                    text="Нарисуй потоки в редакторе и сохрани схему, чтобы быстро возвращаться к структуре."
+                    action={
+                      <button
+                        className="btn-primary"
+                        onClick={() => (hasAccounts ? openEmptyEditor() : toast.info("Сначала добавь счет"))}
+                      >
+                        Открыть редактор
+                      </button>
+                    }
+                  />
+                </div>
+              ) : (
+                schemes.map((s) => (
+                  <div
+                    key={s.id}
+                    className="list-item"
                     style={{
-                      borderRadius: 12,
-                      border: `1px solid ${active ? "#3b82f6" : "#e2e8f0"}`,
-                      background: active ? "#eff6ff" : "#fff",
-                      padding: "10px 10px",
-                      cursor: "pointer",
+                      padding: "10px 12px",
+                      borderBottom: "1px solid #f1f5f9",
                       display: "flex",
-                      gap: 8,
+                      justifyContent: "space-between",
                       alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: 900,
-                      color: active ? "#2563eb" : "#334155",
+                      gap: 10,
                     }}
                   >
-                    <Icon size={16} />
-                    {t.label}
-                  </button>
-                );
-              })}
+                    <div onClick={() => loadScheme(s)} style={{ cursor: "pointer", flex: 1 }}>
+                      <div style={{ fontWeight: 700 }}>{s.name}</div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                        {s.created_at ? String(s.created_at).slice(0, 10) : ""}
+                      </div>
+                    </div>
+                    <Trash2
+                      size={16}
+                      style={{ cursor: "pointer", color: "#cbd5e1" }}
+                      onClick={() => deleteScheme(s.id)}
+                    />
+                  </div>
+                ))
+              )}
             </div>
-          </Field>
-
-          <Field label="Сумма">
-            <input className="text-input" type="number" step="0.00000001" value={transferForm.amount} onChange={(e) => setTransferForm((p) => ({ ...p, amount: e.target.value }))} placeholder="1000" />
-          </Field>
-
-          <Field label="Актив">
-            <input className="text-input" value={transferForm.asset} onChange={(e) => setTransferForm((p) => ({ ...p, asset: (e.target.value || "").toUpperCase() }))} placeholder="USDT" />
-          </Field>
-
-          <Field label="Откуда" hint={transferForm.type === "deposit" ? "Для пополнения можно оставить External" : ""}>
-            <select className="text-input" value={transferForm.fromId} onChange={(e) => setTransferForm((p) => ({ ...p, fromId: e.target.value }))}>
-              <option value="">(External)</option>
-              {(accounts || []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.provider} — {a.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Куда" hint={transferForm.type === "withdraw" ? "Для вывода можно оставить External" : ""}>
-            <select className="text-input" value={transferForm.toId} onChange={(e) => setTransferForm((p) => ({ ...p, toId: e.target.value }))}>
-              <option value="">(External)</option>
-              {(accounts || []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.provider} — {a.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <div style={{ gridColumn: "1 / -1" }}>
-            <Field label="Комментарий (необязательно)">
-              <input className="text-input" value={transferForm.comment} onChange={(e) => setTransferForm((p) => ({ ...p, comment: e.target.value }))} placeholder="Например: распределение маржи" />
-            </Field>
-          </div>
-        </div>
-      </Modal>
-
-      {/* LEFT */}
-      <div style={{ width: 360, display: "flex", flexDirection: "column", gap: 14, flexShrink: 0, overflowY: "auto" }}>
-        <div className="card" style={{ padding: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button className="btn-primary" onClick={openCreateAccount} style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, justifyContent: "center" }}>
-            <Plus size={18} /> Добавить счет
-          </button>
-          <button className="btn-secondary" onClick={openTransfer} disabled={!hasAccounts} style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, justifyContent: "center", opacity: !hasAccounts ? 0.6 : 1 }} title={!hasAccounts ? "Сначала добавьте счет" : ""}>
-            <History size={18} /> Операция
-          </button>
-        </div>
-
-        <div
-          className="card-gradient"
-          onClick={() => (hasAccounts ? openEmptyEditor() : toast.info("Сначала добавь хотя бы один счет"))}
-          style={{ cursor: "pointer", padding: 16, color: "white", display: "flex", justifyContent: "space-between", alignItems: "center", opacity: hasAccounts ? 1 : 0.75 }}
-          title={!hasAccounts ? "Добавьте счет, затем откройте схему" : ""}
-        >
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 16 }}>Схема потоков</div>
-            <div style={{ marginTop: 4, opacity: 0.85, fontSize: 12 }}>Открыть визуальный редактор</div>
-          </div>
-          <Maximize2 size={22} />
-        </div>
-
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: 12, borderBottom: "1px solid #e2e8f0", background: "#f1f5f9", fontWeight: 900, color: "#475569", display: "flex", alignItems: "center", gap: 8 }}>
-            <FolderOpen size={18} /> Схемы
           </div>
 
-          <div>
-            {schemes.length === 0 ? (
-              <div style={{ padding: 12 }}>
+          <div className="card" style={{ padding: 12 }}>
+            <button className="btn-secondary" onClick={refreshCrypto} style={{ width: "100%" }}>
+              Обновить данные
+            </button>
+            {loading ? (
+              <div style={{ marginTop: 10, fontSize: 12, color: "#64748b" }}>Загрузка...</div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* RIGHT */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14, overflow: "hidden" }}>
+          <div style={{ flex: "0 0 auto", maxHeight: "40%", overflowY: "auto" }}>
+            <h3 style={{ margin: 0, color: "#0f172a", fontWeight: 700 }}>Счета</h3>
+
+            {loading ? (
+              <div style={{ marginTop: 12, color: "#64748b" }}>Загрузка...</div>
+            ) : accounts.length === 0 ? (
+              <div style={{ marginTop: 12 }}>
                 <EmptyState
-                  title="Схем пока нет"
-                  text="Нарисуй потоки в редакторе и сохрани схему, чтобы быстро возвращаться к структуре."
-                  action={<button className="btn-primary" onClick={() => (hasAccounts ? openEmptyEditor() : toast.info("Сначала добавь счет"))}>Открыть редактор</button>}
+                  title="Счетов пока нет"
+                  text="Создай первый счет (биржа/кошелек). После этого можно добавлять операции и строить схему потоков."
+                  action={
+                    <button className="btn-primary" onClick={openCreateAccount}>
+                      <Plus size={16} style={{ verticalAlign: "middle", marginRight: 8 }} />
+                      Добавить счет
+                    </button>
+                  }
                 />
               </div>
             ) : (
-              schemes.map((s) => (
-                <div key={s.id} className="list-item" style={{ padding: "10px 12px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                  <div onClick={() => loadScheme(s)} style={{ cursor: "pointer", flex: 1 }}>
-                    <div style={{ fontWeight: 900 }}>{s.name}</div>
-                    <div style={{ fontSize: 12, color: "#94a3b8" }}>{s.created_at ? String(s.created_at).slice(0, 10) : ""}</div>
-                  </div>
-                  <Trash2 size={16} style={{ cursor: "pointer", color: "#cbd5e1" }} onClick={() => deleteScheme(s.id)} />
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+                  gap: 12,
+                }}
+              >
+                {Object.keys(groupedAccounts).map((prov) => (
+                  <div key={prov} className="card" style={{ padding: 0, overflow: "hidden" }}>
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        padding: "10px 12px",
+                        fontWeight: 700,
+                        color: "#475569",
+                        fontSize: 13,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span>{prov}</span>
+                      <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>
+                        {groupedAccounts[prov].length}
+                      </span>
+                    </div>
 
-        <div className="card" style={{ padding: 12 }}>
-          <button className="btn-secondary" onClick={refreshCrypto} style={{ width: "100%" }}>Обновить данные</button>
-          {loading ? <div style={{ marginTop: 10, fontSize: 12, color: "#64748b" }}>Загрузка...</div> : null}
-        </div>
-      </div>
+                    <div style={{ padding: 10 }}>
+                      {groupedAccounts[prov].map((acc) => (
+                        <div
+                          key={acc.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "8px 0",
+                            borderBottom: "1px dashed #f1f5f9",
+                            gap: 10,
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontWeight: 700,
+                                fontSize: 14,
+                                color: "#0f172a",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {acc.name}
+                            </div>
+                            <div style={{ fontSize: 12, color: "#64748b" }}>
+                              {acc.asset ? (
+                                <>
+                                  Актив: <b style={{ fontWeight: 600 }}>{acc.asset}</b>
+                                </>
+                              ) : (
+                                <span style={{ color: "#94a3b8" }}>Актив: не указан</span>
+                              )}
+                            </div>
+                          </div>
 
-      {/* RIGHT */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14, overflow: "hidden" }}>
-        <div style={{ flex: "0 0 auto", maxHeight: "40%", overflowY: "auto" }}>
-          <h3 style={{ margin: 0, color: "#0f172a" }}>Счета</h3>
-
-          {loading ? (
-            <div style={{ marginTop: 12, color: "#64748b" }}>Загрузка...</div>
-          ) : accounts.length === 0 ? (
-            <div style={{ marginTop: 12 }}>
-              <EmptyState
-                title="Счетов пока нет"
-                text="Создай первый счет (биржа/кошелек). После этого можно добавлять операции и строить схему потоков."
-                action={
-                  <button className="btn-primary" onClick={openCreateAccount}>
-                    <Plus size={16} style={{ verticalAlign: "middle", marginRight: 8 }} />
-                    Добавить счет
-                  </button>
-                }
-              />
-            </div>
-          ) : (
-            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
-              {Object.keys(groupedAccounts).map((prov) => (
-                <div key={prov} className="card" style={{ padding: 0, overflow: "hidden" }}>
-                  <div style={{ background: "#f8fafc", padding: "10px 12px", fontWeight: 900, color: "#475569", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>{prov}</span>
-                    <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 900 }}>{groupedAccounts[prov].length}</span>
-                  </div>
-
-                  <div style={{ padding: 10 }}>
-                    {groupedAccounts[prov].map((acc) => (
-                      <div key={acc.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px dashed #f1f5f9", gap: 10 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 900, fontSize: 14, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{acc.name}</div>
-                          <div style={{ fontSize: 12, color: "#64748b" }}>
-                            {acc.asset ? (<>Актив: <b>{acc.asset}</b></>) : (<span style={{ color: "#94a3b8" }}>Актив: не указан</span>)}
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button className="icon-pill" title="Редактировать" onClick={() => openEditAccount(acc)}>
+                              <Pencil size={14} />
+                            </button>
+                            <button className="icon-pill danger" title="Удалить" onClick={() => deleteAccount(acc.id)}>
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         </div>
-
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button className="icon-pill" title="Редактировать" onClick={() => openEditAccount(acc)}><Pencil size={14} /></button>
-                          <button className="icon-pill danger" title="Удалить" onClick={() => deleteAccount(acc.id)}><Trash2 size={14} /></button>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="card" style={{ flex: 1, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", borderTop: "4px solid #10b981" }}>
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <History size={18} color="#10b981" />
-              <h3 style={{ margin: 0 }}>История операций</h3>
-            </div>
-
-            <button className="btn-secondary" onClick={openTransfer} disabled={!hasAccounts} style={{ display: "flex", alignItems: "center", gap: 8, opacity: !hasAccounts ? 0.6 : 1 }}>
-              <Plus size={16} /> Добавить
-            </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {loading ? (
-              <div style={{ padding: 12, color: "#64748b" }}>Загрузка...</div>
-            ) : transfers.length === 0 ? (
-              <div style={{ padding: 12 }}>
-                <EmptyState
-                  title="Операций пока нет"
-                  text="Добавь первую операцию. Для визуализации потоков открой “Схему потоков”."
-                  action={<button className="btn-primary" onClick={openTransfer} disabled={!hasAccounts} style={{ opacity: !hasAccounts ? 0.6 : 1 }}>Добавить операцию</button>}
-                />
+          <div
+            className="card"
+            style={{
+              flex: 1,
+              padding: 0,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              borderTop: "4px solid #10b981",
+            }}
+          >
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <History size={18} color="#10b981" />
+                <h3 style={{ margin: 0, fontWeight: 700 }}>История операций</h3>
               </div>
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                <thead style={{ background: "#f8fafc", position: "sticky", top: 0 }}>
-                  <tr>
-                    <th style={{ textAlign: "left", padding: "12px 16px", color: "#64748b" }}>Дата</th>
-                    <th style={{ textAlign: "left", padding: "12px 16px", color: "#64748b" }}>Тип</th>
-                    <th style={{ textAlign: "left", padding: "12px 16px", color: "#64748b" }}>Откуда</th>
-                    <th style={{ textAlign: "left", padding: "12px 16px", color: "#64748b" }}>Куда</th>
-                    <th style={{ textAlign: "right", padding: "12px 16px", color: "#64748b" }}>Сумма</th>
-                    <th style={{ textAlign: "right", padding: "12px 16px", color: "#64748b" }}>Действия</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transfers.map((t0) => {
-                    const t = normalizeTransfer(t0);
-                    const typeLabel = TX_TYPES.find((x) => x.id === t.type)?.label || "Операция";
 
-                    const fromAcc =
-                      t.from ||
-                      (t.fromId
-                        ? (() => {
-                            const a = accounts.find((x) => String(x.id) === String(t.fromId));
-                            return a ? `${a.provider} - ${a.name}` : "";
-                          })()
-                        : "External");
+              <button
+                className="btn-secondary"
+                onClick={openTransfer}
+                disabled={!hasAccounts}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  opacity: !hasAccounts ? 0.6 : 1,
+                }}
+              >
+                <Plus size={16} /> Добавить
+              </button>
+            </div>
 
-                    const toAcc =
-                      t.to ||
-                      (t.toId
-                        ? (() => {
-                            const a = accounts.find((x) => String(x.id) === String(t.toId));
-                            return a ? `${a.provider} - ${a.name}` : "";
-                          })()
-                        : "External");
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {loading ? (
+                <div style={{ padding: 12, color: "#64748b" }}>Загрузка...</div>
+              ) : transfers.length === 0 ? (
+                <div style={{ padding: 12 }}>
+                  <EmptyState
+                    title="Операций пока нет"
+                    text="Добавь первую операцию. Для визуализации потоков открой “Схему потоков”."
+                    action={
+                      <button
+                        className="btn-primary"
+                        onClick={openTransfer}
+                        disabled={!hasAccounts}
+                        style={{ opacity: !hasAccounts ? 0.6 : 1 }}
+                      >
+                        Добавить операцию
+                      </button>
+                    }
+                  />
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                  <thead style={{ background: "#f8fafc", position: "sticky", top: 0 }}>
+                    <tr>
+                      <th style={{ textAlign: "left", padding: "12px 16px", color: "#64748b", fontWeight: 600 }}>
+                        Дата
+                      </th>
+                      <th style={{ textAlign: "left", padding: "12px 16px", color: "#64748b", fontWeight: 600 }}>
+                        Тип
+                      </th>
+                      <th style={{ textAlign: "left", padding: "12px 16px", color: "#64748b", fontWeight: 600 }}>
+                        Откуда
+                      </th>
+                      <th style={{ textAlign: "left", padding: "12px 16px", color: "#64748b", fontWeight: 600 }}>
+                        Куда
+                      </th>
+                      <th style={{ textAlign: "right", padding: "12px 16px", color: "#64748b", fontWeight: 600 }}>
+                        Сумма
+                      </th>
+                      <th style={{ textAlign: "right", padding: "12px 16px", color: "#64748b", fontWeight: 600 }}>
+                        Действия
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transfers.map((t0) => {
+                      const t = normalizeTransfer(t0);
+                      const typeLabel = TX_TYPES.find((x) => x.id === t.type)?.label || "Операция";
 
-                    return (
-                      <tr key={t.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                        <td style={{ padding: "10px 16px", color: "#94a3b8", whiteSpace: "nowrap" }}>{t.date}</td>
-                        <td style={{ padding: "10px 16px", fontWeight: 900, color: "#334155" }}>{typeLabel}</td>
-                        <td style={{ padding: "10px 16px", fontWeight: 900 }}>{fromAcc}</td>
-                        <td style={{ padding: "10px 16px", fontWeight: 900 }}>{toAcc}</td>
-                        <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 900, color: "#3b82f6" }}>
-                          {fmtAmount(t.amount)} {t.asset}
-                          {t.comment ? ` • ${t.comment}` : ""}
-                        </td>
-                        <td style={{ padding: "10px 16px", textAlign: "right" }}>
-                          <button className="icon-pill danger" title="Удалить" onClick={() => deleteTransfer(t.id)}>
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
+                      const fromAcc =
+                        t.from ||
+                        (t.fromId
+                          ? (() => {
+                              const a = accounts.find((x) => String(x.id) === String(t.fromId));
+                              return a ? `${a.provider} - ${a.name}` : "";
+                            })()
+                          : "External");
+
+                      const toAcc =
+                        t.to ||
+                        (t.toId
+                          ? (() => {
+                              const a = accounts.find((x) => String(x.id) === String(t.toId));
+                              return a ? `${a.provider} - ${a.name}` : "";
+                            })()
+                          : "External");
+
+                      return (
+                        <tr key={t.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "10px 16px", color: "#94a3b8", whiteSpace: "nowrap" }}>{t.date}</td>
+                          <td style={{ padding: "10px 16px", fontWeight: 600, color: "#334155" }}>{typeLabel}</td>
+                          <td style={{ padding: "10px 16px", fontWeight: 600, color: "#0f172a" }}>{fromAcc}</td>
+                          <td style={{ padding: "10px 16px", fontWeight: 600, color: "#0f172a" }}>{toAcc}</td>
+                          <td style={{ padding: "10px 16px", textAlign: "right", fontWeight: 600, color: "#3b82f6" }}>
+                            {fmtAmount(t.amount)} {t.asset}
+                            {t.comment ? ` • ${t.comment}` : ""}
+                          </td>
+                          <td style={{ padding: "10px 16px", textAlign: "right" }}>
+                            <button className="icon-pill danger" title="Удалить" onClick={() => deleteTransfer(t.id)}>
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -1245,9 +1733,37 @@ const CryptoTab = () => {
 // =====================================================
 const AccountsPage = () => {
   return (
-    <div style={{ padding: 18, height: "100vh", display: "flex", flexDirection: "column", background: "#f8fafc", boxSizing: "border-box" }}>
-      <div style={{ marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <h1 style={{ fontSize: 22, color: "#0f172a", display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
+    <div
+      style={{
+        padding: 18,
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "#f8fafc",
+        boxSizing: "border-box",
+      }}
+    >
+      <div
+        style={{
+          marginBottom: 14,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <h1
+          style={{
+            fontSize: 22,
+            color: "#0f172a",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            margin: 0,
+            fontWeight: 800,
+          }}
+        >
           <Wallet color="#7c3aed" /> Крипто счета
         </h1>
       </div>
@@ -1266,6 +1782,7 @@ const AccountsPage = () => {
           width: 100%;
           box-sizing: border-box;
           background: white;
+          font-weight: 400;
         }
         .text-input:focus{
           border-color: #3b82f6;
