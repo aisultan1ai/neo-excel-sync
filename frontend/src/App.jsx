@@ -20,7 +20,6 @@ import {
   LayoutDashboard,
   Binary,
   Wallet,
-  LogOut,
 } from "lucide-react";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -75,10 +74,8 @@ const ProtectedRoute = ({ token }) => {
   return <Outlet />;
 };
 
-// ---------------------------
-// App Layout (sidebar + outlet)
-// ---------------------------
-const AppLayout = ({ onLogout }) => {
+
+const AppLayout = () => {
   return (
     <div className="app-container">
       <aside className="sidebar">
@@ -99,12 +96,6 @@ const AppLayout = ({ onLogout }) => {
 
           <NavButton to="/profile" icon={User} label="Профиль" />
           <NavButton to="/settings" icon={Settings} label="Настройки" />
-
-          {/* logout: чтобы onLogout использовался и было удобно юзеру */}
-          <button className="nav-btn" type="button" onClick={onLogout}>
-            <LogOut size={20} style={{ marginRight: "10px" }} />
-            Выйти
-          </button>
         </nav>
       </aside>
 
@@ -185,7 +176,7 @@ function App() {
 
         {/* protected */}
         <Route element={<ProtectedRoute token={token} />}>
-          <Route element={<AppLayout onLogout={handleLogout} />}>
+          <Route element={<AppLayout  />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/sverka" element={<SverkaPage />} />
             <Route path="/splits" element={<SplitsPage />} />
