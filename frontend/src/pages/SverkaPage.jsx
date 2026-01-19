@@ -170,6 +170,7 @@ const FileSection = ({
               position: "absolute",
               width: "100%",
               top: 0,
+
             }}
           >
             <UploadCloud size={32} color="#94a3b8" style={{ marginBottom: "10px" }} />

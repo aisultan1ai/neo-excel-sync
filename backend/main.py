@@ -41,7 +41,9 @@ app = FastAPI(title="NeoExcelSync API")
 register_excel_reconcile(app)
 
 # --- КОНФИГУРАЦИЯ БЕЗОПАСНОСТИ ---
-SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key-change-this-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY is not set")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
@@ -853,7 +855,7 @@ async def admin_create_user(
 
 @app.delete("/api/admin/users/{user_id}")
 async def admin_delete_user(
-    user_id: int, current_user: str = Depends(get_current_user)
+    user_id: int, current_user: str = Depends(require_admin)
 ):
     caller = database_manager.get_user_by_username(current_user)
     if caller and caller[0] == user_id:

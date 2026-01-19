@@ -212,9 +212,6 @@ const Modal = ({ open, title, subtitle, children, onClose, footer, width = 860 }
   );
 };
 
-// =====================================================
-// CONFIRM DIALOG (custom вместо window.confirm)
-// =====================================================
 const useConfirm = () => {
   const [cfg, setCfg] = useState(null);
   const resolverRef = useRef(null);

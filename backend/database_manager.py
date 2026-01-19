@@ -6,10 +6,10 @@ import logging
 log = logging.getLogger(__name__)
 
 DB_CONFIG = {
-    "dbname": os.getenv("POSTGRES_DB", "neo_db"),
-    "user": os.getenv("POSTGRES_USER", "postgres"),
-    "password": os.getenv("POSTGRES_PASSWORD", "aisu123"),
-    "host": os.getenv("DB_HOST", "localhost"),  # <--- ГЛАВНОЕ ИЗМЕНЕНИЕ
+    "dbname": os.getenv("POSTGRES_DB"),
+    "user": os.getenv("POSTGRES_USER"),
+    "password": os.getenv("POSTGRES_PASSWORD"),
+    "host": os.getenv("DB_HOST", "db"),
     "port": int(os.getenv("DB_PORT", 5432)),
     "client_encoding": "utf8",
 }
