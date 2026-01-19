@@ -235,7 +235,7 @@ def init_database():
                            )
                        """)
 
-        # --- CRYPTO ACCOUNTS ---
+        #  CRYPTO ACCOUNTS
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS crypto_accounts (
                 id SERIAL PRIMARY KEY,
@@ -246,7 +246,7 @@ def init_database():
             )
         """)
 
-        # --- CRYPTO TRANSFERS ---
+        #  CRYPTO TRANSFERS
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS crypto_transfers (
                 id SERIAL PRIMARY KEY,
@@ -494,6 +494,27 @@ def update_task(task_id, title, description):
         return False
     finally:
         conn.close()
+
+
+def get_task_by_id(task_id: int):
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            """
+            SELECT t.*, u.username as author_name, u.department as author_dept
+            FROM tasks t
+            LEFT JOIN users u ON t.from_user_id = u.id
+            WHERE t.id = %s
+            """,
+            (task_id,),
+        )
+        return cursor.fetchone()  # dict-like
+    finally:
+        conn.close()
+
 
 
 def update_task_status(task_id, new_status):
@@ -928,6 +949,7 @@ def update_crypto_account(account_id: int, provider: str, name: str, asset: str 
         cursor.execute(
             """
             UPDATE crypto_accounts
+                
             SET provider=%s, name=%s, asset=%s
             WHERE id=%s
             RETURNING *
@@ -1108,3 +1130,15 @@ def delete_crypto_transfer(transfer_id: int):
         return False
     finally:
         conn.close()
+
+def count_users():
+    conn = get_db_connection()
+    if not conn:
+        return 0
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM users")
+        return cur.fetchone()[0]
+    finally:
+        conn.close()
+

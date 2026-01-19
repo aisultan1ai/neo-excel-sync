@@ -174,6 +174,21 @@ async def require_admin(current_user: str = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
+def ensure_task_owner_or_admin(task_row: dict, user_row: tuple):
+    """
+    user_row: (id, username, password_hash, department, is_admin)
+    task_row: dict из get_task_by_id()
+    """
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    is_admin = user_row[4] if len(user_row) > 4 else False
+    if is_admin:
+        return
+
+    if task_row.get("from_user_id") != user_row[0]:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
 
 def save_upload_file(upload_file: UploadFile) -> str:
     try:
@@ -231,6 +246,20 @@ def startup_event():
     database_manager.init_database()
     log.info("Database initialized.")
 
+    try:
+        init_user = os.getenv("INIT_ADMIN_USERNAME")
+        init_pass = os.getenv("INIT_ADMIN_PASSWORD")
+        init_dept = os.getenv("INIT_ADMIN_DEPARTMENT", "Admin")
+        init_is_admin = os.getenv("INIT_ADMIN_IS_ADMIN", "true").lower() in ("1", "true", "yes", "y")
+
+        if init_user and init_pass:
+            if database_manager.count_users() == 0:  # <-- нужно добавить метод
+                salt = bcrypt.gensalt()
+                hashed = bcrypt.hashpw(init_pass.encode("utf-8"), salt).decode("utf-8")
+                database_manager.create_new_user(init_user, hashed, init_dept, init_is_admin)
+                log.info("Bootstrap admin created.")
+    except Exception:
+        log.exception("Bootstrap admin failed")
 
 @app.get("/")
 def read_root():
@@ -716,11 +745,21 @@ async def change_task_status(
 
 
 @app.put("/api/tasks/{task_id}")
-async def update_task_endpoint(task_id: int, task: TaskUpdateContent):
-    success = database_manager.update_task(task_id, task.title, task.description)
+async def update_task_endpoint(
+    task_id: int,
+    task: TaskUpdateContent,
+    current_user: str = Depends(get_current_user),
+):
+    user = database_manager.get_user_by_username(current_user)
+    db_task = database_manager.get_task_by_id(task_id)
+    if not db_task:
+        raise HTTPException(404, "Task not found")
 
+    ensure_task_owner_or_admin(db_task, user)
+
+    success = database_manager.update_task(task_id, task.title, task.description)
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to update task")
+        raise HTTPException(500, "Failed to update task")
 
     return {"status": "success", "message": "Task updated"}
 
@@ -781,13 +820,26 @@ async def download_attachment(
 async def remove_attachment(
     attachment_id: int, current_user: str = Depends(get_current_user)
 ):
+    user = database_manager.get_user_by_username(current_user)
     file_data = database_manager.get_attachment_by_id(attachment_id)
+    if not file_data:
+        raise HTTPException(404, "File not found")
+
+    task = database_manager.get_task_by_id(file_data["task_id"])
+    if not task:
+        raise HTTPException(404, "Task not found")
+
+    ensure_task_owner_or_admin(task, user)
+
+    # удаляем физический файл
     if file_data and os.path.exists(file_data["file_path"]):
         os.remove(file_data["file_path"])
 
     if database_manager.delete_task_attachment(attachment_id):
         return {"status": "success"}
+
     raise HTTPException(500, "Error deleting attachment")
+
 
 
 # ПОЛЬЗОВАТЕЛИ И ПРОФИЛЬ
@@ -984,11 +1036,20 @@ async def read_my_tasks(current_user: str = Depends(get_current_user)):
 
 @app.delete("/api/tasks/{task_id}")
 async def remove_task(task_id: int, current_user: str = Depends(get_current_user)):
+    user = database_manager.get_user_by_username(current_user)
+    task = database_manager.get_task_by_id(task_id)
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    ensure_task_owner_or_admin(task, user)
+
     success = database_manager.delete_task(task_id)
     if success:
         return {"status": "success"}
 
     raise HTTPException(status_code=500, detail="Failed to delete task")
+
 
 
 @app.get("/api/health")

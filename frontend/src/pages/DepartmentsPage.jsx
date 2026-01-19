@@ -3,7 +3,6 @@ import axios from "axios";
 import {
   Users,
   Plus,
-  MessageSquare,
   Send,
   Trash2,
   Edit2,
@@ -32,6 +31,9 @@ const DepartmentsPage = () => {
   const [tasks, setTasks] = useState([]);
   const [loadingDepts, setLoadingDepts] = useState(true);
 
+  // current user
+  const [me, setMe] = useState(null);
+
   // --- CREATE TASK ---
   const [showModal, setShowModal] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -54,19 +56,28 @@ const DepartmentsPage = () => {
   const [showDeleteFileConfirm, setShowDeleteFileConfirm] = useState(false);
   const [fileToDeleteId, setFileToDeleteId] = useState(null);
 
-  useEffect(() => {
-    fetchDepartments();
-  }, []);
-  useEffect(() => {
-    if (activeDept) fetchTasks();
-  }, [activeDept]);
+  // -----------------------
+  // API helpers
+  // -----------------------
+  const fetchMe = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get("/api/profile", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMe(res.data); // { id, username, department, is_admin, ... }
+    } catch (e) {
+      setMe(null);
+    }
+  };
 
   const fetchDepartments = async () => {
     try {
       const res = await axios.get("/api/departments");
       setDepartments(res.data);
-      setLoadingDepts(false);
     } catch (err) {
+      // ignore
+    } finally {
       setLoadingDepts(false);
     }
   };
@@ -74,7 +85,7 @@ const DepartmentsPage = () => {
   const fetchTasks = async () => {
     try {
       const token = localStorage.getItem("token");
-      let url = activeDept === "My Tasks" ? "/api/my-tasks" : `/api/tasks/${activeDept}`;
+      const url = activeDept === "My Tasks" ? "/api/my-tasks" : `/api/tasks/${activeDept}`;
       const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
       setTasks(res.data);
     } catch (err) {
@@ -82,6 +93,24 @@ const DepartmentsPage = () => {
     }
   };
 
+  // initial load
+  useEffect(() => {
+    fetchDepartments();
+    fetchMe();
+  }, []);
+
+  // load tasks on dept change
+  useEffect(() => {
+    if (activeDept) fetchTasks();
+  }, [activeDept]);
+
+  // rights: only author or admin
+  const canManageTask =
+    me && expandedTask && (me.is_admin || me.id === expandedTask.from_user_id);
+
+  // -----------------------
+  // actions
+  // -----------------------
   const handleCreateTask = async () => {
     if (!newTaskTitle) return toast.error("Введите заголовок");
     const deptToSend = activeDept === "My Tasks" ? targetDeptForNewTask : activeDept;
@@ -91,15 +120,12 @@ const DepartmentsPage = () => {
       const token = localStorage.getItem("token");
       const taskRes = await axios.post(
         "/api/tasks",
-        {
-          title: newTaskTitle,
-          description: newTaskDesc,
-          to_department: deptToSend,
-        },
+        { title: newTaskTitle, description: newTaskDesc, to_department: deptToSend },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       const newTaskId = taskRes.data.id;
+
       if (newTaskFile && newTaskId) {
         const formData = new FormData();
         formData.append("file", newTaskFile);
@@ -107,11 +133,13 @@ const DepartmentsPage = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
       }
+
       toast.success("Задача создана!");
       setShowModal(false);
       setNewTaskTitle("");
       setNewTaskDesc("");
       setNewTaskFile(null);
+      setTargetDeptForNewTask("");
       fetchTasks();
     } catch (err) {
       toast.error("Ошибка создания задачи");
@@ -125,6 +153,7 @@ const DepartmentsPage = () => {
     setEditDesc(task.description);
     setComments([]);
     setAttachments([]);
+
     try {
       const token = localStorage.getItem("token");
       const [resComments, resFiles] = await Promise.all([
@@ -142,23 +171,30 @@ const DepartmentsPage = () => {
     }
   };
 
+  // anyone can upload files
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files?.[0];
+    if (!file || !expandedTask) return;
+
     const formData = new FormData();
     formData.append("file", file);
+
     try {
       const token = localStorage.getItem("token");
       await axios.post(`/api/tasks/${expandedTask.id}/attachments`, formData, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       const res = await axios.get(`/api/tasks/${expandedTask.id}/attachments`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setAttachments(res.data);
       toast.success("Файл загружен");
-    } catch (e) {
+    } catch (e2) {
       toast.error("Ошибка загрузки");
+    } finally {
+      // чтобы можно было загрузить тот же файл повторно
+      e.target.value = "";
     }
   };
 
@@ -175,6 +211,8 @@ const DepartmentsPage = () => {
       link.setAttribute("download", file.filename);
       document.body.appendChild(link);
       link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (e) {
       toast.error("Ошибка скачивания");
     }
@@ -185,8 +223,10 @@ const DepartmentsPage = () => {
     setShowDeleteFileConfirm(true);
   };
 
+  // only author/admin can delete file (UI hides, backend enforces)
   const executeDeleteFile = async () => {
     if (!fileToDeleteId) return;
+
     try {
       const token = localStorage.getItem("token");
       await axios.delete(`/api/attachments/${fileToDeleteId}`, {
@@ -195,7 +235,8 @@ const DepartmentsPage = () => {
       setAttachments((prev) => prev.filter((f) => f.id !== fileToDeleteId));
       toast.success("Файл удален");
     } catch (e) {
-      toast.error("Ошибка");
+      if (e?.response?.status === 403) toast.error("Нет прав на удаление файла");
+      else toast.error("Ошибка");
     } finally {
       setShowDeleteFileConfirm(false);
       setFileToDeleteId(null);
@@ -219,10 +260,9 @@ const DepartmentsPage = () => {
     }
   };
 
-  const openDeleteTaskModal = () => {
-    setShowDeleteTaskConfirm(true);
-  };
+  const openDeleteTaskModal = () => setShowDeleteTaskConfirm(true);
 
+  // only author/admin can delete
   const executeDeleteTask = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -233,12 +273,14 @@ const DepartmentsPage = () => {
       fetchTasks();
       toast.info("Удалено");
     } catch (err) {
-      toast.error("Ошибка");
+      if (err?.response?.status === 403) toast.error("Нет прав на удаление задачи");
+      else toast.error("Ошибка");
     } finally {
       setShowDeleteTaskConfirm(false);
     }
   };
 
+  // only author/admin can edit (UI hides, but still safe)
   const handleSaveEdit = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -247,18 +289,21 @@ const DepartmentsPage = () => {
         { title: editTitle, description: editDesc },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       const updatedTask = { ...expandedTask, title: editTitle, description: editDesc };
       setExpandedTask(updatedTask);
       setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
       setIsEditing(false);
       toast.success("Сохранено");
     } catch (err) {
-      toast.error("Ошибка");
+      if (err?.response?.status === 403) toast.error("Нет прав на редактирование");
+      else toast.error("Ошибка");
     }
   };
 
   const sendComment = async () => {
-    if (!newComment) return;
+    if (!newComment || !expandedTask) return;
+
     try {
       const token = localStorage.getItem("token");
       await axios.post(
@@ -308,6 +353,7 @@ const DepartmentsPage = () => {
           >
             <User size={18} /> Мои задачи
           </button>
+
           {departments.map((dept) => (
             <button
               key={dept.id}
@@ -340,6 +386,7 @@ const DepartmentsPage = () => {
             <Plus size={18} style={{ marginRight: "5px" }} /> Новая задача
           </button>
         </div>
+
         <div
           style={{
             display: "grid",
@@ -350,9 +397,11 @@ const DepartmentsPage = () => {
           }}
         >
           {tasks.length === 0 && <p style={{ color: "#94a3b8" }}>Задач нет.</p>}
+
           {tasks.map((task) => {
             const statusInfo = STATUS_CONFIG[task.status] || STATUS_CONFIG["Open"];
             const StatusIcon = statusInfo.icon;
+
             return (
               <div
                 key={task.id}
@@ -398,6 +447,7 @@ const DepartmentsPage = () => {
                       </>
                     )}
                   </div>
+
                   <div
                     style={{
                       color: statusInfo.color,
@@ -410,6 +460,7 @@ const DepartmentsPage = () => {
                     <StatusIcon size={12} /> {statusInfo.label}
                   </div>
                 </div>
+
                 <h3
                   style={{
                     margin: "0 0 10px 0",
@@ -420,6 +471,7 @@ const DepartmentsPage = () => {
                 >
                   {task.title}
                 </h3>
+
                 <p
                   style={{
                     color: "#475569",
@@ -451,9 +503,7 @@ const DepartmentsPage = () => {
             borderLeft: "1px solid #e2e8f0",
           }}
         >
-          <div
-            style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}
-          >
+          <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px" }}>
               <select
                 value={expandedTask.status || "Open"}
@@ -476,20 +526,27 @@ const DepartmentsPage = () => {
               <div style={{ display: "flex", gap: "5px" }}>
                 {!isEditing ? (
                   <>
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="icon-btn"
-                      title="Редактировать"
-                    >
-                      <Edit2 size={18} color="#64748b" />
-                    </button>
-                    <button
-                      onClick={openDeleteTaskModal}
-                      className="icon-btn"
-                      title="Удалить задачу"
-                    >
-                      <Trash2 size={18} color="#ef4444" />
-                    </button>
+                    {/* EDIT только автор/админ */}
+                    {canManageTask && (
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="icon-btn"
+                        title="Редактировать"
+                      >
+                        <Edit2 size={18} color="#64748b" />
+                      </button>
+                    )}
+
+                    {/* DELETE только автор/админ */}
+                    {canManageTask && (
+                      <button
+                        onClick={openDeleteTaskModal}
+                        className="icon-btn"
+                        title="Удалить задачу"
+                      >
+                        <Trash2 size={18} color="#ef4444" />
+                      </button>
+                    )}
 
                     <button
                       onClick={() => setExpandedTask(null)}
@@ -513,6 +570,7 @@ const DepartmentsPage = () => {
                 )}
               </div>
             </div>
+
             {isEditing ? (
               <input
                 className="text-input"
@@ -522,6 +580,7 @@ const DepartmentsPage = () => {
             ) : (
               <h3 style={{ margin: 0, fontSize: "18px" }}>{expandedTask.title}</h3>
             )}
+
             {!isEditing && (
               <div style={{ fontSize: "13px", color: "#64748b", marginTop: "5px" }}>
                 Автор: <b>{expandedTask.author_name}</b>{" "}
@@ -557,10 +616,12 @@ const DepartmentsPage = () => {
                   ВЛОЖЕНИЯ ({attachments.length})
                 </h4>
               </div>
+
               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                 {attachments.length === 0 && (
                   <span style={{ fontSize: "12px", color: "#cbd5e1" }}>Нет файлов</span>
                 )}
+
                 {attachments.map((file) => (
                   <div
                     key={file.id}
@@ -586,26 +647,36 @@ const DepartmentsPage = () => {
                     >
                       {file.filename}
                     </span>
+
                     <button
                       onClick={() => handleDownloadFile(file)}
                       style={{ border: "none", background: "none", cursor: "pointer" }}
+                      title="Скачать"
                     >
                       <Download size={14} color="#3b82f6" />
                     </button>
-                    <button
-                      onClick={() => openDeleteFileModal(file.id)}
-                      style={{ border: "none", background: "none", cursor: "pointer" }}
-                    >
-                      <X size={14} color="#ef4444" />
-                    </button>
+
+                    {/* Удаление файла только автор/админ */}
+                    {canManageTask && (
+                      <button
+                        onClick={() => openDeleteFileModal(file.id)}
+                        style={{ border: "none", background: "none", cursor: "pointer" }}
+                        title="Удалить файл"
+                      >
+                        <X size={14} color="#ef4444" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
+
             <hr style={{ margin: "20px 0", border: "0", borderTop: "1px solid #e2e8f0" }} />
+
             <h4 style={{ margin: "0 0 15px 0", fontSize: "14px", color: "#94a3b8" }}>
               КОММЕНТАРИИ
             </h4>
+
             <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               {comments.map((c) => (
                 <div
@@ -642,6 +713,7 @@ const DepartmentsPage = () => {
             </div>
           </div>
 
+          {/* bottom bar */}
           <div
             style={{
               padding: "15px",
@@ -650,6 +722,7 @@ const DepartmentsPage = () => {
               gap: "10px",
             }}
           >
+            {/* Upload доступен всем */}
             <label
               className="btn"
               style={{
@@ -659,10 +732,12 @@ const DepartmentsPage = () => {
                 border: "1px solid #cbd5e1",
                 color: "#64748b",
               }}
+              title="Прикрепить файл"
             >
               <Paperclip size={18} />
               <input type="file" hidden onChange={handleFileUpload} />
             </label>
+
             <input
               className="text-input"
               placeholder="Написать ответ..."
@@ -671,6 +746,7 @@ const DepartmentsPage = () => {
               onKeyDown={(e) => e.key === "Enter" && sendComment()}
               style={{ marginBottom: 0 }}
             />
+
             <button className="btn" onClick={sendComment} style={{ padding: "0 12px" }}>
               <Send size={18} />
             </button>
@@ -696,6 +772,7 @@ const DepartmentsPage = () => {
         >
           <div className="card" style={{ width: "500px", padding: "30px" }}>
             <h2>Новая задача</h2>
+
             {activeDept === "My Tasks" && (
               <div style={{ marginBottom: "15px" }}>
                 <label
@@ -723,6 +800,7 @@ const DepartmentsPage = () => {
                 </select>
               </div>
             )}
+
             <div style={{ marginBottom: "15px" }}>
               <input
                 className="text-input"
@@ -731,6 +809,7 @@ const DepartmentsPage = () => {
                 onChange={(e) => setNewTaskTitle(e.target.value)}
               />
             </div>
+
             <div style={{ marginBottom: "15px" }}>
               <textarea
                 className="text-input"
@@ -740,6 +819,7 @@ const DepartmentsPage = () => {
                 onChange={(e) => setNewTaskDesc(e.target.value)}
               />
             </div>
+
             <div style={{ marginBottom: "20px" }}>
               <label
                 className="btn"
@@ -751,12 +831,14 @@ const DepartmentsPage = () => {
                   color: "#64748b",
                   cursor: "pointer",
                 }}
+                title="Прикрепить файл"
               >
                 <Paperclip size={16} style={{ marginRight: "8px" }} />{" "}
                 {newTaskFile ? newTaskFile.name : "Прикрепить файл (необязательно)"}
                 <input type="file" hidden onChange={(e) => setNewTaskFile(e.target.files[0])} />
               </label>
             </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
               <button
                 className="btn"
@@ -919,7 +1001,19 @@ const DepartmentsPage = () => {
         </div>
       )}
 
-      <style>{`.icon-btn { background: transparent; border: none; cursor: pointer; padding: 5px; border-radius: 4px; display: flex; alignItems: center; justify-content: center; } .icon-btn:hover { background: #e2e8f0; }`}</style>
+      <style>{`
+        .icon-btn {
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          padding: 5px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .icon-btn:hover { background: #e2e8f0; }
+      `}</style>
     </div>
   );
 };
