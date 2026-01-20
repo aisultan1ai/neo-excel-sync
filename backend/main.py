@@ -996,52 +996,101 @@ async def compare_instruments(
     file2: UploadFile = File(...),
     col1: str = Form(...),
     col2: str = Form(...),
+    current_user: str = Depends(get_current_user),  # <-- защита JWT
 ):
-    f1_path = save_upload_file(file1)
-    f2_path = save_upload_file(file2)
+    f1_path = None
+    f2_path = None
+
     try:
-        res = await run_in_threadpool(
-            _process_instruments, f1_path, f2_path, col1, col2
-        )
+        # (опционально, но полезно) проверка расширений
+        allowed = (".xlsx", ".xls", ".csv")
+        if not file1.filename or not file2.filename:
+            raise HTTPException(status_code=400, detail="Files are required")
+        if not file1.filename.lower().endswith(allowed):
+            raise HTTPException(status_code=400, detail="file1: only .xlsx/.xls/.csv allowed")
+        if not file2.filename.lower().endswith(allowed):
+            raise HTTPException(status_code=400, detail="file2: only .xlsx/.xls/.csv allowed")
+
+        f1_path = save_upload_file(file1)
+        f2_path = save_upload_file(file2)
+
+        res = await run_in_threadpool(_process_instruments, f1_path, f2_path, col1, col2)
         return res
+
+    except HTTPException:
+        # если мы уже подняли корректную HTTP-ошибку — отдаём как есть
+        raise
+
+    except ValueError as e:
+        # для "ошибка данных" (например колонка не найдена)
+        raise HTTPException(status_code=400, detail=str(e))
+
     except Exception as e:
-        raise HTTPException(400, str(e))
+        # неожиданная серверная ошибка
+        log.error(f"compare-instruments failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Server error during instruments comparison")
+
     finally:
         cleanup_files(f1_path, f2_path)
 
 
-def _process_instruments(f1, f2, c1, c2):
-    df1 = read_dataset(f1)
-    df2 = read_dataset(f2)
+def _process_instruments(f1_path: str, f2_path: str, c1: str, c2: str):
+    df1 = read_dataset(f1_path)
+    df2 = read_dataset(f2_path)
 
     if c1 not in df1.columns:
-        raise Exception(f"Column {c1} missing in file 1")
+        raise ValueError(f"Column '{c1}' missing in file 1")
     if c2 not in df2.columns:
-        raise Exception(f"Column {c2} missing in file 2")
+        raise ValueError(f"Column '{c2}' missing in file 2")
 
-    df1["clean"] = df1[c1].apply(clean_instrument_name)
-    set1 = set(df1["clean"].dropna().unique())
+    s1 = df1[c1].astype(str).map(clean_instrument_name).astype(str).str.strip()
+    s2 = df2[c2].astype(str).str.strip()
 
-    df2["clean"] = df2[c2].astype(str).str.strip()
-    set2 = set(df2["clean"].dropna().unique())
+    s1 = s1[(s1.notna()) & (s1 != "")]
+    s2 = s2[(s2.notna()) & (s2 != "")]
 
-    common = sorted(list(set1 & set2))
-    missing_in_2 = sorted(list(set1 - set2))
-    missing_in_1 = sorted(list(set2 - set1))
+    c1_counts = s1.value_counts()
+    c2_counts = s2.value_counts()
+
+    set1 = set(c1_counts.index)
+    set2 = set(c2_counts.index)
+
+    common = sorted(set1 & set2)
+    only_in_1 = sorted(set1 - set2)
+    only_in_2 = sorted(set2 - set1)
+
+    def row_for(key: str):
+        n1 = int(c1_counts.get(key, 0))
+        n2 = int(c2_counts.get(key, 0))
+        return {
+            "instrument": key,
+            "count_file1": n1,
+            "count_file2": n2,
+            "diff": n1 - n2,
+        }
+
+    matches_rows = [row_for(k) for k in common]
+    only1_rows = [{"instrument": k, "count_file1": int(c1_counts.get(k, 0))} for k in only_in_1]
+    only2_rows = [{"instrument": k, "count_file2": int(c2_counts.get(k, 0))} for k in only_in_2]
+
+    # удобно сортировать совпадения по разнице (чтобы сразу видеть проблему)
+    matches_rows.sort(key=lambda r: abs(r["diff"]), reverse=True)
 
     return {
         "status": "success",
         "stats": {
-            "total_file1": len(set1),
-            "total_file2": len(set2),
+            "unique_file1": len(set1),
+            "unique_file2": len(set2),
             "matches": len(common),
-            "only_in_1": len(missing_in_2),
-            "only_in_2": len(missing_in_1),
+            "only_in_1": len(only_in_1),
+            "only_in_2": len(only_in_2),
+            "rows_file1": int(len(s1)),
+            "rows_file2": int(len(s2)),
         },
         "data": {
-            "matches": common,
-            "only_in_unity": missing_in_2,
-            "only_in_ais": missing_in_1,
+            "matches": matches_rows,
+            "only_in_unity": only1_rows,  # file1
+            "only_in_ais": only2_rows,    # file2
         },
     }
 

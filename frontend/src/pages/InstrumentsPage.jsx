@@ -1,5 +1,7 @@
 import React, { useState, useCallback } from "react";
 import axios from "axios";
+import { api } from "../api";
+
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
 import {
@@ -236,8 +238,9 @@ const ComparisonView = () => {
   const [activeTab, setActiveTab] = useState("missing2");
 
   const handleCompare = async () => {
-    if (!file1 || !file2 || !col1 || !col2)
+    if (!file1 || !file2 || !col1 || !col2) {
       return toast.warning("Пожалуйста, загрузите оба файла и выберите колонки.");
+    }
 
     setLoading(true);
     const formData = new FormData();
@@ -247,19 +250,66 @@ const ComparisonView = () => {
     formData.append("col2", col2);
 
     try {
-      const res = await axios.post("/api/compare-instruments", formData);
+      const res = await api.post("/compare-instruments", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
       setResult(res.data);
       toast.success("Сверка завершена успешно!");
     } catch (e) {
-      toast.error("Ошибка при сверке. Проверьте файлы.");
+      toast.error(e?.response?.data?.detail || "Ошибка при сверке. Проверьте файлы.");
       console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
+  // ---- helpers to support BOTH old/new backend formats ----
+  const getTabData = useCallback(() => {
+    if (!result?.data) return [];
+    if (activeTab === "missing2") return result.data.only_in_unity || [];
+    if (activeTab === "missing1") return result.data.only_in_ais || [];
+    return result.data.matches || [];
+  }, [result, activeTab]);
+
+  const data = getTabData();
+
+  // detect response format:
+  // old format: ["AAPL", "MSFT"]
+  // new format: [{instrument, count_file1, count_file2, diff}, ...]
+  const isObjectRows = Array.isArray(data) && data.length > 0 && typeof data[0] === "object";
+
+  const thStyle = {
+    padding: "15px 24px",
+    textAlign: "left",
+    color: "#64748b",
+    fontSize: "12px",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  };
+
+  const tdMuted = {
+    padding: "12px 24px",
+    width: "60px",
+    color: "#94a3b8",
+    fontSize: "13px",
+  };
+
+  const tdMain = {
+    padding: "12px 24px",
+    fontWeight: 500,
+    color: "#334155",
+  };
+
+  const tdNum = {
+    padding: "12px 24px",
+    color: "#0f172a",
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+  };
+
   return (
     <div className="fade-in" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Upload area */}
       <div
         style={{
           display: "flex",
@@ -308,6 +358,7 @@ const ComparisonView = () => {
         />
       </div>
 
+      {/* Run button */}
       <div style={{ textAlign: "center", marginBottom: "30px", flexShrink: 0 }}>
         <button
           className="custom-btn"
@@ -328,15 +379,12 @@ const ComparisonView = () => {
             gap: "10px",
           }}
         >
-          {loading ? (
-            <Loader2 className="spin" size={20} />
-          ) : (
-            <Play size={20} fill="currentColor" />
-          )}
+          {loading ? <Loader2 className="spin" size={20} /> : <Play size={20} fill="currentColor" />}
           {loading ? "Обработка данных..." : "Начать сверку"}
         </button>
       </div>
 
+      {/* Results */}
       {result && (
         <div
           className="card fade-in"
@@ -348,10 +396,12 @@ const ComparisonView = () => {
             overflow: "hidden",
             background: "white",
             borderRadius: "12px",
-            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+            boxShadow:
+              "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
             border: "1px solid #e2e8f0",
           }}
         >
+          {/* Tabs */}
           <div
             style={{
               display: "flex",
@@ -365,99 +415,92 @@ const ComparisonView = () => {
               onClick={() => setActiveTab("missing2")}
               color="#ef4444"
               label="Только в Unity"
-              count={result.stats.only_in_1}
+              count={result?.stats?.only_in_1 ?? 0}
             />
             <TabButton
               active={activeTab === "missing1"}
               onClick={() => setActiveTab("missing1")}
               color="#f59e0b"
               label="Только у Провайдера"
-              count={result.stats.only_in_2}
+              count={result?.stats?.only_in_2 ?? 0}
             />
             <TabButton
               active={activeTab === "matches"}
               onClick={() => setActiveTab("matches")}
               color="#16a34a"
               label="Совпадения"
-              count={result.stats.matches}
+              count={result?.stats?.matches ?? 0}
             />
           </div>
 
+          {/* Table */}
           <div style={{ flex: 1, overflowY: "auto", padding: "0" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead style={{ background: "#f1f5f9", position: "sticky", top: 0, zIndex: 10 }}>
                 <tr>
-                  <th
-                    style={{
-                      padding: "15px 24px",
-                      textAlign: "left",
-                      color: "#64748b",
-                      fontSize: "12px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    #
-                  </th>
-                  <th
-                    style={{
-                      padding: "15px 24px",
-                      textAlign: "left",
-                      color: "#64748b",
-                      fontSize: "12px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    Инструмент (Тикер)
-                  </th>
+                  <th style={thStyle}>#</th>
+                  <th style={thStyle}>Инструмент (Тикер)</th>
+
+                  {/* New-format columns */}
+                  {isObjectRows && activeTab === "matches" && (
+                    <>
+                      <th style={thStyle}>Unity (count)</th>
+                      <th style={thStyle}>Provider (count)</th>
+                      <th style={thStyle}>Diff</th>
+                    </>
+                  )}
+
+                  {isObjectRows && activeTab === "missing2" && <th style={thStyle}>Unity (count)</th>}
+                  {isObjectRows && activeTab === "missing1" && (
+                    <th style={thStyle}>Provider (count)</th>
+                  )}
                 </tr>
               </thead>
-              <tbody>
-                {(() => {
-                  const data =
-                    activeTab === "missing2"
-                      ? result.data.only_in_unity
-                      : activeTab === "missing1"
-                        ? result.data.only_in_ais
-                        : result.data.matches;
 
-                  if (data.length === 0)
+              <tbody>
+                {(!data || data.length === 0) ? (
+                  <tr>
+                    <td colSpan={isObjectRows ? (activeTab === "matches" ? 5 : 3) : 2}
+                        style={{ padding: "60px", textAlign: "center", color: "#94a3b8" }}>
+                      <List size={48} style={{ opacity: 0.2, marginBottom: 15 }} />
+                      <div style={{ fontSize: "16px" }}>Список пуст</div>
+                    </td>
+                  </tr>
+                ) : (
+                  data.map((row, idx) => {
+                    // old format row is a string
+                    const instrument = isObjectRows ? (row.instrument ?? row) : row;
+
                     return (
-                      <tr>
-                        <td
-                          colSpan="2"
-                          style={{ padding: "60px", textAlign: "center", color: "#94a3b8" }}
-                        >
-                          <List size={48} style={{ opacity: 0.2, marginBottom: 15 }} />
-                          <div style={{ fontSize: "16px" }}>Список пуст</div>
-                        </td>
+                      <tr
+                        key={idx}
+                        style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.1s" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <td style={tdMuted}>{idx + 1}</td>
+                        <td style={tdMain}>{instrument}</td>
+
+                        {/* New-format cells */}
+                        {isObjectRows && activeTab === "matches" && (
+                          <>
+                            <td style={tdNum}>{row.count_file1 ?? 0}</td>
+                            <td style={tdNum}>{row.count_file2 ?? 0}</td>
+                            <td style={tdNum}>{row.diff ?? 0}</td>
+                          </>
+                        )}
+
+                        {isObjectRows && activeTab === "missing2" && (
+                          <td style={tdNum}>{row.count_file1 ?? 0}</td>
+                        )}
+
+                        {isObjectRows && activeTab === "missing1" && (
+                          <td style={tdNum}>{row.count_file2 ?? 0}</td>
+                        )}
                       </tr>
                     );
-
-                  return data.map((item, idx) => (
-                    <tr
-                      key={idx}
-                      style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.1s" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      <td
-                        style={{
-                          padding: "12px 24px",
-                          width: "60px",
-                          color: "#94a3b8",
-                          fontSize: "13px",
-                        }}
-                      >
-                        {idx + 1}
-                      </td>
-                      <td style={{ padding: "12px 24px", fontWeight: 500, color: "#334155" }}>
-                        {item}
-                      </td>
-                    </tr>
-                  ));
-                })()}
+                  })
+                )}
               </tbody>
             </table>
           </div>
