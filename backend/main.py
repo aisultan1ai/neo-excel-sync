@@ -176,6 +176,7 @@ async def require_admin(current_user: str = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
+
 def ensure_task_owner_or_admin(task_row: dict, user_row: tuple):
     """
     user_row: (id, username, password_hash, department, is_admin)
@@ -257,16 +258,24 @@ def startup_event():
         init_user = os.getenv("INIT_ADMIN_USERNAME")
         init_pass = os.getenv("INIT_ADMIN_PASSWORD")
         init_dept = os.getenv("INIT_ADMIN_DEPARTMENT", "Admin")
-        init_is_admin = os.getenv("INIT_ADMIN_IS_ADMIN", "true").lower() in ("1", "true", "yes", "y")
+        init_is_admin = os.getenv("INIT_ADMIN_IS_ADMIN", "true").lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+        )
 
         if init_user and init_pass:
             if database_manager.count_users() == 0:  # <-- нужно добавить метод
                 salt = bcrypt.gensalt()
                 hashed = bcrypt.hashpw(init_pass.encode("utf-8"), salt).decode("utf-8")
-                database_manager.create_new_user(init_user, hashed, init_dept, init_is_admin)
+                database_manager.create_new_user(
+                    init_user, hashed, init_dept, init_is_admin
+                )
                 log.info("Bootstrap admin created.")
     except Exception:
         log.exception("Bootstrap admin failed")
+
 
 @app.get("/")
 def read_root():
@@ -451,7 +460,9 @@ def _process_comparison_sync(
 
 
 @app.get("/api/export/{comparison_id}")
-async def export_excel_file(comparison_id: str, current_user: str = Depends(get_current_user)):
+async def export_excel_file(
+    comparison_id: str, current_user: str = Depends(get_current_user)
+):
     """Экспорт по ID без передачи данных обратно."""
     cleanup_cache()
 
@@ -513,9 +524,10 @@ def get_last_result(current_user: str = Depends(get_current_user)):
             json_response[key] = val
 
     json_response["status"] = "success"
-    json_response["comparison_id"] = cid  # <-- чтобы export работал после восстановления
+    json_response["comparison_id"] = (
+        cid  # <-- чтобы export работал после восстановления
+    )
     return json_response
-
 
 
 @app.get("/api/settings")
@@ -863,7 +875,6 @@ async def remove_attachment(
     raise HTTPException(500, "Error deleting attachment")
 
 
-
 # ПОЛЬЗОВАТЕЛИ И ПРОФИЛЬ
 
 
@@ -928,9 +939,7 @@ async def admin_create_user(
 
 
 @app.delete("/api/admin/users/{user_id}")
-async def admin_delete_user(
-    user_id: int, current_user: str = Depends(require_admin)
-):
+async def admin_delete_user(user_id: int, current_user: str = Depends(require_admin)):
     caller = database_manager.get_user_by_username(current_user)
     if caller and caller[0] == user_id:
         raise HTTPException(400, "Cannot delete yourself")
@@ -1007,14 +1016,20 @@ async def compare_instruments(
         if not file1.filename or not file2.filename:
             raise HTTPException(status_code=400, detail="Files are required")
         if not file1.filename.lower().endswith(allowed):
-            raise HTTPException(status_code=400, detail="file1: only .xlsx/.xls/.csv allowed")
+            raise HTTPException(
+                status_code=400, detail="file1: only .xlsx/.xls/.csv allowed"
+            )
         if not file2.filename.lower().endswith(allowed):
-            raise HTTPException(status_code=400, detail="file2: only .xlsx/.xls/.csv allowed")
+            raise HTTPException(
+                status_code=400, detail="file2: only .xlsx/.xls/.csv allowed"
+            )
 
         f1_path = save_upload_file(file1)
         f2_path = save_upload_file(file2)
 
-        res = await run_in_threadpool(_process_instruments, f1_path, f2_path, col1, col2)
+        res = await run_in_threadpool(
+            _process_instruments, f1_path, f2_path, col1, col2
+        )
         return res
 
     except HTTPException:
@@ -1028,7 +1043,9 @@ async def compare_instruments(
     except Exception as e:
         # неожиданная серверная ошибка
         log.error(f"compare-instruments failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Server error during instruments comparison")
+        raise HTTPException(
+            status_code=500, detail="Server error during instruments comparison"
+        )
 
     finally:
         cleanup_files(f1_path, f2_path)
@@ -1070,8 +1087,12 @@ def _process_instruments(f1_path: str, f2_path: str, c1: str, c2: str):
         }
 
     matches_rows = [row_for(k) for k in common]
-    only1_rows = [{"instrument": k, "count_file1": int(c1_counts.get(k, 0))} for k in only_in_1]
-    only2_rows = [{"instrument": k, "count_file2": int(c2_counts.get(k, 0))} for k in only_in_2]
+    only1_rows = [
+        {"instrument": k, "count_file1": int(c1_counts.get(k, 0))} for k in only_in_1
+    ]
+    only2_rows = [
+        {"instrument": k, "count_file2": int(c2_counts.get(k, 0))} for k in only_in_2
+    ]
 
     # удобно сортировать совпадения по разнице (чтобы сразу видеть проблему)
     matches_rows.sort(key=lambda r: abs(r["diff"]), reverse=True)
@@ -1090,7 +1111,7 @@ def _process_instruments(f1_path: str, f2_path: str, c1: str, c2: str):
         "data": {
             "matches": matches_rows,
             "only_in_unity": only1_rows,  # file1
-            "only_in_ais": only2_rows,    # file2
+            "only_in_ais": only2_rows,  # file2
         },
     }
 
@@ -1122,7 +1143,6 @@ async def remove_task(task_id: int, current_user: str = Depends(get_current_user
     raise HTTPException(status_code=500, detail="Failed to delete task")
 
 
-
 @app.get("/api/health")
 def health_check():
     api_status = "Online"
@@ -1143,9 +1163,6 @@ def health_check():
                 log.debug("Failed to close DB connection in healthcheck", exc_info=True)
 
     return {"api": api_status, "db": db_status}
-
-
-# ГЕНЕРАТОР ОТЧЕТОВ ПО СДЕЛКАМ
 
 
 def format_report_number(num):
@@ -1190,11 +1207,8 @@ async def generate_trade_report(file: UploadFile = File(...)):
         report_lines = []
 
         df["Ticker"] = df["Instrument"].apply(parse_ticker_from_instrument)
-        # Определяем тип: Лонг (Amount > 0) или Шорт (Amount < 0)
         df["Type"] = df["Amount"].apply(lambda x: "лонг" if x > 0 else "шорт")
 
-        # Группируем по Тикеру и Типу.
-        # sort=False сохраняет порядок появления (если нужно), но лучше отсортировать по тикеру
         grouped = df.groupby(["Ticker", "Type"])
 
         for (ticker, trade_type), group in grouped:
@@ -1227,11 +1241,6 @@ async def generate_trade_report(file: UploadFile = File(...)):
         raise HTTPException(500, f"Ошибка обработки файла: {str(e)}")
     finally:
         cleanup_files(temp_path)
-
-
-# =========================
-# CRYPTO API
-# =========================
 
 
 @app.get("/api/crypto/accounts")
@@ -1305,7 +1314,6 @@ def api_create_crypto_transfer(
     if not asset:
         raise HTTPException(400, "asset required")
 
-    # правила как у твоего фронта
     if t == "transfer":
         if not payload.fromId or not payload.toId:
             raise HTTPException(400, "fromId and toId required for transfer")
@@ -1368,6 +1376,6 @@ def api_delete_crypto_transfer(
 ):
     ok = database_manager.delete_crypto_transfer(transfer_id)
     if not ok:
-        # если хочешь отличать "не найдено" от "ошибка" — см. ниже вариант 404
+
         raise HTTPException(404, "Transfer not found")
     return {"ok": True}

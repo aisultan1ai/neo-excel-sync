@@ -516,7 +516,6 @@ def get_task_by_id(task_id: int):
         conn.close()
 
 
-
 def update_task_status(task_id, new_status):
     conn = get_db_connection()
     if not conn:
@@ -1131,6 +1130,7 @@ def delete_crypto_transfer(transfer_id: int):
     finally:
         conn.close()
 
+
 def count_users():
     conn = get_db_connection()
     if not conn:
@@ -1141,4 +1141,3 @@ def count_users():
         return cur.fetchone()[0]
     finally:
         conn.close()
-

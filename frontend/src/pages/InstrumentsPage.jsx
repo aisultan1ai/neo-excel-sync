@@ -263,7 +263,6 @@ const ComparisonView = () => {
     }
   };
 
-  // ---- helpers to support BOTH old/new backend formats ----
   const getTabData = useCallback(() => {
     if (!result?.data) return [];
     if (activeTab === "missing2") return result.data.only_in_unity || [];
@@ -273,9 +272,6 @@ const ComparisonView = () => {
 
   const data = getTabData();
 
-  // detect response format:
-  // old format: ["AAPL", "MSFT"]
-  // new format: [{instrument, count_file1, count_file2, diff}, ...]
   const isObjectRows = Array.isArray(data) && data.length > 0 && typeof data[0] === "object";
 
   const thStyle = {
@@ -510,7 +506,6 @@ const ComparisonView = () => {
   );
 };
 
-// --- ГЕНЕРАТОР ОТЧЕТА ---
 const ReportView = () => {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -690,7 +685,6 @@ const ReportView = () => {
 const ReconcileView = () => {
   const [subMode, setSubMode] = useState("twofiles"); // twofiles | duplicates
 
-  // --- twofiles ---
   const [f1, setF1] = useState(null);
   const [h1, setH1] = useState([]);
   const [instCol1, setInstCol1] = useState("Ценная бумага");
