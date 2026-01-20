@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import { api } from "../api";
 import { toast } from "react-toastify";
 import * as XLSX from "xlsx";
 import {
@@ -49,7 +49,10 @@ const FileSection = ({
 
           if (defaultIdName) {
             const foundId = foundHeaders.find((h) =>
-              String(h).toLowerCase().trim().includes(String(defaultIdName).toLowerCase().trim())
+              String(h || "")
+                .toLowerCase()
+                .trim()
+                .includes(String(defaultIdName).toLowerCase().trim())
             );
             if (foundId) setIdCol(foundId);
           }
@@ -170,7 +173,6 @@ const FileSection = ({
               position: "absolute",
               width: "100%",
               top: 0,
-
             }}
           >
             <UploadCloud size={32} color="#94a3b8" style={{ marginBottom: "10px" }} />
@@ -282,25 +284,7 @@ const SverkaPage = () => {
   const [activeTab, setActiveTab] = useState("matches");
 
   const [filterText, setFilterText] = useState("");
-  const [filterCol, setFilterCol] = useState(""); // "" = по всем колонкам
-
-  const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
-
-  useEffect(() => {
-    const fetchLastResult = async () => {
-      try {
-        const response = await fetch("/api/last-result");
-        const data = await response.json();
-        if (data.status === "success") {
-          setResults(data);
-          setIsHeaderExpanded(false);
-        }
-      } catch (error) {
-        console.error("Ошибка восстановления:", error);
-      }
-    };
-    fetchLastResult();
-  }, []);
+  const [filterCol, setFilterCol] = useState("");
 
   const [cols, setCols] = useState({
     id_col_1: "",
@@ -316,9 +300,26 @@ const SverkaPage = () => {
     acc_ais: "Субсчет",
   });
 
+  // восстановить последний результат (теперь через api, с токеном)
   useEffect(() => {
-    axios
-      .get("/api/settings")
+    const fetchLastResult = async () => {
+      try {
+        const { data } = await api.get("/last-result");
+        if (data.status === "success") {
+          setResults(data);
+        }
+      } catch (error) {
+        // если 401 — interceptor сам сделает logout/reload
+        console.error("Ошибка восстановления:", error);
+      }
+    };
+    fetchLastResult();
+  }, []);
+
+  // настройки
+  useEffect(() => {
+    api
+      .get("/settings")
       .then((res) => {
         if (res.data) {
           setDefaults({
@@ -348,7 +349,7 @@ const SverkaPage = () => {
     formData.append("file2", file2);
 
     try {
-      const settingsRes = await axios.get("/api/settings");
+      const settingsRes = await api.get("/settings");
       formData.append("settings_json", JSON.stringify(settingsRes.data));
     } catch (e) {
       setLoading(false);
@@ -361,7 +362,7 @@ const SverkaPage = () => {
     formData.append("acc_col_2", cols.acc_col_2);
 
     try {
-      const res = await axios.post("/api/compare", formData, {
+      const res = await api.post("/compare", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setResults(res.data);
@@ -381,7 +382,7 @@ const SverkaPage = () => {
 
     setLoadingExport(true);
     try {
-      const res = await axios.get(`/api/export/${results.comparison_id}`, {
+      const res = await api.get(`/export/${results.comparison_id}`, {
         responseType: "blob",
       });
 
@@ -426,14 +427,10 @@ const SverkaPage = () => {
       : data.filter((row) => {
           if (filterCol) {
             const v = row?.[filterCol];
-            return String(v ?? "")
-              .toLowerCase()
-              .includes(normalizedQuery);
+            return String(v ?? "").toLowerCase().includes(normalizedQuery);
           }
           return headers.some((h) =>
-            String(row?.[h] ?? "")
-              .toLowerCase()
-              .includes(normalizedQuery)
+            String(row?.[h] ?? "").toLowerCase().includes(normalizedQuery)
           );
         });
 
@@ -458,7 +455,7 @@ const SverkaPage = () => {
             {filtered.slice(0, 2000).map((row, i) => (
               <tr key={i}>
                 {headers.map((h) => (
-                  <td key={h}>{String(row?.[h] === null ? "" : (row?.[h] ?? ""))}</td>
+                  <td key={h}>{String(row?.[h] === null ? "" : row?.[h] ?? "")}</td>
                 ))}
               </tr>
             ))}
@@ -498,7 +495,7 @@ const SverkaPage = () => {
         .spin-anim { animation: spin 1s linear infinite; }
       `}</style>
 
-      {/* Верхняя часть НЕ уменьшаем */}
+      {/* Верх */}
       <div style={{ flexShrink: 0, overflowY: "auto", paddingBottom: "20px" }}>
         <h1 style={{ marginBottom: "20px", fontSize: "28px", color: "#1e293b" }}>Сверка данных</h1>
 
@@ -585,7 +582,6 @@ const SverkaPage = () => {
             marginBottom: "0",
           }}
         >
-          {/* Шапка результатов + фильтр + экспорт */}
           <div
             style={{
               padding: "15px 30px",
@@ -624,7 +620,6 @@ const SverkaPage = () => {
               ))}
             </div>
 
-            {/* Фильтр */}
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748b" }}>
                 <Search size={16} />
@@ -654,7 +649,6 @@ const SverkaPage = () => {
               />
             </div>
 
-            {/* Экспорт */}
             <button
               className="btn"
               onClick={handleExport}
@@ -683,7 +677,6 @@ const SverkaPage = () => {
             </button>
           </div>
 
-          {/* Контейнер таблицы */}
           <div style={{ flex: 1, background: "#ffffff", overflow: "hidden", position: "relative" }}>
             <ResultTable data={results[activeTab]} />
           </div>

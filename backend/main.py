@@ -64,9 +64,11 @@ TEMP_DIR = "temp_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 COMPARISON_CACHE: Dict[str, Any] = {}
+LAST_RESULT_BY_USER: Dict[str, str] = {}
 CACHE_LOCK = Lock()
-CACHE_TTL_MINUTES = int(os.getenv("CACHE_TTL_MINUTES", "60"))
-CACHE_MAX_ITEMS = int(os.getenv("CACHE_MAX_ITEMS", "30"))
+
+CACHE_TTL_MINUTES = int(os.getenv("CACHE_TTL_MINUTES", "30"))
+CACHE_MAX_ITEMS = int(os.getenv("CACHE_MAX_ITEMS", "15"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
@@ -237,6 +239,11 @@ def cleanup_cache():
             )
             COMPARISON_CACHE.pop(oldest, None)
 
+        valid_ids = set(COMPARISON_CACHE.keys())
+        for user, cid in list(LAST_RESULT_BY_USER.items()):
+            if cid not in valid_ids:
+                LAST_RESULT_BY_USER.pop(user, None)
+
 
 # --- API ---
 
@@ -290,6 +297,7 @@ async def run_comparison(
     acc_col_1: str = Form(...),
     id_col_2: str = Form(...),
     acc_col_2: str = Form(...),
+    current_user: str = Depends(get_current_user),
 ):
     f1_path = None
     f2_path = None
@@ -320,7 +328,9 @@ async def run_comparison(
             COMPARISON_CACHE[comparison_id] = {
                 "data": results,
                 "created_at": datetime.now(),
+                "owner": current_user,
             }
+            LAST_RESULT_BY_USER[current_user] = comparison_id
 
         cleanup_cache()
 
@@ -441,9 +451,10 @@ def _process_comparison_sync(
 
 
 @app.get("/api/export/{comparison_id}")
-async def export_excel_file(comparison_id: str):
+async def export_excel_file(comparison_id: str, current_user: str = Depends(get_current_user)):
     """Экспорт по ID без передачи данных обратно."""
     cleanup_cache()
+
     with CACHE_LOCK:
         cached = COMPARISON_CACHE.get(comparison_id)
 
@@ -452,6 +463,8 @@ async def export_excel_file(comparison_id: str):
             status_code=404,
             detail="Результаты устарели или не найдены. Повторите сверку.",
         )
+    if cached.get("owner") != current_user:
+        raise HTTPException(403, "Forbidden")
 
     results = cached["data"]
 
@@ -476,12 +489,17 @@ async def export_excel_file(comparison_id: str):
 
 
 @app.get("/api/last-result")
-def get_last_result():
-    if not COMPARISON_CACHE:
+def get_last_result(current_user: str = Depends(get_current_user)):
+    cleanup_cache()
+
+    with CACHE_LOCK:
+        cid = LAST_RESULT_BY_USER.get(current_user)
+        cached = COMPARISON_CACHE.get(cid) if cid else None
+
+    if not cached:
         return {"status": "empty", "message": "No data"}
 
-    last_key = list(COMPARISON_CACHE.keys())[-1]
-    results = COMPARISON_CACHE[last_key]["data"]
+    results = cached["data"]
 
     json_response = {}
     for key, val in results.items():
@@ -491,9 +509,13 @@ def get_last_result():
             json_response[key] = val.to_dict()
         elif isinstance(val, set):
             json_response[key] = list(val)
+        elif isinstance(val, list):
+            json_response[key] = val
 
     json_response["status"] = "success"
+    json_response["comparison_id"] = cid  # <-- чтобы export работал после восстановления
     return json_response
+
 
 
 @app.get("/api/settings")
