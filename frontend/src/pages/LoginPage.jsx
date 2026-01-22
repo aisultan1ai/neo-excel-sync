@@ -1,12 +1,8 @@
-// src/pages/LoginPage.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ShieldCheck, Zap, BarChart3, User, Lock, ArrowRight } from "lucide-react";
 import axios from "axios";
 
-// ВАЖНО:
-// - Мы бьёмся в /api/*, потому что backend у тебя: @app.post("/api/token")
-// - Если у тебя нет прокси /api -> backend, то настроим (скажу ниже)
 const http = axios.create({
   baseURL: "/api",
   timeout: 15000,
@@ -27,7 +23,7 @@ const LoginPage = ({ onLogin }) => {
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        // если у тебя health НЕ под /api/health, поменяй на "/health"
+
         await http.get("/health", { timeout: 2500 });
         setSystemStatus("ONLINE");
       } catch (err) {
@@ -70,7 +66,6 @@ const LoginPage = ({ onLogin }) => {
       body.append("username", username.trim());
       body.append("password", password);
 
-      // ✅ твой endpoint: POST /api/token
       const res = await http.post("/token", body, {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
