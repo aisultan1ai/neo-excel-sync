@@ -164,6 +164,48 @@ def init_database():
                            )
                        """)
 
+        # --- TASKS schema upgrades (assign/accept/deadline/priority) ---
+        for sql in [
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS to_user_id INTEGER",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS accepted_by_user_id INTEGER",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date DATE",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'normal'",
+        ]:
+            try:
+                cursor.execute(sql)
+            except Exception:
+                conn.rollback()
+
+        # FK constraints (safe)
+        try:
+            cursor.execute("""
+            DO $$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='tasks_to_user_fk') THEN
+                ALTER TABLE tasks
+                  ADD CONSTRAINT tasks_to_user_fk
+                  FOREIGN KEY (to_user_id) REFERENCES users(id) ON DELETE SET NULL;
+              END IF;
+
+              IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='tasks_accepted_by_fk') THEN
+                ALTER TABLE tasks
+                  ADD CONSTRAINT tasks_accepted_by_fk
+                  FOREIGN KEY (accepted_by_user_id) REFERENCES users(id) ON DELETE SET NULL;
+              END IF;
+            END$$;
+            """)
+        except Exception:
+            conn.rollback()
+
+        # Индексы (не обязательно, но полезно)
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_to_dept ON tasks(to_department)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_accepted_by ON tasks(accepted_by_user_id)")
+        except Exception:
+            conn.rollback()
+
+
         # 4. Таблица COMMENTS
         cursor.execute("""
                        CREATE TABLE IF NOT EXISTS comments
@@ -429,24 +471,79 @@ def get_user_by_username(username):
         conn.close()
 
 
-def create_task(title, description, from_user_id, to_department):
+def create_task(title, description, from_user_id, to_department, to_user_id=None, due_date=None, priority="normal"):
     conn = get_db_connection()
     if not conn:
-        return False
+        return None
     try:
         cursor = conn.cursor()
         cursor.execute(
             """
-                       INSERT INTO tasks (title, description, from_user_id, to_department)
-                       VALUES (%s, %s, %s, %s) RETURNING id
-                       """,
-            (title, description, from_user_id, to_department),
+            INSERT INTO tasks (title, description, from_user_id, to_department, to_user_id, due_date, priority)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (title, description, from_user_id, to_department, to_user_id, due_date, priority),
         )
         task_id = cursor.fetchone()[0]
         conn.commit()
         return task_id
     except Exception as e:
         log.error(f"Create task error: {e}")
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+
+def get_user_by_id(user_id: int):
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT id, username, department, is_admin FROM users WHERE id=%s", (user_id,))
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+def get_users_basic():
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT id, username, department FROM users ORDER BY department, username")
+        return cur.fetchall()
+    finally:
+        conn.close()
+
+def accept_task(task_id: int, accepter_user_id: int):
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """
+            UPDATE tasks
+            SET accepted_by_user_id = %s,
+                accepted_at = NOW(),
+                status = CASE WHEN status='Open' THEN 'In Progress' ELSE status END
+            WHERE id = %s
+              AND accepted_by_user_id IS NULL
+              AND to_user_id IS NULL
+              AND status <> 'Done'
+            RETURNING *
+            """,
+            (accepter_user_id, task_id),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return row  # None если уже принято/нельзя
+    except Exception as e:
+        log.error(f"accept_task error: {e}")
+        conn.rollback()
         return None
     finally:
         conn.close()
@@ -460,17 +557,23 @@ def get_tasks_by_dept(department):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute(
             """
-                       SELECT t.*, u.username as author_name, u.department as author_dept
-                       FROM tasks t
-                                LEFT JOIN users u ON t.from_user_id = u.id
-                       WHERE t.to_department = %s
-                       ORDER BY t.created_at DESC
-                       """,
+            SELECT t.*,
+                   au.username as author_name, au.department as author_dept,
+                   acc.username as accepted_by_name, acc.department as accepted_by_dept,
+                   tu.username as to_user_name, tu.department as to_user_dept
+            FROM tasks t
+            LEFT JOIN users au  ON t.from_user_id = au.id
+            LEFT JOIN users acc ON t.accepted_by_user_id = acc.id
+            LEFT JOIN users tu  ON t.to_user_id = tu.id
+            WHERE t.to_department = %s
+            ORDER BY t.created_at DESC
+            """,
             (department,),
         )
         return cursor.fetchall()
     finally:
         conn.close()
+
 
 
 def update_task(task_id, title, description):
@@ -504,14 +607,19 @@ def get_task_by_id(task_id: int):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute(
             """
-            SELECT t.*, u.username as author_name, u.department as author_dept
+            SELECT t.*,
+                   au.username as author_name, au.department as author_dept,
+                   acc.username as accepted_by_name, acc.department as accepted_by_dept,
+                   tu.username as to_user_name, tu.department as to_user_dept
             FROM tasks t
-            LEFT JOIN users u ON t.from_user_id = u.id
+            LEFT JOIN users au  ON t.from_user_id = au.id
+            LEFT JOIN users acc ON t.accepted_by_user_id = acc.id
+            LEFT JOIN users tu  ON t.to_user_id = tu.id
             WHERE t.id = %s
             """,
             (task_id,),
         )
-        return cursor.fetchone()  # dict-like
+        return cursor.fetchone()
     finally:
         conn.close()
 
@@ -884,17 +992,23 @@ def get_user_tasks(user_id):
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute(
             """
-            SELECT t.*, u.username as author_name, u.department as author_dept
+            SELECT t.*,
+                   au.username as author_name, au.department as author_dept,
+                   acc.username as accepted_by_name, acc.department as accepted_by_dept,
+                   tu.username as to_user_name, tu.department as to_user_dept
             FROM tasks t
-            LEFT JOIN users u ON t.from_user_id = u.id
+            LEFT JOIN users au  ON t.from_user_id = au.id
+            LEFT JOIN users acc ON t.accepted_by_user_id = acc.id
+            LEFT JOIN users tu  ON t.to_user_id = tu.id
             WHERE t.from_user_id = %s
             ORDER BY t.created_at DESC
-        """,
+            """,
             (user_id,),
         )
         return cursor.fetchall()
     finally:
         conn.close()
+
 
 
 # =========================

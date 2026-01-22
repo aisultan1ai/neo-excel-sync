@@ -83,8 +83,12 @@ class UserCreate(BaseModel):
 
 class TaskCreate(BaseModel):
     title: str
-    description: str
-    to_department: str
+    description: str = ""
+    to_department: Optional[str] = None
+    to_user_id: Optional[int] = None
+    due_date: Optional[date] = None  # "YYYY-MM-DD"
+    priority: str = "normal"         # normal | urgent
+
 
 
 class TaskStatusUpdate(BaseModel):
@@ -743,6 +747,9 @@ async def reset_all_clients_status(current_user: str = Depends(get_current_user)
 
 
 # ЗАДАЧИ
+@app.get("/api/users")
+async def get_users_basic(current_user: str = Depends(get_current_user)):
+    return database_manager.get_users_basic()
 
 
 @app.get("/api/tasks/{department}")
@@ -759,12 +766,79 @@ async def create_new_task(
     if not user:
         raise HTTPException(404, "User not found")
 
+    pr = (task.priority or "normal").strip().lower()
+    if pr not in ("normal", "urgent"):
+        raise HTTPException(400, "priority must be normal or urgent")
+
+    to_user_id = task.to_user_id
+    to_department = (task.to_department or "").strip() or None
+
+    # если назначаем на человека — подтянем его департамент (чтобы задача была видна отделу)
+    if to_user_id:
+        u = database_manager.get_user_by_id(to_user_id)
+        if not u:
+            raise HTTPException(404, "Target user not found")
+        if not to_department:
+            to_department = u["department"]
+
+    if not to_department:
+        raise HTTPException(400, "to_department is required (or specify to_user_id)")
+
     task_id = database_manager.create_task(
-        task.title, task.description, user[0], task.to_department
+        task.title,
+        task.description,
+        user[0],
+        to_department,
+        to_user_id=to_user_id,
+        due_date=task.due_date,
+        priority=pr,
     )
     if task_id:
         return {"status": "success", "id": task_id}
     raise HTTPException(500, "Error creating task")
+
+@app.post("/api/tasks/{task_id}/accept")
+async def accept_task_endpoint(task_id: int, current_user: str = Depends(get_current_user)):
+    user = database_manager.get_user_by_username(current_user)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    db_task = database_manager.get_task_by_id(task_id)
+    if not db_task:
+        raise HTTPException(404, "Task not found")
+
+    is_admin = user[4] if len(user) > 4 else False
+
+    # Нельзя "принять" задачу, если она назначена конкретному человеку
+    if db_task.get("to_user_id"):
+        raise HTTPException(400, "This task is assigned to a specific user")
+
+    # Нельзя принимать Done
+    if db_task.get("status") == "Done":
+        raise HTTPException(400, "Cannot accept a completed task")
+
+    # Только свой отдел (или админ)
+    if (not is_admin) and (db_task.get("to_department") != user[3]):
+        raise HTTPException(403, "Not allowed")
+
+    # Уже принято?
+    if db_task.get("accepted_by_user_id"):
+        if db_task.get("accepted_by_user_id") == user[0]:
+            # идемпотентно
+            return {"status": "success", "task": db_task}
+        raise HTTPException(409, f"Already accepted by {db_task.get('accepted_by_name')}")
+
+    updated = database_manager.accept_task(task_id, user[0])
+    if not updated:
+        # если гонка — просто вернём актуальную
+        fresh = database_manager.get_task_by_id(task_id)
+        if fresh and fresh.get("accepted_by_user_id") == user[0]:
+            return {"status": "success", "task": fresh}
+        raise HTTPException(409, "Already accepted")
+
+    # вернем красиво с join-полями
+    fresh = database_manager.get_task_by_id(task_id)
+    return {"status": "success", "task": fresh or updated}
 
 
 @app.put("/api/tasks/{task_id}/status")

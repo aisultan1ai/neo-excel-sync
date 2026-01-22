@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import {
   Users,
@@ -25,6 +25,14 @@ const STATUS_CONFIG = {
   Done: { label: "Выполнено", color: "#10b981", bg: "#ecfdf5", icon: CheckCircle },
 };
 
+const formatYmdToRu = (ymd) => {
+  if (!ymd || typeof ymd !== "string") return "";
+  const parts = ymd.split("-");
+  if (parts.length !== 3) return ymd;
+  const [y, m, d] = parts;
+  return `${d}.${m}.${y}`;
+};
+
 const DepartmentsPage = () => {
   const [departments, setDepartments] = useState([]);
   const [activeDept, setActiveDept] = useState("My Tasks");
@@ -34,12 +42,23 @@ const DepartmentsPage = () => {
   // current user
   const [me, setMe] = useState(null);
 
+  // users list for "assign to user"
+  const [users, setUsers] = useState([]);
+
   // --- CREATE TASK ---
   const [showModal, setShowModal] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDesc, setNewTaskDesc] = useState("");
   const [newTaskFile, setNewTaskFile] = useState(null);
+
+  // receiver: department or user
+  const [receiverType, setReceiverType] = useState("department"); // department | user
   const [targetDeptForNewTask, setTargetDeptForNewTask] = useState("");
+  const [targetUserIdForNewTask, setTargetUserIdForNewTask] = useState("");
+
+  // due date + priority
+  const [newTaskDueDate, setNewTaskDueDate] = useState(""); // YYYY-MM-DD
+  const [newTaskPriority, setNewTaskPriority] = useState("normal"); // normal | urgent
 
   // --- VIEW / EDIT ---
   const [expandedTask, setExpandedTask] = useState(null);
@@ -71,6 +90,18 @@ const DepartmentsPage = () => {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get("/api/users", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setUsers(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      setUsers([]);
+    }
+  };
+
   const fetchDepartments = async () => {
     try {
       const res = await axios.get("/api/departments");
@@ -87,7 +118,7 @@ const DepartmentsPage = () => {
       const token = localStorage.getItem("token");
       const url = activeDept === "My Tasks" ? "/api/my-tasks" : `/api/tasks/${activeDept}`;
       const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
-      setTasks(res.data);
+      setTasks(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("request failed", err);
     }
@@ -97,6 +128,7 @@ const DepartmentsPage = () => {
   useEffect(() => {
     fetchDepartments();
     fetchMe();
+    fetchUsers();
   }, []);
 
   // load tasks on dept change
@@ -105,22 +137,73 @@ const DepartmentsPage = () => {
   }, [activeDept]);
 
   // rights: only author or admin
-  const canManageTask =
-    me && expandedTask && (me.is_admin || me.id === expandedTask.from_user_id);
+  const canManageTask = useMemo(() => {
+    return me && expandedTask && (me.is_admin || me.id === expandedTask.from_user_id);
+  }, [me, expandedTask]);
+
+  const canAcceptTask = useMemo(() => {
+    if (!me || !expandedTask) return false;
+    if (expandedTask.status === "Done") return false;
+    if (expandedTask.to_user_id) return false; // assigned to specific user -> no "accept"
+    if (expandedTask.accepted_by_user_id) return false; // already accepted
+    // must be same department (or admin)
+    return me.is_admin || me.department === expandedTask.to_department;
+  }, [me, expandedTask]);
+
+  const usersForModal = useMemo(() => {
+    // if user is looking at a specific department, we can filter users by that dept (handy)
+    if (activeDept !== "My Tasks") {
+      return users.filter((u) => u.department === activeDept);
+    }
+    return users;
+  }, [users, activeDept]);
 
   // -----------------------
   // actions
   // -----------------------
+  const resetCreateModal = () => {
+    setShowModal(false);
+    setNewTaskTitle("");
+    setNewTaskDesc("");
+    setNewTaskFile(null);
+    setTargetDeptForNewTask("");
+    setTargetUserIdForNewTask("");
+    setReceiverType("department");
+    setNewTaskDueDate("");
+    setNewTaskPriority("normal");
+  };
+
   const handleCreateTask = async () => {
     if (!newTaskTitle) return toast.error("Введите заголовок");
-    const deptToSend = activeDept === "My Tasks" ? targetDeptForNewTask : activeDept;
-    if (!deptToSend) return toast.error("Выберите отдел получатель");
+
+    let to_department = "";
+    let to_user_id = null;
+
+    if (receiverType === "user") {
+      if (!targetUserIdForNewTask) return toast.error("Выберите пользователя");
+      const u = users.find((x) => String(x.id) === String(targetUserIdForNewTask));
+      if (!u) return toast.error("Пользователь не найден");
+      to_user_id = u.id;
+      to_department = u.department; // чтобы задача была видна отделу
+    } else {
+      // department
+      const deptToSend = activeDept === "My Tasks" ? targetDeptForNewTask : activeDept;
+      if (!deptToSend) return toast.error("Выберите отдел получатель");
+      to_department = deptToSend;
+    }
 
     try {
       const token = localStorage.getItem("token");
       const taskRes = await axios.post(
         "/api/tasks",
-        { title: newTaskTitle, description: newTaskDesc, to_department: deptToSend },
+        {
+          title: newTaskTitle,
+          description: newTaskDesc,
+          to_department,
+          to_user_id,
+          due_date: newTaskDueDate || null,
+          priority: newTaskPriority || "normal",
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -135,11 +218,7 @@ const DepartmentsPage = () => {
       }
 
       toast.success("Задача создана!");
-      setShowModal(false);
-      setNewTaskTitle("");
-      setNewTaskDesc("");
-      setNewTaskFile(null);
-      setTargetDeptForNewTask("");
+      resetCreateModal();
       fetchTasks();
     } catch (err) {
       toast.error("Ошибка создания задачи");
@@ -164,10 +243,37 @@ const DepartmentsPage = () => {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
-      setComments(resComments.data);
-      setAttachments(resFiles.data);
+      setComments(Array.isArray(resComments.data) ? resComments.data : []);
+      setAttachments(Array.isArray(resFiles.data) ? resFiles.data : []);
     } catch (err) {
       console.error("request failed", err);
+    }
+  };
+
+  const handleAcceptTask = async () => {
+    if (!expandedTask) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.post(
+        `/api/tasks/${expandedTask.id}/accept`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const updated = res.data?.task || null;
+      if (updated) {
+        setExpandedTask(updated);
+        setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+        toast.success(`Принято: ${updated.accepted_by_name || "Вы"}`);
+      } else {
+        fetchTasks();
+      }
+    } catch (e) {
+      if (e?.response?.status === 409) toast.error("Задача уже принята другим сотрудником");
+      else if (e?.response?.status === 403) toast.error("Нет прав принимать эту задачу");
+      else toast.error("Ошибка принятия");
+      fetchTasks();
     }
   };
 
@@ -188,7 +294,7 @@ const DepartmentsPage = () => {
       const res = await axios.get(`/api/tasks/${expandedTask.id}/attachments`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setAttachments(res.data);
+      setAttachments(Array.isArray(res.data) ? res.data : []);
       toast.success("Файл загружен");
     } catch (e2) {
       toast.error("Ошибка загрузки");
@@ -315,7 +421,7 @@ const DepartmentsPage = () => {
       const res = await axios.get(`/api/tasks/${expandedTask.id}/comments`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setComments(res.data);
+      setComments(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       toast.error("Ошибка");
     }
@@ -421,6 +527,7 @@ const DepartmentsPage = () => {
                     justifyContent: "space-between",
                     fontSize: "12px",
                     marginBottom: "10px",
+                    gap: "10px",
                   }}
                 >
                   <div style={{ color: "#64748b" }}>
@@ -428,7 +535,7 @@ const DepartmentsPage = () => {
                       <>
                         To:{" "}
                         <span style={{ fontWeight: 600, color: "#3b82f6" }}>
-                          {task.to_department}
+                          {task.to_user_id ? `👤 ${task.to_user_name}` : task.to_department}
                         </span>
                       </>
                     ) : (
@@ -455,6 +562,7 @@ const DepartmentsPage = () => {
                       alignItems: "center",
                       gap: "4px",
                       fontWeight: 600,
+                      flexShrink: 0,
                     }}
                   >
                     <StatusIcon size={12} /> {statusInfo.label}
@@ -471,6 +579,63 @@ const DepartmentsPage = () => {
                 >
                   {task.title}
                 </h3>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
+                  {task.priority === "urgent" && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        color: "#ef4444",
+                        background: "#fee2e2",
+                        padding: "3px 8px",
+                        borderRadius: "999px",
+                      }}
+                    >
+                      <AlertTriangle size={12} /> Срочно
+                    </div>
+                  )}
+
+                  {task.due_date && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "#334155",
+                        background: "#f1f5f9",
+                        padding: "3px 8px",
+                        borderRadius: "999px",
+                      }}
+                    >
+                      <Clock size={12} /> Дедлайн: {formatYmdToRu(task.due_date)}
+                    </div>
+                  )}
+
+                  {task.accepted_by_user_id && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "#0f172a",
+                        background: "#ecfdf5",
+                        padding: "3px 8px",
+                        borderRadius: "999px",
+                        border: "1px solid #d1fae5",
+                      }}
+                    >
+                      <CheckCircle size={12} /> Принял: {task.accepted_by_name}
+                    </div>
+                  )}
+                </div>
 
                 <p
                   style={{
@@ -528,22 +693,14 @@ const DepartmentsPage = () => {
                   <>
                     {/* EDIT только автор/админ */}
                     {canManageTask && (
-                      <button
-                        onClick={() => setIsEditing(true)}
-                        className="icon-btn"
-                        title="Редактировать"
-                      >
+                      <button onClick={() => setIsEditing(true)} className="icon-btn" title="Редактировать">
                         <Edit2 size={18} color="#64748b" />
                       </button>
                     )}
 
                     {/* DELETE только автор/админ */}
                     {canManageTask && (
-                      <button
-                        onClick={openDeleteTaskModal}
-                        className="icon-btn"
-                        title="Удалить задачу"
-                      >
+                      <button onClick={openDeleteTaskModal} className="icon-btn" title="Удалить задачу">
                         <Trash2 size={18} color="#ef4444" />
                       </button>
                     )}
@@ -572,22 +729,113 @@ const DepartmentsPage = () => {
             </div>
 
             {isEditing ? (
-              <input
-                className="text-input"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-              />
+              <input className="text-input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
             ) : (
               <h3 style={{ margin: 0, fontSize: "18px" }}>{expandedTask.title}</h3>
             )}
 
             {!isEditing && (
-              <div style={{ fontSize: "13px", color: "#64748b", marginTop: "5px" }}>
-                Автор: <b>{expandedTask.author_name}</b>{" "}
-                <span style={{ background: "#e2e8f0", padding: "2px 5px", borderRadius: "4px" }}>
-                  {expandedTask.author_dept}
-                </span>
-              </div>
+              <>
+                <div style={{ fontSize: "13px", color: "#64748b", marginTop: "6px" }}>
+                  Автор: <b>{expandedTask.author_name}</b>{" "}
+                  <span style={{ background: "#e2e8f0", padding: "2px 5px", borderRadius: "4px" }}>
+                    {expandedTask.author_dept}
+                  </span>
+                </div>
+
+                <div style={{ marginTop: "10px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                  {expandedTask.priority === "urgent" && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        color: "#ef4444",
+                        background: "#fee2e2",
+                        padding: "3px 8px",
+                        borderRadius: "999px",
+                      }}
+                    >
+                      <AlertTriangle size={12} /> Срочно
+                    </div>
+                  )}
+
+                  {expandedTask.due_date && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "#334155",
+                        background: "#f1f5f9",
+                        padding: "3px 8px",
+                        borderRadius: "999px",
+                      }}
+                    >
+                      <Clock size={12} /> Дедлайн: {formatYmdToRu(expandedTask.due_date)}
+                    </div>
+                  )}
+
+                  {expandedTask.to_user_id && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "#0f172a",
+                        background: "#eff6ff",
+                        padding: "3px 8px",
+                        borderRadius: "999px",
+                        border: "1px solid #dbeafe",
+                      }}
+                    >
+                      <User size={12} /> Назначено: {expandedTask.to_user_name}
+                    </div>
+                  )}
+
+                  {expandedTask.accepted_by_user_id && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "#0f172a",
+                        background: "#ecfdf5",
+                        padding: "3px 8px",
+                        borderRadius: "999px",
+                        border: "1px solid #d1fae5",
+                      }}
+                    >
+                      <CheckCircle size={12} /> Принял: {expandedTask.accepted_by_name}
+                    </div>
+                  )}
+                </div>
+
+                {canAcceptTask && (
+                  <button
+                    className="btn"
+                    onClick={handleAcceptTask}
+                    style={{
+                      marginTop: "12px",
+                      background: "#3b82f6",
+                      width: "100%",
+                      justifyContent: "center",
+                    }}
+                    title="Принять задачу"
+                  >
+                    <CheckCircle size={18} style={{ marginRight: 6 }} />
+                    Принять задачу
+                  </button>
+                )}
+              </>
             )}
           </div>
 
@@ -679,21 +927,9 @@ const DepartmentsPage = () => {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               {comments.map((c) => (
-                <div
-                  key={c.id}
-                  style={{ background: "#f1f5f9", padding: "12px", borderRadius: "8px" }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    <span style={{ fontWeight: 600, fontSize: "13px", color: "#0f172a" }}>
-                      {c.username}
-                    </span>
+                <div key={c.id} style={{ background: "#f1f5f9", padding: "12px", borderRadius: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                    <span style={{ fontWeight: 600, fontSize: "13px", color: "#0f172a" }}>{c.username}</span>
                     <span
                       style={{
                         fontSize: "11px",
@@ -770,10 +1006,72 @@ const DepartmentsPage = () => {
             zIndex: 1000,
           }}
         >
-          <div className="card" style={{ width: "500px", padding: "30px" }}>
+          <div className="card" style={{ width: "520px", padding: "30px" }}>
             <h2>Новая задача</h2>
 
-            {activeDept === "My Tasks" && (
+            {/* receiver toggle */}
+            <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
+              <button
+                className="btn"
+                onClick={() => setReceiverType("department")}
+                style={{
+                  background: receiverType === "department" ? "#eff6ff" : "#f1f5f9",
+                  color: receiverType === "department" ? "#2563eb" : "#475569",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                Отдел
+              </button>
+              <button
+                className="btn"
+                onClick={() => setReceiverType("user")}
+                style={{
+                  background: receiverType === "user" ? "#eff6ff" : "#f1f5f9",
+                  color: receiverType === "user" ? "#2563eb" : "#475569",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                Пользователь
+              </button>
+            </div>
+
+            {/* receiver fields */}
+            {receiverType === "department" ? (
+              <>
+                {activeDept === "My Tasks" ? (
+                  <div style={{ marginBottom: "15px" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        color: "#64748b",
+                        marginBottom: "5px",
+                      }}
+                    >
+                      Получатель (Отдел)
+                    </label>
+                    <select
+                      className="text-input"
+                      value={targetDeptForNewTask}
+                      onChange={(e) => setTargetDeptForNewTask(e.target.value)}
+                    >
+                      <option value="">-- Выберите отдел --</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.name}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: "15px", fontSize: "13px", color: "#64748b" }}>
+                    Получатель (Отдел):{" "}
+                    <b style={{ color: "#0f172a" }}>{activeDept}</b>
+                  </div>
+                )}
+              </>
+            ) : (
               <div style={{ marginBottom: "15px" }}>
                 <label
                   style={{
@@ -784,22 +1082,72 @@ const DepartmentsPage = () => {
                     marginBottom: "5px",
                   }}
                 >
-                  Получатель (Отдел)
+                  Получатель (Пользователь)
                 </label>
                 <select
                   className="text-input"
-                  value={targetDeptForNewTask}
-                  onChange={(e) => setTargetDeptForNewTask(e.target.value)}
+                  value={targetUserIdForNewTask}
+                  onChange={(e) => setTargetUserIdForNewTask(e.target.value)}
                 >
-                  <option value="">-- Выберите отдел --</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.name}>
-                      {d.name}
+                  <option value="">-- Выберите пользователя --</option>
+                  {usersForModal.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.username} — {u.department}
                     </option>
                   ))}
                 </select>
+                {activeDept !== "My Tasks" && usersForModal.length === 0 && (
+                  <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "6px" }}>
+                    В отделе нет пользователей (или список пользователей не загрузился).
+                  </div>
+                )}
               </div>
             )}
+
+            {/* due date + priority */}
+            <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
+              <div style={{ flex: 1 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    color: "#64748b",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Дедлайн
+                </label>
+                <input
+                  type="date"
+                  className="text-input"
+                  value={newTaskDueDate}
+                  onChange={(e) => setNewTaskDueDate(e.target.value)}
+                />
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    color: "#64748b",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Приоритет
+                </label>
+                <select
+                  className="text-input"
+                  value={newTaskPriority}
+                  onChange={(e) => setNewTaskPriority(e.target.value)}
+                >
+                  <option value="normal">Обычная</option>
+                  <option value="urgent">Срочно</option>
+                </select>
+              </div>
+            </div>
 
             <div style={{ marginBottom: "15px" }}>
               <input
@@ -835,7 +1183,7 @@ const DepartmentsPage = () => {
               >
                 <Paperclip size={16} style={{ marginRight: "8px" }} />{" "}
                 {newTaskFile ? newTaskFile.name : "Прикрепить файл (необязательно)"}
-                <input type="file" hidden onChange={(e) => setNewTaskFile(e.target.files[0])} />
+                <input type="file" hidden onChange={(e) => setNewTaskFile(e.target.files?.[0] || null)} />
               </label>
             </div>
 
@@ -843,7 +1191,7 @@ const DepartmentsPage = () => {
               <button
                 className="btn"
                 style={{ background: "#e2e8f0", color: "black" }}
-                onClick={() => setShowModal(false)}
+                onClick={resetCreateModal}
               >
                 Отмена
               </button>
