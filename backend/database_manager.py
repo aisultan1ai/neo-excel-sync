@@ -342,6 +342,43 @@ def init_database():
     finally:
         conn.close()
 
+        # =========================
+        # PODFT SNAPSHOTS (manual save by admin)
+        # =========================
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS podft_snapshots (
+                id SERIAL PRIMARY KEY,
+                snapshot_date DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_by TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS podft_snapshot_trades (
+                id SERIAL PRIMARY KEY,
+                snapshot_id INTEGER NOT NULL REFERENCES podft_snapshots(id) ON DELETE CASCADE,
+                row_hash TEXT NOT NULL,
+                account TEXT,
+                instrument TEXT,
+                side TEXT,
+                trading_dt TEXT,
+                deal_dt TEXT,
+                value_date DATE NOT NULL,
+                qty NUMERIC,
+                amount_tg NUMERIC,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(snapshot_id, row_hash)
+            )
+        """)
+
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_podft_snapshots_date ON podft_snapshots(snapshot_date)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_snapshot ON podft_snapshot_trades(snapshot_id)")
+        except Exception:
+            conn.rollback()
+
+
 
 def search_clients(search_term=""):
     conn = get_db_connection()
@@ -1384,5 +1421,145 @@ def delete_problem(problem_id: int) -> bool:
         log.error(f"delete_problem error: {e}")
         conn.rollback()
         return False
+    finally:
+        conn.close()
+
+
+import hashlib
+import json
+from datetime import date as _date
+
+def _podft_row_hash(trade: dict) -> str:
+    payload = {
+        "account": trade.get("account"),
+        "instrument": trade.get("instrument"),
+        "side": trade.get("side"),
+        "trading_dt": trade.get("trading_dt"),
+        "deal_dt": trade.get("deal_dt"),
+        "value_date": str(trade.get("value_date")),
+        "qty": str(trade.get("qty")),
+        "amount_tg": str(trade.get("amount_tg")),
+    }
+    s = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+
+def create_podft_snapshot(snapshot_date: _date, created_by: str):
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """
+            INSERT INTO podft_snapshots(snapshot_date, created_by)
+            VALUES (%s, %s)
+            RETURNING *
+            """,
+            (snapshot_date, created_by),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return row
+    except Exception as e:
+        log.error(f"create_podft_snapshot error: {e}")
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+
+def add_podft_snapshot_trades(snapshot_id: int, trades: list[dict]) -> int:
+    conn = get_db_connection()
+    if not conn:
+        return 0
+    try:
+        cur = conn.cursor()
+        inserted = 0
+        for t in trades:
+            row_hash = _podft_row_hash(t)
+            cur.execute(
+                """
+                INSERT INTO podft_snapshot_trades
+                  (snapshot_id, row_hash, account, instrument, side, trading_dt, deal_dt, value_date, qty, amount_tg)
+                VALUES
+                  (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (snapshot_id, row_hash) DO NOTHING
+                """,
+                (
+                    snapshot_id,
+                    row_hash,
+                    t.get("account"),
+                    t.get("instrument"),
+                    t.get("side"),
+                    t.get("trading_dt"),
+                    t.get("deal_dt"),
+                    t.get("value_date"),
+                    t.get("qty"),
+                    t.get("amount_tg"),
+                ),
+            )
+            if cur.rowcount > 0:
+                inserted += 1
+        conn.commit()
+        return inserted
+    except Exception as e:
+        log.error(f"add_podft_snapshot_trades error: {e}")
+        conn.rollback()
+        return 0
+    finally:
+        conn.close()
+
+
+def get_latest_podft_snapshot_for_date(snapshot_date: _date):
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """
+            SELECT *
+            FROM podft_snapshots
+            WHERE snapshot_date = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (snapshot_date,),
+        )
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def get_podft_snapshot_count(snapshot_id: int) -> int:
+    conn = get_db_connection()
+    if not conn:
+        return 0
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM podft_snapshot_trades WHERE snapshot_id = %s", (snapshot_id,))
+        return int(cur.fetchone()[0])
+    finally:
+        conn.close()
+
+
+def get_podft_trades_by_snapshot(snapshot_id: int, limit: int = 500):
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """
+            SELECT account, instrument, side, trading_dt, deal_dt, value_date, qty, amount_tg
+            FROM podft_snapshot_trades
+            WHERE snapshot_id = %s
+            ORDER BY created_at DESC, id DESC
+            LIMIT %s
+            """,
+            (snapshot_id, limit),
+        )
+        return cur.fetchall()
     finally:
         conn.close()

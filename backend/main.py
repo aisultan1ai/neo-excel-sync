@@ -150,6 +150,22 @@ class ProblemUpdate(BaseModel):
     title: str
     description: str = ""
 
+class PodftTradeIn(BaseModel):
+    account: Optional[str] = None
+    instrument: Optional[str] = None
+    side: Optional[str] = None
+    trading_dt: Optional[str] = None
+    deal_dt: Optional[str] = None
+    value_date: date
+    qty: Optional[float] = None
+    amount_tg: Optional[float] = None
+
+
+class PodftSnapshotSaveIn(BaseModel):
+    snapshot_date: date
+    trades: list[PodftTradeIn]
+
+
 
 def verify_password(plain_password, hashed_password):
     return bcrypt.checkpw(
@@ -1077,6 +1093,59 @@ async def change_password(
 @app.get("/api/dashboard")
 async def get_dashboard_data(current_user: str = Depends(get_current_user)):
     return database_manager.get_dashboard_stats() or {"users": 0, "total_tasks": 0}
+
+@app.post("/api/podft/snapshots")
+async def save_podft_snapshot(
+    payload: PodftSnapshotSaveIn,
+    current_user: str = Depends(require_admin),
+):
+    if not payload.trades:
+        raise HTTPException(400, "No trades to save")
+
+    snap = database_manager.create_podft_snapshot(payload.snapshot_date, created_by=current_user)
+    if not snap:
+        raise HTTPException(500, "Failed to create snapshot")
+
+    trades_dicts = [t.model_dump() for t in payload.trades]
+    inserted = database_manager.add_podft_snapshot_trades(snap["id"], trades_dicts)
+
+    return {
+        "status": "success",
+        "snapshot_id": snap["id"],
+        "snapshot_date": str(payload.snapshot_date),
+        "inserted": inserted,
+        "created_at": str(snap.get("created_at")),
+    }
+
+
+@app.get("/api/podft/today")
+async def podft_today(current_user: str = Depends(get_current_user)):
+    today = date.today()
+    snap = database_manager.get_latest_podft_snapshot_for_date(today)
+    if not snap:
+        return {"date": str(today), "count": 0, "updated_at": None, "snapshot_id": None}
+
+    count = database_manager.get_podft_snapshot_count(snap["id"])
+    return {
+        "date": str(today),
+        "count": count,
+        "updated_at": str(snap.get("created_at")),
+        "snapshot_id": snap["id"],
+    }
+
+
+@app.get("/api/podft/trades")
+async def podft_trades(
+    date_: date,
+    current_user: str = Depends(get_current_user),
+):
+    snap = database_manager.get_latest_podft_snapshot_for_date(date_)
+    if not snap:
+        return []
+
+    rows = database_manager.get_podft_trades_by_snapshot(snap["id"], limit=500)
+    return [dict(r) for r in rows]
+
 
 
 @app.get("/api/admin/users")

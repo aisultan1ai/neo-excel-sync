@@ -1,9 +1,9 @@
+// DashboardPage.jsx
 import React, { useMemo, useState, useEffect } from "react";
 import axios from "axios";
 import {
   Activity,
   Users,
-  CheckCircle,
   Clock,
   FileDiff,
   Plus,
@@ -15,6 +15,9 @@ import {
   Save,
   AlertTriangle,
   RefreshCw,
+  CheckCircle,
+  Search,
+  Loader2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -32,15 +35,23 @@ const DashboardPage = () => {
   const [problemsLoading, setProblemsLoading] = useState(true);
   const [problemsUpdatedAt, setProblemsUpdatedAt] = useState(null);
 
-  // Modal
+  // Problems Modal
   const [problemModalOpen, setProblemModalOpen] = useState(false);
   const [problemModalMode, setProblemModalMode] = useState("view"); // view | create | edit
   const [selectedProblem, setSelectedProblem] = useState(null);
 
-  // Form
+  // Problems Form
   const [problemTitle, setProblemTitle] = useState("");
   const [problemDescription, setProblemDescription] = useState("");
   const [savingProblem, setSavingProblem] = useState(false);
+
+  // ===== POD/FT (3rd top card) =====
+  const [podft, setPodft] = useState({ count: 0, date: null });
+  const [podftModalOpen, setPodftModalOpen] = useState(false);
+  const [podftTrades, setPodftTrades] = useState([]);
+  const [podftLoading, setPodftLoading] = useState(false);
+  const [podftUpdatedAt, setPodftUpdatedAt] = useState(null);
+  const [podftFilter, setPodftFilter] = useState("");
 
   useEffect(() => {
     fetchDashboard();
@@ -56,11 +67,40 @@ const DashboardPage = () => {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
+  const getLocalYMD = (d = new Date()) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const parsePodftToday = (data) => {
+    const fallback = { count: 0, date: getLocalYMD() };
+
+    if (data == null) return fallback;
+
+    if (typeof data === "number") {
+      return { count: Number.isFinite(data) ? data : 0, date: getLocalYMD() };
+    }
+
+    if (typeof data === "object") {
+      const rawCount = data.count ?? data.total ?? data.n ?? data.value ?? 0;
+      const rawDate = data.date ?? data.day ?? data.today ?? getLocalYMD();
+      const count = Number(rawCount);
+      return {
+        count: Number.isFinite(count) ? count : 0,
+        date: String(rawDate || getLocalYMD()),
+      };
+    }
+
+    return fallback;
+  };
+
   const checkSystemHealth = async () => {
     try {
       const res = await axios.get("/api/health", { timeout: 2000 });
       setHealth(res.data);
-    } catch (err) {
+    } catch {
       setHealth({ api: "Offline", db: "Disconnected" });
     }
   };
@@ -79,6 +119,37 @@ const DashboardPage = () => {
     }
   };
 
+  const fetchPodftToday = async () => {
+    try {
+      const res = await axios.get("/api/podft/today", { headers: authHeaders() });
+      const parsed = parsePodftToday(res.data);
+      setPodft(parsed);
+    } catch (err) {
+      console.error("podft today request failed", err);
+      setPodft({ count: 0, date: getLocalYMD() });
+    }
+  };
+
+  const fetchPodftTrades = async (dateStr) => {
+    const date = dateStr || podft.date || getLocalYMD();
+    try {
+      setPodftLoading(true);
+      const res = await axios.get(`/api/podft/trades?date=${encodeURIComponent(date)}`, {
+        headers: authHeaders(),
+      });
+
+      const list = Array.isArray(res.data) ? res.data : res.data?.trades;
+      setPodftTrades(Array.isArray(list) ? list : []);
+      setPodftUpdatedAt(new Date());
+    } catch (err) {
+      console.error("podft trades request failed", err);
+      setPodftTrades([]);
+      setPodftUpdatedAt(new Date());
+    } finally {
+      setPodftLoading(false);
+    }
+  };
+
   const fetchDashboard = async () => {
     try {
       const resProfile = await axios.get("/api/profile", { headers: authHeaders() });
@@ -92,7 +163,7 @@ const DashboardPage = () => {
       const res = await axios.get("/api/dashboard", { headers: authHeaders() });
       setStats(res.data);
 
-      await fetchProblems();
+      await Promise.all([fetchProblems(), fetchPodftToday()]);
       setLoading(false);
     } catch (err) {
       console.error("request failed", err);
@@ -106,7 +177,7 @@ const DashboardPage = () => {
     return "#ef4444";
   };
 
-  // Modal helpers
+  // Problems Modal helpers
   const openViewProblem = (p) => {
     setSelectedProblem(p);
     setProblemModalMode("view");
@@ -182,6 +253,20 @@ const DashboardPage = () => {
     }
   };
 
+  // POD/FT Modal helpers
+  const openPodftModal = async () => {
+    setPodftModalOpen(true);
+    setPodftFilter("");
+    await fetchPodftTrades(podft.date || getLocalYMD());
+  };
+
+  const closePodftModal = () => {
+    setPodftModalOpen(false);
+    setPodftTrades([]);
+    setPodftFilter("");
+    setPodftLoading(false);
+  };
+
   const formatDate = (iso) => {
     if (!iso) return "";
     const d = new Date(iso);
@@ -214,7 +299,7 @@ const DashboardPage = () => {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
     alignItems: "center",
-    height: HEADER_HEIGHT, // <— makes bottom lines perfectly aligned
+    height: HEADER_HEIGHT,
     gap: "12px",
   };
 
@@ -242,7 +327,7 @@ const DashboardPage = () => {
     minWidth: 0,
     color: "#0f172a",
     fontSize: "16px",
-    fontWeight: 700, // like "Активность"
+    fontWeight: 700,
     lineHeight: 1.2,
   };
 
@@ -280,7 +365,7 @@ const DashboardPage = () => {
     whiteSpace: "nowrap",
   };
 
-  // ===== Modal styles (updated to match Activity typography) =====
+  // ===== Modal styles =====
   const modalOverlayStyle = {
     position: "fixed",
     inset: 0,
@@ -293,7 +378,7 @@ const DashboardPage = () => {
   };
 
   const modalCardStyle = {
-    width: "min(560px, 95vw)",
+    width: "min(860px, 96vw)",
     background: "white",
     borderRadius: "16px",
     boxShadow: "0 25px 60px rgba(0,0,0,0.25)",
@@ -310,21 +395,41 @@ const DashboardPage = () => {
   };
 
   const modalHeaderTitleStyle = {
-    fontWeight: 700, // was 800
+    fontWeight: 700,
     color: "#0f172a",
-    fontSize: 14, // smaller like card headers
+    fontSize: 14,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
   };
 
   const modalBodyStyle = { padding: "16px" };
 
   const modalMainTitleStyle = {
-    fontSize: 16, // was 18
-    fontWeight: 700, // was 900
+    fontSize: 16,
+    fontWeight: 700,
     color: "#0f172a",
     lineHeight: 1.25,
   };
 
   const modalMetaStyle = { fontSize: 12, color: "#94a3b8" };
+
+  // ===== POD/FT modal table helpers =====
+  const podftColumns = useMemo(() => {
+    if (!podftTrades || podftTrades.length === 0) return [];
+    const first = podftTrades[0] || {};
+    return Object.keys(first);
+  }, [podftTrades]);
+
+  const filteredPodftTrades = useMemo(() => {
+    const q = (podftFilter || "").trim().toLowerCase();
+    if (!q) return podftTrades;
+
+    return (podftTrades || []).filter((row) => {
+      const cols = podftColumns.length ? podftColumns : Object.keys(row || {});
+      return cols.some((k) => String(row?.[k] ?? "").toLowerCase().includes(q));
+    });
+  }, [podftFilter, podftTrades, podftColumns]);
 
   if (loading) return <div style={{ padding: 40 }}>Загрузка аналитики...</div>;
 
@@ -437,24 +542,41 @@ const DashboardPage = () => {
           </div>
         </div>
 
+        {/* ✅ REPLACED: "Всего задач" -> "ПОД/ФТ сделки" + modal list */}
         <div
           className="card"
+          role="button"
+          tabIndex={0}
+          onClick={openPodftModal}
+          onKeyDown={(e) => e.key === "Enter" && openPodftModal()}
           style={{
             padding: "25px",
             display: "flex",
             alignItems: "center",
             gap: "20px",
             borderLeft: "4px solid #10b981",
+            cursor: "pointer",
+            userSelect: "none",
           }}
+          title="Открыть список ПОД/ФТ сделок за сегодня"
         >
           <div style={{ background: "#ecfdf5", padding: "15px", borderRadius: "12px" }}>
             <CheckCircle size={30} color="#10b981" />
           </div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>
-              {stats?.total_tasks || 0}
+              {podft?.count || 0}
             </div>
-            <div style={{ color: "#64748b", fontSize: "14px" }}>Всего задач</div>
+            <div style={{ color: "#64748b", fontSize: "14px" }}>
+              ПОД/ФТ сделки (сегодня)
+            </div>
+            <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>
+              Нажми чтобы открыть список
+            </div>
+          </div>
+
+          <div style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 12, whiteSpace: "nowrap" }}>
+            {podft?.date ? podft.date : getLocalYMD()}
           </div>
         </div>
       </div>
@@ -738,10 +860,139 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* ===== POD/FT Modal (list of trades) ===== */}
+      {podftModalOpen && (
+        <div style={modalOverlayStyle} onClick={closePodftModal}>
+          <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={modalHeaderStyle}>
+              <div style={modalHeaderTitleStyle}>
+                <CheckCircle size={16} color="#10b981" />
+                ПОД/ФТ сделки за {podft?.date || getLocalYMD()}
+                <span style={badgeCount}>{podftTrades.length}</span>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {podftUpdatedAt && (
+                  <span style={{ fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>
+                    обновлено {formatTime(podftUpdatedAt)}
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => fetchPodftTrades(podft?.date || getLocalYMD())}
+                  title="Обновить список"
+                  style={{ ...subtleActionBtn, opacity: podftLoading ? 0.7 : 1 }}
+                  disabled={podftLoading}
+                >
+                  {podftLoading ? <Loader2 size={16} className="spin-anim" /> : <RefreshCw size={16} />}
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>
+                    {podftLoading ? "..." : "Refresh"}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={closePodftModal}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                  title="Закрыть"
+                >
+                  <X size={20} color="#334155" />
+                </button>
+              </div>
+            </div>
+
+            <div style={modalBodyStyle}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748b" }}>
+                  <Search size={16} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>ПОИСК</span>
+                </div>
+
+                <input
+                  value={podftFilter}
+                  onChange={(e) => setPodftFilter(e.target.value)}
+                  placeholder="Фильтр по всем колонкам..."
+                  style={{
+                    flex: 1,
+                    padding: "10px 12px",
+                    borderRadius: "12px",
+                    border: "1px solid #cbd5e1",
+                    outline: "none",
+                    fontSize: 13,
+                    color: "#0f172a",
+                  }}
+                />
+              </div>
+
+              {podftLoading ? (
+                <div style={{ padding: "16px", color: "#94a3b8" }}>Загрузка сделок...</div>
+              ) : filteredPodftTrades.length === 0 ? (
+                <div
+                  style={{
+                    padding: "40px",
+                    textAlign: "center",
+                    color: "#94a3b8",
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 12,
+                  }}
+                >
+                  <div style={modalMainTitleStyle}>Сделок нет</div>
+                  <div style={modalMetaStyle}>(или фильтр слишком строгий)</div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 12,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div style={{ maxHeight: "60vh", overflow: "auto" }}>
+                    <table className="styled-table" style={{ width: "100%" }}>
+                      <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
+                        <tr>
+                          {podftColumns.map((h) => (
+                            <th key={h}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPodftTrades.slice(0, 2000).map((row, idx) => (
+                          <tr key={idx}>
+                            {podftColumns.map((h) => (
+                              <td key={h}>{String(row?.[h] ?? "")}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {filteredPodftTrades.length > 2000 && (
+                    <div style={{ padding: "10px 12px", fontSize: 12, color: "#64748b" }}>
+                      Показаны первые 2000 строк из {filteredPodftTrades.length}. Уточните фильтр.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Problems Modal (как было) ===== */}
       {problemModalOpen && (
         <div style={modalOverlayStyle} onClick={closeProblemModal}>
-          <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
+          <div style={{ ...modalCardStyle, width: "min(560px, 95vw)" }} onClick={(e) => e.stopPropagation()}>
             <div style={modalHeaderStyle}>
               <div style={modalHeaderTitleStyle}>
                 {problemModalMode === "create"
@@ -868,7 +1119,7 @@ const DashboardPage = () => {
                         <div
                           style={{
                             fontSize: "12px",
-                            fontWeight: 600, // was 700
+                            fontWeight: 600,
                             color: "#64748b",
                             marginBottom: 6,
                           }}
@@ -895,7 +1146,7 @@ const DashboardPage = () => {
                         <div
                           style={{
                             fontSize: "12px",
-                            fontWeight: 600, // was 700
+                            fontWeight: 600,
                             color: "#64748b",
                             marginBottom: 6,
                           }}
@@ -921,7 +1172,14 @@ const DashboardPage = () => {
                         />
                       </div>
 
-                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: 4 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          gap: "10px",
+                          marginTop: 4,
+                        }}
+                      >
                         <button
                           type="button"
                           onClick={closeProblemModal}
@@ -968,6 +1226,11 @@ const DashboardPage = () => {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spin-anim { animation: spin 1s linear infinite; }
+      `}</style>
     </div>
   );
 };

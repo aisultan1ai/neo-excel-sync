@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// src/pages/SverkaPage.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { toast } from "react-toastify";
 import * as XLSX from "xlsx";
@@ -15,6 +16,9 @@ import {
   Search,
 } from "lucide-react";
 
+// ------------------------------
+// FileSection (upload + detect headers + choose columns)
+// ------------------------------
 const FileSection = ({
   title,
   file,
@@ -28,7 +32,7 @@ const FileSection = ({
   defaultIdName,
   defaultAccName,
 }) => {
-  const handleFileSelect = async (e) => {
+  const handleFileSelect = (e) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
@@ -39,14 +43,15 @@ const FileSection = ({
       try {
         const bstr = evt.target.result;
         const wb = XLSX.read(bstr, { type: "binary" });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
+        const wsname = wb.SheetNames?.[0];
+        const ws = wb.Sheets?.[wsname];
         const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
         if (data && data.length > 0) {
           const foundHeaders = data[0] || [];
-          if (headers.onLoad) headers.onLoad(foundHeaders);
+          headers?.onLoad?.(foundHeaders);
 
+          // Try auto-select ID column
           if (defaultIdName) {
             const foundId = foundHeaders.find((h) =>
               String(h || "")
@@ -57,18 +62,22 @@ const FileSection = ({
             if (foundId) setIdCol(foundId);
           }
 
+          // Try auto-select Account/Subaccount column
           const foundAcc = foundHeaders.find((h) => {
             const hs = String(h || "").toLowerCase();
             return (
               (defaultAccName && hs.includes(String(defaultAccName).toLowerCase())) ||
               hs.includes("account") ||
-              hs.includes("счет")
+              hs.includes("счет") ||
+              hs.includes("субсчет") ||
+              hs.includes("subaccount")
             );
           });
           if (foundAcc) setAccCol(foundAcc);
         }
       } catch (err) {
         console.error("Ошибка чтения заголовков", err);
+        toast.error("Не удалось прочитать заголовки файла");
       }
     };
 
@@ -146,6 +155,7 @@ const FileSection = ({
                 </div>
               </div>
             </div>
+
             <label
               style={{
                 cursor: "pointer",
@@ -177,13 +187,7 @@ const FileSection = ({
           >
             <UploadCloud size={32} color="#94a3b8" style={{ marginBottom: "10px" }} />
             <div style={{ textAlign: "center" }}>
-              <span
-                style={{
-                  color: "#3b82f6",
-                  fontWeight: 600,
-                  fontSize: "16px",
-                }}
-              >
+              <span style={{ color: "#3b82f6", fontWeight: 600, fontSize: "16px" }}>
                 Выберите файл
               </span>
               <span
@@ -237,13 +241,12 @@ const FileSection = ({
             style={{ cursor: "pointer", appearance: "auto", padding: "8px" }}
           >
             <option value="">-- Выберите --</option>
-            {headers.list &&
-              headers.list.map((h, i) => (
-                <option key={i} value={h}>
-                  {h}
-                </option>
-              ))}
-            {!headers.list?.includes(idCol) && idCol && <option value={idCol}>{idCol}</option>}
+            {headers?.list?.map((h, i) => (
+              <option key={`${String(h)}_${i}`} value={h}>
+                {h}
+              </option>
+            ))}
+            {!headers?.list?.includes(idCol) && idCol && <option value={idCol}>{idCol}</option>}
           </select>
         </div>
 
@@ -258,13 +261,12 @@ const FileSection = ({
             style={{ cursor: "pointer", appearance: "auto", padding: "8px" }}
           >
             <option value="">-- Выберите --</option>
-            {headers.list &&
-              headers.list.map((h, i) => (
-                <option key={i} value={h}>
-                  {h}
-                </option>
-              ))}
-            {!headers.list?.includes(accCol) && accCol && <option value={accCol}>{accCol}</option>}
+            {headers?.list?.map((h, i) => (
+              <option key={`${String(h)}_${i}`} value={h}>
+                {h}
+              </option>
+            ))}
+            {!headers?.list?.includes(accCol) && accCol && <option value={accCol}>{accCol}</option>}
           </select>
         </div>
       </div>
@@ -272,6 +274,9 @@ const FileSection = ({
   );
 };
 
+// ------------------------------
+// SverkaPage
+// ------------------------------
 const SverkaPage = () => {
   const [file1, setFile1] = useState(null);
   const [file2, setFile2] = useState(null);
@@ -300,28 +305,25 @@ const SverkaPage = () => {
     acc_ais: "Субсчет",
   });
 
-  // восстановить последний результат (теперь через api, с токеном)
+  // Restore last result (via API with token)
   useEffect(() => {
     const fetchLastResult = async () => {
       try {
         const { data } = await api.get("/last-result");
-        if (data.status === "success") {
-          setResults(data);
-        }
+        if (data?.status === "success") setResults(data);
       } catch (error) {
-        // если 401 — interceptor сам сделает logout/reload
         console.error("Ошибка восстановления:", error);
       }
     };
     fetchLastResult();
   }, []);
 
-  // настройки
+  // Load settings defaults
   useEffect(() => {
     api
       .get("/settings")
       .then((res) => {
-        if (res.data) {
+        if (res?.data) {
           setDefaults({
             id_unity: "Execution ID",
             acc_unity: res.data.default_acc_name_unity || "Account",
@@ -337,6 +339,18 @@ const SverkaPage = () => {
     setFilterText("");
     setFilterCol("");
   }, [activeTab]);
+
+  const tabs = useMemo(
+    () => [
+      { id: "matches", label: "Совпадения", color: "#16a34a" },
+      { id: "unmatched1", label: "Расх. Unity", color: "#dc2626" },
+      { id: "unmatched2", label: "Расх. АИС", color: "#dc2626" },
+      { id: "podft_7m_deals", label: "ПОД/ФТ", color: "#ca8a04" },
+      { id: "crypto_deals", label: "Крипто", color: "#2563eb" },
+      { id: "duplicates1", label: "Дубли", color: "#ea580c" },
+    ],
+    []
+  );
 
   const handleCompare = async () => {
     if (!file1 || !file2) return toast.warning("Выберите оба файла!");
@@ -375,7 +389,7 @@ const SverkaPage = () => {
   };
 
   const handleExport = async () => {
-    if (!results || !results.comparison_id) {
+    if (!results?.comparison_id) {
       toast.error("Нет данных для экспорта. Повторите сверку.");
       return;
     }
@@ -429,9 +443,7 @@ const SverkaPage = () => {
             const v = row?.[filterCol];
             return String(v ?? "").toLowerCase().includes(normalizedQuery);
           }
-          return headers.some((h) =>
-            String(row?.[h] ?? "").toLowerCase().includes(normalizedQuery)
-          );
+          return headers.some((h) => String(row?.[h] ?? "").toLowerCase().includes(normalizedQuery));
         });
 
     return (
@@ -470,15 +482,6 @@ const SverkaPage = () => {
       </div>
     );
   };
-
-  const tabs = [
-    { id: "matches", label: "Совпадения", color: "#16a34a" },
-    { id: "unmatched1", label: "Расх. Unity", color: "#dc2626" },
-    { id: "unmatched2", label: "Расх. АИС", color: "#dc2626" },
-    { id: "podft_7m_deals", label: "ПОД/ФТ", color: "#ca8a04" },
-    { id: "crypto_deals", label: "Крипто", color: "#2563eb" },
-    { id: "duplicates1", label: "Дубли", color: "#ea580c" },
-  ];
 
   return (
     <div
