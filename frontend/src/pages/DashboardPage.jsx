@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import axios from "axios";
 import {
   Activity,
@@ -13,6 +13,8 @@ import {
   Trash2,
   X,
   Save,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -28,6 +30,7 @@ const DashboardPage = () => {
   // FIX Problems
   const [problems, setProblems] = useState([]);
   const [problemsLoading, setProblemsLoading] = useState(true);
+  const [problemsUpdatedAt, setProblemsUpdatedAt] = useState(null);
 
   // Modal state
   const [problemModalOpen, setProblemModalOpen] = useState(false);
@@ -45,6 +48,7 @@ const DashboardPage = () => {
 
     const interval = setInterval(checkSystemHealth, 30000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const authHeaders = () => {
@@ -66,6 +70,7 @@ const DashboardPage = () => {
       setProblemsLoading(true);
       const res = await axios.get("/api/problems", { headers: authHeaders() });
       setProblems(Array.isArray(res.data) ? res.data : []);
+      setProblemsUpdatedAt(new Date());
     } catch (err) {
       console.error("problems request failed", err);
       setProblems([]);
@@ -145,17 +150,9 @@ const DashboardPage = () => {
       setSavingProblem(true);
 
       if (problemModalMode === "create") {
-        await axios.post(
-          "/api/problems",
-          { title, description },
-          { headers: authHeaders() }
-        );
+        await axios.post("/api/problems", { title, description }, { headers: authHeaders() });
       } else if (problemModalMode === "edit" && selectedProblem?.id != null) {
-        await axios.put(
-          `/api/problems/${selectedProblem.id}`,
-          { title, description },
-          { headers: authHeaders() }
-        );
+        await axios.put(`/api/problems/${selectedProblem.id}`, { title, description }, { headers: authHeaders() });
       }
 
       await fetchProblems();
@@ -177,7 +174,6 @@ const DashboardPage = () => {
       await axios.delete(`/api/problems/${p.id}`, { headers: authHeaders() });
       await fetchProblems();
 
-      // если удалили то, что было открыто в модалке
       if (selectedProblem?.id === p.id) closeProblemModal();
     } catch (err) {
       console.error("delete problem failed", err);
@@ -189,6 +185,15 @@ const DashboardPage = () => {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "";
     return d.toLocaleDateString();
+  };
+
+  const formatTime = (d) => {
+    if (!d) return "";
+    try {
+      return new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return "";
+    }
   };
 
   // Modal styles
@@ -221,6 +226,17 @@ const DashboardPage = () => {
   };
 
   const modalBodyStyle = { padding: "16px" };
+
+  const recentTasks = useMemo(
+    () => (Array.isArray(stats?.recent_tasks) ? stats.recent_tasks : []),
+    [stats]
+  );
+
+  // UX constants
+  const LIST_HEIGHT = 340; // fixed height for lists
+  const rowHoverStyle = {
+    transition: "background 0.15s ease, transform 0.15s ease",
+  };
 
   if (loading) return <div style={{ padding: 40 }}>Загрузка аналитики...</div>;
 
@@ -291,196 +307,191 @@ const DashboardPage = () => {
           marginBottom: "30px",
         }}
       >
-        <div
-          className="card"
-          style={{
-            padding: "25px",
-            display: "flex",
-            alignItems: "center",
-            gap: "20px",
-            borderLeft: "4px solid #3b82f6",
-          }}
-        >
+        <div className="card" style={{ padding: "25px", display: "flex", alignItems: "center", gap: "20px", borderLeft: "4px solid #3b82f6" }}>
           <div style={{ background: "#eff6ff", padding: "15px", borderRadius: "12px" }}>
             <Clock size={30} color="#3b82f6" />
           </div>
           <div>
-            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>
-              {stats?.active_tasks || 0}
-            </div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>{stats?.active_tasks || 0}</div>
             <div style={{ color: "#64748b", fontSize: "14px" }}>Активных задач</div>
           </div>
         </div>
 
-        <div
-          className="card"
-          style={{
-            padding: "25px",
-            display: "flex",
-            alignItems: "center",
-            gap: "20px",
-            borderLeft: "4px solid #8b5cf6",
-          }}
-        >
+        <div className="card" style={{ padding: "25px", display: "flex", alignItems: "center", gap: "20px", borderLeft: "4px solid #8b5cf6" }}>
           <div style={{ background: "#f5f3ff", padding: "15px", borderRadius: "12px" }}>
             <Users size={30} color="#8b5cf6" />
           </div>
           <div>
-            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>
-              {stats?.users || 0}
-            </div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>{stats?.users || 0}</div>
             <div style={{ color: "#64748b", fontSize: "14px" }}>Пользователей</div>
           </div>
         </div>
 
-        <div
-          className="card"
-          style={{
-            padding: "25px",
-            display: "flex",
-            alignItems: "center",
-            gap: "20px",
-            borderLeft: "4px solid #10b981",
-          }}
-        >
+        <div className="card" style={{ padding: "25px", display: "flex", alignItems: "center", gap: "20px", borderLeft: "4px solid #10b981" }}>
           <div style={{ background: "#ecfdf5", padding: "15px", borderRadius: "12px" }}>
             <CheckCircle size={30} color="#10b981" />
           </div>
           <div>
-            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>
-              {stats?.total_tasks || 0}
-            </div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>{stats?.total_tasks || 0}</div>
             <div style={{ color: "#64748b", fontSize: "14px" }}>Всего задач</div>
           </div>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "30px" }}>
-        {/* АКТИВНОСТЬ (split: tasks + fix problems) */}
-        <div className="card" style={{ padding: "0", overflow: "hidden" }}>
-          <div
-            style={{
-              padding: "20px",
-              borderBottom: "1px solid #e2e8f0",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-              <Activity size={20} color="#64748b" /> Активность
-            </h3>
-            <Link
-              to="/departments"
-              style={{ fontSize: "13px", color: "#3b82f6", textDecoration: "none" }}
+        {/* LEFT COLUMN: 2 separate cards */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Активность */}
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <div
+              style={{
+                padding: "20px",
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
             >
-              Все задачи →
-            </Link>
-          </div>
+              <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
+                <Activity size={20} color="#64748b" /> Активность
+              </h3>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-            }}
-          >
-            {/* LEFT: Recent tasks */}
-            <div style={{ minHeight: 240 }}>
-              <div
-                style={{
-                  padding: "12px 20px",
-                  borderBottom: "1px solid #f1f5f9",
-                  fontSize: "13px",
-                  color: "#64748b",
-                  fontWeight: 700,
-                }}
-              >
-                Задачи
-              </div>
-
-              <div>
-                {stats?.recent_tasks?.length === 0 ? (
-                  <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>
-                    Нет недавней активности
-                  </div>
-                ) : (
-                  stats?.recent_tasks?.map((task, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: "15px 20px",
-                        borderBottom: "1px solid #f1f5f9",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: "12px",
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontWeight: 600,
-                            color: "#334155",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {task.title}
-                        </div>
-                        <div style={{ fontSize: "12px", color: "#94a3b8" }}>
-                          Автор: {task.username} • {formatDate(task.created_at)}
-                        </div>
-                      </div>
-
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          padding: "4px 8px",
-                          borderRadius: "10px",
-                          fontWeight: 600,
-                          background:
-                            task.status === "Done"
-                              ? "#dcfce7"
-                              : task.status === "In Progress"
-                              ? "#dbeafe"
-                              : "#f1f5f9",
-                          color:
-                            task.status === "Done"
-                              ? "#166534"
-                              : task.status === "In Progress"
-                              ? "#1e40af"
-                              : "#475569",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {task.status === "Open"
-                          ? "Новая"
-                          : task.status === "In Progress"
-                          ? "В работе"
-                          : "Готово"}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
+              <Link to="/departments" style={{ fontSize: "13px", color: "#3b82f6", textDecoration: "none" }}>
+                Все задачи →
+              </Link>
             </div>
 
-            {/* RIGHT: FIX Problems */}
-            <div style={{ borderLeft: "1px solid #e2e8f0", minHeight: 240 }}>
-              <div
-                style={{
-                  padding: "12px 20px",
-                  borderBottom: "1px solid #f1f5f9",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "10px",
-                }}
-              >
-                <div style={{ fontSize: "13px", color: "#64748b", fontWeight: 800 }}>
-                  FIX Problems
-                </div>
+            <div style={{ height: LIST_HEIGHT, overflow: "auto" }}>
+              {recentTasks.length === 0 ? (
+                <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>Нет недавней активности</div>
+              ) : (
+                recentTasks.map((task, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      padding: "15px 20px",
+                      borderBottom: "1px solid #f1f5f9",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "12px",
+                      ...rowHoverStyle,
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          color: "#334155",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {task.title}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#94a3b8" }}>
+                        Автор: {task.username} • {formatDate(task.created_at)}
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        padding: "4px 8px",
+                        borderRadius: "10px",
+                        fontWeight: 700,
+                        background:
+                          task.status === "Done"
+                            ? "#dcfce7"
+                            : task.status === "In Progress"
+                            ? "#dbeafe"
+                            : "#f1f5f9",
+                        color:
+                          task.status === "Done"
+                            ? "#166534"
+                            : task.status === "In Progress"
+                            ? "#1e40af"
+                            : "#475569",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {task.status === "Open" ? "Новая" : task.status === "In Progress" ? "В работе" : "Готово"}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Active Problems */}
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <div
+              style={{
+                padding: "20px",
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
+                  <AlertTriangle size={20} color="#f59e0b" /> Active Problems
+                </h3>
+
+                {/* Badge count */}
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    padding: "4px 10px",
+                    borderRadius: "999px",
+                    background: problemsLoading ? "#f1f5f9" : problems.length > 0 ? "#fff7ed" : "#ecfdf5",
+                    border: `1px solid ${
+                      problemsLoading ? "#e2e8f0" : problems.length > 0 ? "#fed7aa" : "#a7f3d0"
+                    }`,
+                    color: problemsLoading ? "#64748b" : problems.length > 0 ? "#9a3412" : "#065f46",
+                  }}
+                  title="Количество активных проблем"
+                >
+                  {problemsLoading ? "Loading…" : problems.length}
+                </span>
+
+                {/* last updated */}
+                {problemsUpdatedAt && (
+                  <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                    обновлено {formatTime(problemsUpdatedAt)}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={fetchProblems}
+                  title="Обновить список"
+                  style={{
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    padding: "8px 10px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "#334155",
+                  }}
+                  disabled={problemsLoading}
+                >
+                  <RefreshCw size={16} />
+                  <span style={{ fontSize: "12px", fontWeight: 700 }}>
+                    {problemsLoading ? "..." : "Refresh"}
+                  </span>
+                </button>
 
                 {isAdmin && (
                   <button
@@ -498,91 +509,78 @@ const DashboardPage = () => {
                     type="button"
                   >
                     <Plus size={16} />
-                    Добавить
+                    Add
                   </button>
                 )}
               </div>
+            </div>
 
-              <div>
-                {problemsLoading ? (
-                  <div style={{ padding: "20px", color: "#94a3b8" }}>Загрузка проблем...</div>
-                ) : problems.length === 0 ? (
-                  <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>
-                    Пока нет зафиксированных проблем
-                  </div>
-                ) : (
-                  problems.map((p) => (
-                    <div
-                      key={p.id ?? `${p.title}-${p.created_at}`}
-                      onClick={() => openViewProblem(p)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => e.key === "Enter" && openViewProblem(p)}
-                      style={{
-                        padding: "14px 20px",
-                        borderBottom: "1px solid #f1f5f9",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontWeight: 700,
-                            color: "#0f172a",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {p.title}
-                        </div>
-                        <div style={{ fontSize: "12px", color: "#94a3b8" }}>
-                          {formatDate(p.created_at)}
-                        </div>
+            <div style={{ height: LIST_HEIGHT, overflow: "auto" }}>
+              {problemsLoading ? (
+                <div style={{ padding: "20px", color: "#94a3b8" }}>Загрузка проблем...</div>
+              ) : problems.length === 0 ? (
+                <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>
+                  Пока нет зафиксированных проблем
+                </div>
+              ) : (
+                problems.map((p) => (
+                  <div
+                    key={p.id ?? `${p.title}-${p.created_at}`}
+                    onClick={() => openViewProblem(p)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && openViewProblem(p)}
+                    style={{
+                      padding: "14px 20px",
+                      borderBottom: "1px solid #f1f5f9",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      cursor: "pointer",
+                      ...rowHoverStyle,
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#fff7ed")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontWeight: 800,
+                          color: "#0f172a",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {p.title}
                       </div>
-
-                      {/* Admin controls (hidden for non-admin) */}
-                      {isAdmin && (
-                        <div
-                          style={{ display: "flex", gap: "10px", flexShrink: 0 }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => openEditProblem(p)}
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              cursor: "pointer",
-                              padding: 0,
-                            }}
-                            title="Редактировать"
-                          >
-                            <Edit2 size={16} color="#3b82f6" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteProblem(p)}
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              cursor: "pointer",
-                              padding: 0,
-                            }}
-                            title="Удалить"
-                          >
-                            <Trash2 size={16} color="#ef4444" />
-                          </button>
-                        </div>
-                      )}
+                      <div style={{ fontSize: "12px", color: "#94a3b8" }}>{formatDate(p.created_at)}</div>
                     </div>
-                  ))
-                )}
-              </div>
+
+                    {isAdmin && (
+                      <div style={{ display: "flex", gap: "10px", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => openEditProblem(p)}
+                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                          title="Редактировать"
+                        >
+                          <Edit2 size={16} color="#3b82f6" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteProblem(p)}
+                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                          title="Удалить"
+                        >
+                          <Trash2 size={16} color="#ef4444" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -621,9 +619,7 @@ const DashboardPage = () => {
 
           <div className="card" style={{ background: "#1e293b", color: "white" }}>
             <h3 style={{ marginTop: 0, color: "white", fontSize: "16px" }}>Technical Status</h3>
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "15px", marginTop: "15px" }}
-            >
+            <div style={{ display: "flex", flexDirection: "column", gap: "15px", marginTop: "15px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px" }}>
                   <Server size={16} color={getStatusColor(health.api)} /> API Server
@@ -660,7 +656,7 @@ const DashboardPage = () => {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                {isAdmin && (problemModalMode === "view") && selectedProblem && (
+                {isAdmin && problemModalMode === "view" && selectedProblem && (
                   <button
                     type="button"
                     onClick={() => openEditProblem(selectedProblem)}
@@ -728,7 +724,6 @@ const DashboardPage = () => {
                     {selectedProblem?.description || "Описание не указано."}
                   </div>
 
-                  {/* Admin delete only inside view (optional) */}
                   {isAdmin && selectedProblem && (
                     <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
                       <button
@@ -755,7 +750,7 @@ const DashboardPage = () => {
                 </div>
               )}
 
-              {/* CREATE / EDIT (admin only) */}
+              {/* CREATE / EDIT */}
               {(problemModalMode === "create" || problemModalMode === "edit") && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   {!isAdmin ? (
