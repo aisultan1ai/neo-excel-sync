@@ -203,30 +203,19 @@ const DashboardPage = () => {
     [stats]
   );
 
-  // -----------------------------
-  // UX Styles (Unified)
-  // -----------------------------
+  // ===== UX / Layout constants =====
   const LIST_HEIGHT = 340;
   const HEADER_HEIGHT = 64;
 
-  const rowBase = {
-    padding: "15px 20px",
-    borderBottom: "1px solid #f1f5f9",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "12px",
-    transition: "background 0.15s ease",
-  };
-
-  // Header grid => fixed height for equal border line
+  // ===== Reusable styles (to keep both cards identical) =====
   const sectionHeader = {
     padding: "16px 20px",
     borderBottom: "1px solid #e2e8f0",
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto",
     alignItems: "center",
-    height: HEADER_HEIGHT,
+    height: HEADER_HEIGHT, // <— makes bottom lines perfectly aligned
+    gap: "12px",
   };
 
   const headerLeft = {
@@ -251,9 +240,20 @@ const DashboardPage = () => {
     alignItems: "center",
     gap: "10px",
     minWidth: 0,
-    lineHeight: 1.2,
-    fontWeight: 800,
     color: "#0f172a",
+    fontSize: "16px",
+    fontWeight: 700, // like "Активность"
+    lineHeight: 1.2,
+  };
+
+  const rowBase = {
+    padding: "15px 20px",
+    borderBottom: "1px solid #f1f5f9",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    transition: "background 0.15s ease",
   };
 
   const subtleActionBtn = {
@@ -268,7 +268,19 @@ const DashboardPage = () => {
     color: "#334155",
   };
 
-  // Modal styles (updated to match cards)
+  const badgeCount = {
+    marginLeft: 8,
+    fontSize: 12,
+    fontWeight: 600,
+    padding: "3px 8px",
+    borderRadius: 999,
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+    color: "#475569",
+    whiteSpace: "nowrap",
+  };
+
+  // ===== Modal styles (updated to match Activity typography) =====
   const modalOverlayStyle = {
     position: "fixed",
     inset: 0,
@@ -281,7 +293,7 @@ const DashboardPage = () => {
   };
 
   const modalCardStyle = {
-    width: "min(620px, 95vw)",
+    width: "min(560px, 95vw)",
     background: "white",
     borderRadius: "16px",
     boxShadow: "0 25px 60px rgba(0,0,0,0.25)",
@@ -289,7 +301,7 @@ const DashboardPage = () => {
   };
 
   const modalHeaderStyle = {
-    padding: "16px 18px",
+    padding: "14px 16px",
     borderBottom: "1px solid #e2e8f0",
     display: "flex",
     alignItems: "center",
@@ -297,107 +309,22 @@ const DashboardPage = () => {
     gap: "10px",
   };
 
-  const modalTitleStyle = {
-    fontWeight: 900,
+  const modalHeaderTitleStyle = {
+    fontWeight: 700, // was 800
     color: "#0f172a",
-    fontSize: 14,
-    letterSpacing: 0.2,
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
+    fontSize: 14, // smaller like card headers
   };
 
-  const modalBodyStyle = { padding: "18px" };
+  const modalBodyStyle = { padding: "16px" };
 
-  const modalLabel = {
-    fontSize: 12,
-    fontWeight: 800,
-    color: "#64748b",
-    marginBottom: 6,
-  };
-
-  const modalInput = {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "12px",
-    border: "1px solid #cbd5e1",
-    outline: "none",
-    fontSize: 14,
+  const modalMainTitleStyle = {
+    fontSize: 16, // was 18
+    fontWeight: 700, // was 900
     color: "#0f172a",
+    lineHeight: 1.25,
   };
 
-  const modalTextarea = {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "12px",
-    border: "1px solid #cbd5e1",
-    outline: "none",
-    resize: "vertical",
-    fontSize: 14,
-    color: "#0f172a",
-    lineHeight: 1.5,
-  };
-
-  const modalMeta = {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontWeight: 600,
-  };
-
-  const modalContentBox = {
-    marginTop: 8,
-    padding: 14,
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    borderRadius: 12,
-    color: "#334155",
-    whiteSpace: "pre-wrap",
-    lineHeight: 1.6,
-    fontSize: 14,
-  };
-
-  const modalFooterActions = {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 6,
-  };
-
-  const modalSecondaryBtn = {
-    background: "white",
-    color: "#334155",
-    border: "1px solid #cbd5e1",
-    borderRadius: 10,
-    padding: "10px 12px",
-    fontSize: 12,
-    fontWeight: 800,
-    cursor: "pointer",
-  };
-
-  const modalPrimaryBtn = {
-    borderRadius: 10,
-    padding: "10px 12px",
-    fontSize: 12,
-    fontWeight: 800,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    cursor: "pointer",
-  };
-
-  const modalDangerBtn = {
-    background: "#fee2e2",
-    color: "#991b1b",
-    border: "1px solid #fecaca",
-    borderRadius: 10,
-    padding: "10px 12px",
-    fontSize: 12,
-    fontWeight: 800,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    cursor: "pointer",
-  };
+  const modalMetaStyle = { fontSize: 12, color: "#94a3b8" };
 
   if (loading) return <div style={{ padding: 40 }}>Загрузка аналитики...</div>;
 
@@ -451,7 +378,7 @@ const DashboardPage = () => {
             style={{
               fontSize: "13px",
               color: health.api === "Online" ? "#065f46" : "#991b1b",
-              fontWeight: 700,
+              fontWeight: 600,
             }}
           >
             {health.api === "Online" ? "System Stable" : "System Issues"}
@@ -482,12 +409,10 @@ const DashboardPage = () => {
             <Clock size={30} color="#3b82f6" />
           </div>
           <div>
-            <div style={{ fontSize: "32px", fontWeight: 900, color: "#1e293b" }}>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>
               {stats?.active_tasks || 0}
             </div>
-            <div style={{ color: "#64748b", fontSize: "14px", fontWeight: 700 }}>
-              Активных задач
-            </div>
+            <div style={{ color: "#64748b", fontSize: "14px" }}>Активных задач</div>
           </div>
         </div>
 
@@ -505,12 +430,10 @@ const DashboardPage = () => {
             <Users size={30} color="#8b5cf6" />
           </div>
           <div>
-            <div style={{ fontSize: "32px", fontWeight: 900, color: "#1e293b" }}>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>
               {stats?.users || 0}
             </div>
-            <div style={{ color: "#64748b", fontSize: "14px", fontWeight: 700 }}>
-              Пользователей
-            </div>
+            <div style={{ color: "#64748b", fontSize: "14px" }}>Пользователей</div>
           </div>
         </div>
 
@@ -528,22 +451,20 @@ const DashboardPage = () => {
             <CheckCircle size={30} color="#10b981" />
           </div>
           <div>
-            <div style={{ fontSize: "32px", fontWeight: 900, color: "#1e293b" }}>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>
               {stats?.total_tasks || 0}
             </div>
-            <div style={{ color: "#64748b", fontSize: "14px", fontWeight: 700 }}>
-              Всего задач
-            </div>
+            <div style={{ color: "#64748b", fontSize: "14px" }}>Всего задач</div>
           </div>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "30px" }}>
-        {/* LEFT: 2 cards in 1 row */}
+        {/* LEFT: two cards in one row */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
             gap: "20px",
             alignItems: "stretch",
           }}
@@ -556,10 +477,11 @@ const DashboardPage = () => {
                   <Activity size={20} color="#64748b" /> Активность
                 </h3>
               </div>
+
               <div style={headerRight}>
                 <Link
                   to="/departments"
-                  style={{ fontSize: "13px", color: "#3b82f6", textDecoration: "none", fontWeight: 700 }}
+                  style={{ fontSize: "13px", color: "#3b82f6", textDecoration: "none" }}
                 >
                   Все задачи →
                 </Link>
@@ -568,7 +490,7 @@ const DashboardPage = () => {
 
             <div style={{ height: LIST_HEIGHT, overflow: "auto" }}>
               {recentTasks.length === 0 ? (
-                <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8", fontWeight: 700 }}>
+                <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>
                   Нет недавней активности
                 </div>
               ) : (
@@ -582,17 +504,16 @@ const DashboardPage = () => {
                     <div style={{ minWidth: 0 }}>
                       <div
                         style={{
-                          fontWeight: 700,
-                          color: "#0f172a",
+                          fontWeight: 600,
+                          color: "#334155",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
-                        title={task.title}
                       >
                         {task.title}
                       </div>
-                      <div style={{ fontSize: "12px", color: "#94a3b8", fontWeight: 600 }}>
+                      <div style={{ fontSize: "12px", color: "#94a3b8" }}>
                         Автор: {task.username} • {formatDate(task.created_at)}
                       </div>
                     </div>
@@ -602,7 +523,7 @@ const DashboardPage = () => {
                         fontSize: "11px",
                         padding: "4px 8px",
                         borderRadius: "10px",
-                        fontWeight: 800,
+                        fontWeight: 600,
                         background:
                           task.status === "Done"
                             ? "#dcfce7"
@@ -636,20 +557,7 @@ const DashboardPage = () => {
               <div style={headerLeft}>
                 <h3 style={headerTitle}>
                   <AlertTriangle size={20} color="#64748b" /> Active Problems
-                  <span
-                    style={{
-                      marginLeft: 8,
-                      fontSize: 12,
-                      fontWeight: 800,
-                      padding: "3px 8px",
-                      borderRadius: 999,
-                      background: "#f1f5f9",
-                      border: "1px solid #e2e8f0",
-                      color: "#475569",
-                      whiteSpace: "nowrap",
-                    }}
-                    title="Количество активных проблем"
-                  >
+                  <span style={badgeCount} title="Количество активных проблем">
                     {problemsLoading ? "..." : problems.length}
                   </span>
                 </h3>
@@ -657,7 +565,7 @@ const DashboardPage = () => {
 
               <div style={headerRight}>
                 {problemsUpdatedAt && (
-                  <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 600, whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>
                     обновлено {formatTime(problemsUpdatedAt)}
                   </span>
                 )}
@@ -666,14 +574,11 @@ const DashboardPage = () => {
                   type="button"
                   onClick={fetchProblems}
                   title="Обновить список"
-                  style={{
-                    ...subtleActionBtn,
-                    opacity: problemsLoading ? 0.7 : 1,
-                  }}
+                  style={{ ...subtleActionBtn, opacity: problemsLoading ? 0.7 : 1 }}
                   disabled={problemsLoading}
                 >
                   <RefreshCw size={16} />
-                  <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>
                     {problemsLoading ? "..." : "Refresh"}
                   </span>
                 </button>
@@ -689,7 +594,6 @@ const DashboardPage = () => {
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
-                      fontWeight: 800,
                     }}
                     title="Добавить проблему"
                     type="button"
@@ -703,9 +607,9 @@ const DashboardPage = () => {
 
             <div style={{ height: LIST_HEIGHT, overflow: "auto" }}>
               {problemsLoading ? (
-                <div style={{ padding: "20px", color: "#94a3b8", fontWeight: 700 }}>Загрузка проблем...</div>
+                <div style={{ padding: "20px", color: "#94a3b8" }}>Загрузка проблем...</div>
               ) : problems.length === 0 ? (
-                <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8", fontWeight: 700 }}>
+                <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>
                   Пока нет зафиксированных проблем
                 </div>
               ) : (
@@ -723,17 +627,16 @@ const DashboardPage = () => {
                     <div style={{ minWidth: 0 }}>
                       <div
                         style={{
-                          fontWeight: 700,
-                          color: "#0f172a",
+                          fontWeight: 600,
+                          color: "#334155",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
-                        title={p.title}
                       >
                         {p.title}
                       </div>
-                      <div style={{ fontSize: "12px", color: "#94a3b8", fontWeight: 600 }}>
+                      <div style={{ fontSize: "12px", color: "#94a3b8" }}>
                         {formatDate(p.created_at)}
                       </div>
                     </div>
@@ -746,7 +649,12 @@ const DashboardPage = () => {
                         <button
                           type="button"
                           onClick={() => openEditProblem(p)}
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
                           title="Редактировать"
                         >
                           <Edit2 size={16} color="#3b82f6" />
@@ -754,7 +662,12 @@ const DashboardPage = () => {
                         <button
                           type="button"
                           onClick={() => deleteProblem(p)}
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
                           title="Удалить"
                         >
                           <Trash2 size={16} color="#ef4444" />
@@ -807,7 +720,7 @@ const DashboardPage = () => {
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px" }}>
                   <Server size={16} color={getStatusColor(health.api)} /> API Server
                 </div>
-                <span style={{ color: getStatusColor(health.api), fontSize: "12px", fontWeight: 800 }}>
+                <span style={{ color: getStatusColor(health.api), fontSize: "12px", fontWeight: 600 }}>
                   {health.api}
                 </span>
               </div>
@@ -816,7 +729,7 @@ const DashboardPage = () => {
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px" }}>
                   <Database size={16} color={getStatusColor(health.db)} /> PostgreSQL
                 </div>
-                <span style={{ color: getStatusColor(health.db), fontSize: "12px", fontWeight: 800 }}>
+                <span style={{ color: getStatusColor(health.db), fontSize: "12px", fontWeight: 600 }}>
                   {health.db}
                 </span>
               </div>
@@ -830,8 +743,7 @@ const DashboardPage = () => {
         <div style={modalOverlayStyle} onClick={closeProblemModal}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
             <div style={modalHeaderStyle}>
-              <div style={modalTitleStyle}>
-                <AlertTriangle size={18} color="#64748b" />
+              <div style={modalHeaderTitleStyle}>
                 {problemModalMode === "create"
                   ? "Новая проблема"
                   : problemModalMode === "edit"
@@ -844,12 +756,17 @@ const DashboardPage = () => {
                   <button
                     type="button"
                     onClick={() => openEditProblem(selectedProblem)}
+                    className="btn"
                     style={{
-                      ...subtleActionBtn,
-                      borderColor: "#cbd5e1",
+                      background: "white",
+                      color: "#334155",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "10px",
                       padding: "8px 10px",
-                      fontSize: 12,
-                      fontWeight: 800,
+                      fontSize: "12px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
                     }}
                     title="Редактировать"
                   >
@@ -879,23 +796,48 @@ const DashboardPage = () => {
             <div style={modalBodyStyle}>
               {/* VIEW */}
               {problemModalMode === "view" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: "#0f172a" }}>
-                    {selectedProblem?.title}
-                  </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={modalMainTitleStyle}>{selectedProblem?.title}</div>
 
-                  {selectedProblem?.created_at && <div style={modalMeta}>{formatDate(selectedProblem.created_at)}</div>}
+                  {selectedProblem?.created_at && (
+                    <div style={modalMetaStyle}>{formatDate(selectedProblem.created_at)}</div>
+                  )}
 
-                  <div style={modalContentBox}>
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      padding: "12px",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      color: "#334155",
+                      whiteSpace: "pre-wrap",
+                      lineHeight: 1.5,
+                      fontSize: 13,
+                      fontWeight: 400,
+                    }}
+                  >
                     {selectedProblem?.description || "Описание не указано."}
                   </div>
 
                   {isAdmin && selectedProblem && (
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
                       <button
                         type="button"
                         onClick={() => deleteProblem(selectedProblem)}
-                        style={modalDangerBtn}
+                        className="btn"
+                        style={{
+                          background: "#fee2e2",
+                          color: "#991b1b",
+                          border: "1px solid #fecaca",
+                          borderRadius: "10px",
+                          padding: "10px 12px",
+                          fontSize: "12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          fontWeight: 600,
+                        }}
                       >
                         <Trash2 size={16} />
                         Удалить
@@ -907,16 +849,14 @@ const DashboardPage = () => {
 
               {/* CREATE / EDIT */}
               {(problemModalMode === "create" || problemModalMode === "edit") && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   {!isAdmin ? (
                     <div
                       style={{
                         color: "#991b1b",
                         background: "#fef2f2",
-                        border: "1px solid #fecaca",
                         padding: 12,
                         borderRadius: 12,
-                        fontWeight: 800,
                         fontSize: 13,
                       }}
                     >
@@ -925,31 +865,76 @@ const DashboardPage = () => {
                   ) : (
                     <>
                       <div>
-                        <div style={modalLabel}>Название</div>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 600, // was 700
+                            color: "#64748b",
+                            marginBottom: 6,
+                          }}
+                        >
+                          Название
+                        </div>
                         <input
                           value={problemTitle}
                           onChange={(e) => setProblemTitle(e.target.value)}
                           placeholder="Например: Ошибка импорта сверки"
-                          style={modalInput}
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            borderRadius: "12px",
+                            border: "1px solid #cbd5e1",
+                            outline: "none",
+                            fontSize: 13,
+                            color: "#0f172a",
+                          }}
                         />
                       </div>
 
                       <div>
-                        <div style={modalLabel}>Описание</div>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 600, // was 700
+                            color: "#64748b",
+                            marginBottom: 6,
+                          }}
+                        >
+                          Описание
+                        </div>
                         <textarea
                           value={problemDescription}
                           onChange={(e) => setProblemDescription(e.target.value)}
                           placeholder="Подробности проблемы, шаги воспроизведения, что должно быть и что происходит..."
                           rows={6}
-                          style={modalTextarea}
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            borderRadius: "12px",
+                            border: "1px solid #cbd5e1",
+                            outline: "none",
+                            resize: "vertical",
+                            fontSize: 13,
+                            color: "#0f172a",
+                            lineHeight: 1.45,
+                          }}
                         />
                       </div>
 
-                      <div style={modalFooterActions}>
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: 4 }}>
                         <button
                           type="button"
                           onClick={closeProblemModal}
-                          style={modalSecondaryBtn}
+                          className="btn"
+                          style={{
+                            background: "white",
+                            color: "#334155",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "10px",
+                            padding: "10px 12px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                          }}
                           disabled={savingProblem}
                         >
                           Отмена
@@ -960,8 +945,14 @@ const DashboardPage = () => {
                           onClick={saveProblem}
                           className="btn"
                           style={{
-                            ...modalPrimaryBtn,
+                            borderRadius: "10px",
+                            padding: "10px 12px",
+                            fontSize: "12px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
                             opacity: savingProblem ? 0.7 : 1,
+                            fontWeight: 600,
                           }}
                           disabled={savingProblem || !problemTitle.trim()}
                         >
