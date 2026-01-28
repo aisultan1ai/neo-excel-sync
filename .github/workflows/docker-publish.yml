@@ -17,8 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      # QEMU больше не нужен, т.к. arm64 не собираем
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -29,20 +28,20 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & push backend
+      - name: Build & push backend (amd64 only)
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.IMAGE_BACKEND }}:1.1
 
-      - name: Build & push frontend
+      - name: Build & push frontend (amd64 only)
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.IMAGE_FRONTEND }}:1.1
