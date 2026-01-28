@@ -30,88 +30,50 @@ def init_database():
     conn = get_db_connection()
     if not conn:
         return
+
     try:
         cursor = conn.cursor()
 
         # 1. Таблица CLIENTS
         cursor.execute("""
-                       CREATE TABLE IF NOT EXISTS clients
-                       (
-                           id
-                           SERIAL
-                           PRIMARY
-                           KEY,
-                           name
-                           TEXT
-                           NOT
-                           NULL,
-                           email
-                           TEXT,
-                           account_number
-                           TEXT,
-                           status
-                           TEXT
-                           DEFAULT
-                           'gray',
-                           folder_path
-                           TEXT
-                       )
-                       """)
+            CREATE TABLE IF NOT EXISTS clients (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT,
+                account_number TEXT,
+                status TEXT DEFAULT 'gray',
+                folder_path TEXT
+            )
+        """)
 
         # 2. Таблица USERS
         cursor.execute("""
-                       CREATE TABLE IF NOT EXISTS users
-                       (
-                           id
-                           SERIAL
-                           PRIMARY
-                           KEY,
-                           username
-                           VARCHAR
-                       (
-                           50
-                       ) UNIQUE NOT NULL,
-                           password_hash VARCHAR
-                       (
-                           255
-                       ) NOT NULL,
-                           department VARCHAR
-                       (
-                           50
-                       ) DEFAULT 'Back Office',
-                           is_admin BOOLEAN DEFAULT FALSE
-                           )
-                       """)
-
-        try:
-            cursor.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(50) DEFAULT 'Back Office'"
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                department VARCHAR(50) DEFAULT 'Back Office',
+                is_admin BOOLEAN DEFAULT FALSE
             )
-        except Exception:
-            conn.rollback()
+        """)
 
-        try:
-            cursor.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE"
-            )
-        except Exception:
-            conn.rollback()
+        # Если хочешь оставить upgrade-блоки — ок
+        for sql in [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(50) DEFAULT 'Back Office'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
+        ]:
+            try:
+                cursor.execute(sql)
+            except Exception:
+                conn.rollback()
 
         # 2.1 Таблица DEPARTMENTS
         cursor.execute("""
-                       CREATE TABLE IF NOT EXISTS departments
-                       (
-                           id
-                           SERIAL
-                           PRIMARY
-                           KEY,
-                           name
-                           VARCHAR
-                       (
-                           50
-                       ) UNIQUE NOT NULL
-                           )
-                       """)
+            CREATE TABLE IF NOT EXISTS departments (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(50) UNIQUE NOT NULL
+            )
+        """)
 
         cursor.execute("SELECT COUNT(*) FROM departments")
         if cursor.fetchone()[0] == 0:
@@ -127,44 +89,19 @@ def init_database():
 
         # 3. Таблица TASKS
         cursor.execute("""
-                       CREATE TABLE IF NOT EXISTS tasks
-                       (
-                           id
-                           SERIAL
-                           PRIMARY
-                           KEY,
-                           title
-                           TEXT
-                           NOT
-                           NULL,
-                           description
-                           TEXT,
-                           from_user_id
-                           INTEGER,
-                           to_department
-                           TEXT
-                           NOT
-                           NULL,
-                           status
-                           TEXT
-                           DEFAULT
-                           'Open',
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP,
-                           FOREIGN
-                           KEY
-                       (
-                           from_user_id
-                       ) REFERENCES users
-                       (
-                           id
-                       )
-                           )
-                       """)
+            CREATE TABLE IF NOT EXISTS tasks (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                from_user_id INTEGER,
+                to_department TEXT NOT NULL,
+                status TEXT DEFAULT 'Open',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (from_user_id) REFERENCES users(id)
+            )
+        """)
 
-        # --- TASKS schema upgrades (assign/accept/deadline/priority) ---
+        # --- TASKS schema upgrades ---
         for sql in [
             "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS to_user_id INTEGER",
             "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS accepted_by_user_id INTEGER",
@@ -177,7 +114,7 @@ def init_database():
             except Exception:
                 conn.rollback()
 
-        # FK constraints (safe)
+        # FK constraints
         try:
             cursor.execute("""
             DO $$
@@ -198,86 +135,40 @@ def init_database():
         except Exception:
             conn.rollback()
 
-        # Индексы (не обязательно, но полезно)
+        # Индексы
         try:
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_to_dept ON tasks(to_department)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_accepted_by ON tasks(accepted_by_user_id)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_to_dept ON tasks(to_department)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_accepted_by ON tasks(accepted_by_user_id)"
+            )
         except Exception:
             conn.rollback()
 
-
         # 4. Таблица COMMENTS
         cursor.execute("""
-                       CREATE TABLE IF NOT EXISTS comments
-                       (
-                           id
-                           SERIAL
-                           PRIMARY
-                           KEY,
-                           task_id
-                           INTEGER,
-                           user_id
-                           INTEGER,
-                           content
-                           TEXT
-                           NOT
-                           NULL,
-                           created_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP,
-                           FOREIGN
-                           KEY
-                       (
-                           task_id
-                       ) REFERENCES tasks
-                       (
-                           id
-                       ) ON DELETE CASCADE,
-                           FOREIGN KEY
-                       (
-                           user_id
-                       ) REFERENCES users
-                       (
-                           id
-                       )
-                           )
-                       """)
+            CREATE TABLE IF NOT EXISTS comments (
+                id SERIAL PRIMARY KEY,
+                task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+                user_id INTEGER REFERENCES users(id),
+                content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
         # 5. Таблица TASK_ATTACHMENTS
         cursor.execute("""
-                       CREATE TABLE IF NOT EXISTS task_attachments
-                       (
-                           id
-                           SERIAL
-                           PRIMARY
-                           KEY,
-                           task_id
-                           INTEGER,
-                           filename
-                           TEXT
-                           NOT
-                           NULL,
-                           file_path
-                           TEXT
-                           NOT
-                           NULL,
-                           uploaded_at
-                           TIMESTAMP
-                           DEFAULT
-                           CURRENT_TIMESTAMP,
-                           FOREIGN
-                           KEY
-                       (
-                           task_id
-                       ) REFERENCES tasks
-                       (
-                           id
-                       ) ON DELETE CASCADE
-                           )
-                       """)
+            CREATE TABLE IF NOT EXISTS task_attachments (
+                id SERIAL PRIMARY KEY,
+                task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+                filename TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
-        #  --- FIX PROBLEMS ---
+        # PROBLEMS
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS problems (
                 id SERIAL PRIMARY KEY,
@@ -288,15 +179,14 @@ def init_database():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
-        # Индекс по дате (полезно)
         try:
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_problems_created_at ON problems(created_at DESC)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_problems_created_at ON problems(created_at DESC)"
+            )
         except Exception:
             conn.rollback()
 
-
-        #  CRYPTO ACCOUNTS
+        # CRYPTO
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS crypto_accounts (
                 id SERIAL PRIMARY KEY,
@@ -306,8 +196,6 @@ def init_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
-        #  CRYPTO TRANSFERS
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS crypto_transfers (
                 id SERIAL PRIMARY KEY,
@@ -322,8 +210,6 @@ def init_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
-        # --- CRYPTO SCHEMES (ReactFlow) ---
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS crypto_schemes (
                 id SERIAL PRIMARY KEY,
@@ -334,17 +220,7 @@ def init_database():
             )
         """)
 
-        conn.commit()
-        log.info("БД инициализирована успешно.")
-    except Exception as e:
-        log.error(f"Ошибка инициализации БД: {e}")
-        conn.rollback()
-    finally:
-        conn.close()
-
-        # =========================
-        # PODFT SNAPSHOTS (manual save by admin)
-        # =========================
+        # ✅ PODFT SNAPSHOTS — ВОТ СЮДА (а не в finally)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS podft_snapshots (
                 id SERIAL PRIMARY KEY,
@@ -353,7 +229,6 @@ def init_database():
                 created_by TEXT
             )
         """)
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS podft_snapshot_trades (
                 id SERIAL PRIMARY KEY,
@@ -371,13 +246,31 @@ def init_database():
                 UNIQUE(snapshot_id, row_hash)
             )
         """)
-
         try:
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_podft_snapshots_date ON podft_snapshots(snapshot_date)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_snapshot ON podft_snapshot_trades(snapshot_id)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_podft_snapshots_date ON podft_snapshots(snapshot_date)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_snapshot ON podft_snapshot_trades(snapshot_id)"
+            )
         except Exception:
             conn.rollback()
 
+        conn.commit()
+        log.info("БД инициализирована успешно.")
+
+    except Exception as e:
+        log.error(f"Ошибка инициализации БД: {e}", exc_info=True)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def search_clients(search_term=""):
@@ -527,7 +420,15 @@ def get_user_by_username(username):
         conn.close()
 
 
-def create_task(title, description, from_user_id, to_department, to_user_id=None, due_date=None, priority="normal"):
+def create_task(
+    title,
+    description,
+    from_user_id,
+    to_department,
+    to_user_id=None,
+    due_date=None,
+    priority="normal",
+):
     conn = get_db_connection()
     if not conn:
         return None
@@ -539,7 +440,15 @@ def create_task(title, description, from_user_id, to_department, to_user_id=None
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
-            (title, description, from_user_id, to_department, to_user_id, due_date, priority),
+            (
+                title,
+                description,
+                from_user_id,
+                to_department,
+                to_user_id,
+                due_date,
+                priority,
+            ),
         )
         task_id = cursor.fetchone()[0]
         conn.commit()
@@ -558,10 +467,14 @@ def get_user_by_id(user_id: int):
         return None
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT id, username, department, is_admin FROM users WHERE id=%s", (user_id,))
+        cur.execute(
+            "SELECT id, username, department, is_admin FROM users WHERE id=%s",
+            (user_id,),
+        )
         return cur.fetchone()
     finally:
         conn.close()
+
 
 def get_users_basic():
     conn = get_db_connection()
@@ -569,10 +482,13 @@ def get_users_basic():
         return []
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT id, username, department FROM users ORDER BY department, username")
+        cur.execute(
+            "SELECT id, username, department FROM users ORDER BY department, username"
+        )
         return cur.fetchall()
     finally:
         conn.close()
+
 
 def accept_task(task_id: int, accepter_user_id: int):
     conn = get_db_connection()
@@ -629,7 +545,6 @@ def get_tasks_by_dept(department):
         return cursor.fetchall()
     finally:
         conn.close()
-
 
 
 def update_task(task_id, title, description):
@@ -1066,7 +981,6 @@ def get_user_tasks(user_id):
         conn.close()
 
 
-
 # =========================
 # CRYPTO: ACCOUNTS
 # =========================
@@ -1312,6 +1226,7 @@ def count_users():
     finally:
         conn.close()
 
+
 def get_problems(limit: int = 50):
     conn = get_db_connection()
     if not conn:
@@ -1429,6 +1344,7 @@ import hashlib
 import json
 from datetime import date as _date
 
+
 def _podft_row_hash(trade: dict) -> str:
     payload = {
         "account": trade.get("account"),
@@ -1538,7 +1454,10 @@ def get_podft_snapshot_count(snapshot_id: int) -> int:
         return 0
     try:
         cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM podft_snapshot_trades WHERE snapshot_id = %s", (snapshot_id,))
+        cur.execute(
+            "SELECT COUNT(*) FROM podft_snapshot_trades WHERE snapshot_id = %s",
+            (snapshot_id,),
+        )
         return int(cur.fetchone()[0])
     finally:
         conn.close()

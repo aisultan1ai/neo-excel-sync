@@ -87,8 +87,7 @@ class TaskCreate(BaseModel):
     to_department: Optional[str] = None
     to_user_id: Optional[int] = None
     due_date: Optional[date] = None  # "YYYY-MM-DD"
-    priority: str = "normal"         # normal | urgent
-
+    priority: str = "normal"  # normal | urgent
 
 
 class TaskStatusUpdate(BaseModel):
@@ -141,6 +140,7 @@ class CryptoSchemeCreate(BaseModel):
     nodes: Any
     edges: Any
 
+
 class ProblemCreate(BaseModel):
     title: str
     description: str = ""
@@ -149,6 +149,7 @@ class ProblemCreate(BaseModel):
 class ProblemUpdate(BaseModel):
     title: str
     description: str = ""
+
 
 class PodftTradeIn(BaseModel):
     account: Optional[str] = None
@@ -164,7 +165,6 @@ class PodftTradeIn(BaseModel):
 class PodftSnapshotSaveIn(BaseModel):
     snapshot_date: date
     trades: list[PodftTradeIn]
-
 
 
 def verify_password(plain_password, hashed_password):
@@ -822,8 +822,11 @@ async def create_new_task(
         return {"status": "success", "id": task_id}
     raise HTTPException(500, "Error creating task")
 
+
 @app.post("/api/tasks/{task_id}/accept")
-async def accept_task_endpoint(task_id: int, current_user: str = Depends(get_current_user)):
+async def accept_task_endpoint(
+    task_id: int, current_user: str = Depends(get_current_user)
+):
     user = database_manager.get_user_by_username(current_user)
     if not user:
         raise HTTPException(404, "User not found")
@@ -851,7 +854,9 @@ async def accept_task_endpoint(task_id: int, current_user: str = Depends(get_cur
         if db_task.get("accepted_by_user_id") == user[0]:
             # идемпотентно
             return {"status": "success", "task": db_task}
-        raise HTTPException(409, f"Already accepted by {db_task.get('accepted_by_name')}")
+        raise HTTPException(
+            409, f"Already accepted by {db_task.get('accepted_by_name')}"
+        )
 
     updated = database_manager.accept_task(task_id, user[0])
     if not updated:
@@ -974,7 +979,6 @@ async def remove_attachment(
     raise HTTPException(500, "Error deleting attachment")
 
 
-
 @app.get("/api/problems")
 async def api_get_problems(
     limit: int = 50,
@@ -1049,7 +1053,6 @@ async def api_delete_problem(
     return {"status": "success"}
 
 
-
 # ПОЛЬЗОВАТЕЛИ И ПРОФИЛЬ
 
 
@@ -1094,6 +1097,7 @@ async def change_password(
 async def get_dashboard_data(current_user: str = Depends(get_current_user)):
     return database_manager.get_dashboard_stats() or {"users": 0, "total_tasks": 0}
 
+
 @app.post("/api/podft/snapshots")
 async def save_podft_snapshot(
     payload: PodftSnapshotSaveIn,
@@ -1102,7 +1106,9 @@ async def save_podft_snapshot(
     if not payload.trades:
         raise HTTPException(400, "No trades to save")
 
-    snap = database_manager.create_podft_snapshot(payload.snapshot_date, created_by=current_user)
+    snap = database_manager.create_podft_snapshot(
+        payload.snapshot_date, created_by=current_user
+    )
     if not snap:
         raise HTTPException(500, "Failed to create snapshot")
 
@@ -1145,7 +1151,6 @@ async def podft_trades(
 
     rows = database_manager.get_podft_trades_by_snapshot(snap["id"], limit=500)
     return [dict(r) for r in rows]
-
 
 
 @app.get("/api/admin/users")
@@ -1604,6 +1609,5 @@ def api_delete_crypto_transfer(
 ):
     ok = database_manager.delete_crypto_transfer(transfer_id)
     if not ok:
-
         raise HTTPException(404, "Transfer not found")
     return {"ok": True}
