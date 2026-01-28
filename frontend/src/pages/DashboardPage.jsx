@@ -7,18 +7,37 @@ import {
   Clock,
   FileDiff,
   Plus,
-  ArrowRight,
   Server,
   Database,
+  Edit2,
+  Trash2,
+  X,
+  Save,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const DashboardPage = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+
   const [username, setUsername] = useState("User");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [health, setHealth] = useState({ api: "Checking...", db: "Checking..." });
+
+  // FIX Problems
+  const [problems, setProblems] = useState([]);
+  const [problemsLoading, setProblemsLoading] = useState(true);
+
+  // Modal state
+  const [problemModalOpen, setProblemModalOpen] = useState(false);
+  const [problemModalMode, setProblemModalMode] = useState("view"); // view | create | edit
+  const [selectedProblem, setSelectedProblem] = useState(null);
+
+  // Form
+  const [problemTitle, setProblemTitle] = useState("");
+  const [problemDescription, setProblemDescription] = useState("");
+  const [savingProblem, setSavingProblem] = useState(false);
 
   useEffect(() => {
     fetchDashboard();
@@ -27,6 +46,11 @@ const DashboardPage = () => {
     const interval = setInterval(checkSystemHealth, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const authHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
 
   const checkSystemHealth = async () => {
     try {
@@ -37,19 +61,33 @@ const DashboardPage = () => {
     }
   };
 
+  const fetchProblems = async () => {
+    try {
+      setProblemsLoading(true);
+      const res = await axios.get("/api/problems", { headers: authHeaders() });
+      setProblems(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("problems request failed", err);
+      setProblems([]);
+    } finally {
+      setProblemsLoading(false);
+    }
+  };
+
   const fetchDashboard = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const resProfile = await axios.get("/api/profile", { headers: authHeaders() });
+      setUsername(resProfile.data?.username || "User");
 
-      const resProfile = await axios.get("/api/profile", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setUsername(resProfile.data.username);
+      const adminFlag =
+        resProfile.data?.is_admin === true ||
+        String(resProfile.data?.role || "").toLowerCase() === "admin";
+      setIsAdmin(Boolean(adminFlag));
 
-      const res = await axios.get("/api/dashboard", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get("/api/dashboard", { headers: authHeaders() });
       setStats(res.data);
+
+      await fetchProblems();
       setLoading(false);
     } catch (err) {
       console.error("request failed", err);
@@ -60,12 +98,135 @@ const DashboardPage = () => {
   const getStatusColor = (status) => {
     if (status === "Online" || status === "Connected") return "#4ade80"; // Green
     if (status === "Checking...") return "#94a3b8"; // Grey
-    return "#ef4444"; // Red (Offline/Error)
+    return "#ef4444"; // Red
   };
+
+  // Modal helpers
+  const openViewProblem = (p) => {
+    setSelectedProblem(p);
+    setProblemModalMode("view");
+    setProblemTitle(p?.title || "");
+    setProblemDescription(p?.description || "");
+    setProblemModalOpen(true);
+  };
+
+  const openCreateProblem = () => {
+    setSelectedProblem(null);
+    setProblemModalMode("create");
+    setProblemTitle("");
+    setProblemDescription("");
+    setProblemModalOpen(true);
+  };
+
+  const openEditProblem = (p) => {
+    setSelectedProblem(p);
+    setProblemModalMode("edit");
+    setProblemTitle(p?.title || "");
+    setProblemDescription(p?.description || "");
+    setProblemModalOpen(true);
+  };
+
+  const closeProblemModal = () => {
+    setProblemModalOpen(false);
+    setSelectedProblem(null);
+    setProblemTitle("");
+    setProblemDescription("");
+    setSavingProblem(false);
+  };
+
+  const saveProblem = async () => {
+    if (!isAdmin) return;
+    const title = problemTitle.trim();
+    const description = problemDescription.trim();
+
+    if (!title) return;
+
+    try {
+      setSavingProblem(true);
+
+      if (problemModalMode === "create") {
+        await axios.post(
+          "/api/problems",
+          { title, description },
+          { headers: authHeaders() }
+        );
+      } else if (problemModalMode === "edit" && selectedProblem?.id != null) {
+        await axios.put(
+          `/api/problems/${selectedProblem.id}`,
+          { title, description },
+          { headers: authHeaders() }
+        );
+      }
+
+      await fetchProblems();
+      closeProblemModal();
+    } catch (err) {
+      console.error("save problem failed", err);
+      setSavingProblem(false);
+    }
+  };
+
+  const deleteProblem = async (p) => {
+    if (!isAdmin) return;
+    if (!p?.id) return;
+
+    const ok = window.confirm("Удалить эту проблему?");
+    if (!ok) return;
+
+    try {
+      await axios.delete(`/api/problems/${p.id}`, { headers: authHeaders() });
+      await fetchProblems();
+
+      // если удалили то, что было открыто в модалке
+      if (selectedProblem?.id === p.id) closeProblemModal();
+    } catch (err) {
+      console.error("delete problem failed", err);
+    }
+  };
+
+  const formatDate = (iso) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString();
+  };
+
+  // Modal styles
+  const modalOverlayStyle = {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15, 23, 42, 0.55)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
+    padding: "18px",
+  };
+
+  const modalCardStyle = {
+    width: "min(560px, 95vw)",
+    background: "white",
+    borderRadius: "16px",
+    boxShadow: "0 25px 60px rgba(0,0,0,0.25)",
+    overflow: "hidden",
+  };
+
+  const modalHeaderStyle = {
+    padding: "14px 16px",
+    borderBottom: "1px solid #e2e8f0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "10px",
+  };
+
+  const modalBodyStyle = { padding: "16px" };
+
   if (loading) return <div style={{ padding: 40 }}>Загрузка аналитики...</div>;
 
   return (
     <div style={{ width: "100%", paddingRight: "20px" }}>
+      {/* Header */}
       <div
         style={{
           marginBottom: "30px",
@@ -88,6 +249,7 @@ const DashboardPage = () => {
           </h1>
           <p style={{ color: "#64748b", marginTop: "5px" }}>Вот обзор системы на сегодня.</p>
         </div>
+
         <div
           style={{
             display: "flex",
@@ -107,7 +269,7 @@ const DashboardPage = () => {
               borderRadius: "50%",
               boxShadow: `0 0 5px ${health.api === "Online" ? "#10b981" : "#ef4444"}`,
             }}
-          ></div>
+          />
           <span
             style={{
               fontSize: "13px",
@@ -120,6 +282,7 @@ const DashboardPage = () => {
         </div>
       </div>
 
+      {/* Top cards */}
       <div
         style={{
           display: "grid",
@@ -193,7 +356,7 @@ const DashboardPage = () => {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "30px" }}>
-        {/* ЛЕВАЯ КОЛОНКА: ПОСЛЕДНИЕ ЗАДАЧИ */}
+        {/* АКТИВНОСТЬ (split: tasks + fix problems) */}
         <div className="card" style={{ padding: "0", overflow: "hidden" }}>
           <div
             style={{
@@ -215,64 +378,217 @@ const DashboardPage = () => {
             </Link>
           </div>
 
-          <div>
-            {stats?.recent_tasks?.length === 0 ? (
-              <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>
-                Нет недавней активности
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+            }}
+          >
+            {/* LEFT: Recent tasks */}
+            <div style={{ minHeight: 240 }}>
+              <div
+                style={{
+                  padding: "12px 20px",
+                  borderBottom: "1px solid #f1f5f9",
+                  fontSize: "13px",
+                  color: "#64748b",
+                  fontWeight: 700,
+                }}
+              >
+                Задачи
               </div>
-            ) : (
-              stats?.recent_tasks.map((task, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    padding: "15px 20px",
-                    borderBottom: "1px solid #f1f5f9",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 600, color: "#334155" }}>{task.title}</div>
-                    <div style={{ fontSize: "12px", color: "#94a3b8" }}>
-                      Автор: {task.username} • {new Date(task.created_at).toLocaleDateString()}
-                    </div>
+
+              <div>
+                {stats?.recent_tasks?.length === 0 ? (
+                  <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>
+                    Нет недавней активности
                   </div>
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      padding: "4px 8px",
-                      borderRadius: "10px",
-                      fontWeight: 600,
-                      background:
-                        task.status === "Done"
-                          ? "#dcfce7"
+                ) : (
+                  stats?.recent_tasks?.map((task, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: "15px 20px",
+                        borderBottom: "1px solid #f1f5f9",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "12px",
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            color: "#334155",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {task.title}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#94a3b8" }}>
+                          Автор: {task.username} • {formatDate(task.created_at)}
+                        </div>
+                      </div>
+
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          padding: "4px 8px",
+                          borderRadius: "10px",
+                          fontWeight: 600,
+                          background:
+                            task.status === "Done"
+                              ? "#dcfce7"
+                              : task.status === "In Progress"
+                              ? "#dbeafe"
+                              : "#f1f5f9",
+                          color:
+                            task.status === "Done"
+                              ? "#166534"
+                              : task.status === "In Progress"
+                              ? "#1e40af"
+                              : "#475569",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {task.status === "Open"
+                          ? "Новая"
                           : task.status === "In Progress"
-                            ? "#dbeafe"
-                            : "#f1f5f9",
-                      color:
-                        task.status === "Done"
-                          ? "#166534"
-                          : task.status === "In Progress"
-                            ? "#1e40af"
-                            : "#475569",
-                    }}
-                  >
-                    {task.status === "Open"
-                      ? "Новая"
-                      : task.status === "In Progress"
-                        ? "В работе"
-                        : "Готово"}
-                  </span>
+                          ? "В работе"
+                          : "Готово"}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT: FIX Problems */}
+            <div style={{ borderLeft: "1px solid #e2e8f0", minHeight: 240 }}>
+              <div
+                style={{
+                  padding: "12px 20px",
+                  borderBottom: "1px solid #f1f5f9",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ fontSize: "13px", color: "#64748b", fontWeight: 800 }}>
+                  FIX Problems
                 </div>
-              ))
-            )}
+
+                {isAdmin && (
+                  <button
+                    onClick={openCreateProblem}
+                    className="btn"
+                    style={{
+                      padding: "8px 10px",
+                      fontSize: "12px",
+                      borderRadius: "10px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                    title="Добавить проблему"
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    Добавить
+                  </button>
+                )}
+              </div>
+
+              <div>
+                {problemsLoading ? (
+                  <div style={{ padding: "20px", color: "#94a3b8" }}>Загрузка проблем...</div>
+                ) : problems.length === 0 ? (
+                  <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>
+                    Пока нет зафиксированных проблем
+                  </div>
+                ) : (
+                  problems.map((p) => (
+                    <div
+                      key={p.id ?? `${p.title}-${p.created_at}`}
+                      onClick={() => openViewProblem(p)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && openViewProblem(p)}
+                      style={{
+                        padding: "14px 20px",
+                        borderBottom: "1px solid #f1f5f9",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            color: "#0f172a",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {p.title}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#94a3b8" }}>
+                          {formatDate(p.created_at)}
+                        </div>
+                      </div>
+
+                      {/* Admin controls (hidden for non-admin) */}
+                      {isAdmin && (
+                        <div
+                          style={{ display: "flex", gap: "10px", flexShrink: 0 }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => openEditProblem(p)}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: 0,
+                            }}
+                            title="Редактировать"
+                          >
+                            <Edit2 size={16} color="#3b82f6" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteProblem(p)}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: 0,
+                            }}
+                            title="Удалить"
+                          >
+                            <Trash2 size={16} color="#ef4444" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* ПРАВАЯ КОЛОНКА: БЫСТРЫЕ ДЕЙСТВИЯ И СТАТУС */}
+        {/* RIGHT COLUMN: Quick actions + tech status */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* Быстрый запуск */}
           <div className="card">
             <h3 style={{ marginTop: 0 }}>Быстрый запуск</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -284,6 +600,7 @@ const DashboardPage = () => {
                 <FileDiff size={18} style={{ verticalAlign: "middle", marginRight: "8px" }} />
                 Новая сверка
               </Link>
+
               <Link
                 to="/departments"
                 className="btn"
@@ -302,40 +619,25 @@ const DashboardPage = () => {
             </div>
           </div>
 
-          {/* Технический статус */}
           <div className="card" style={{ background: "#1e293b", color: "white" }}>
             <h3 style={{ marginTop: 0, color: "white", fontSize: "16px" }}>Technical Status</h3>
             <div
               style={{ display: "flex", flexDirection: "column", gap: "15px", marginTop: "15px" }}
             >
-              {/* API Status */}
-              <div
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px" }}
-                >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px" }}>
                   <Server size={16} color={getStatusColor(health.api)} /> API Server
                 </div>
-                <span
-                  style={{ color: getStatusColor(health.api), fontSize: "12px", fontWeight: 600 }}
-                >
+                <span style={{ color: getStatusColor(health.api), fontSize: "12px", fontWeight: 600 }}>
                   {health.api}
                 </span>
               </div>
 
-              {/* DB Status */}
-              <div
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px" }}
-                >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px" }}>
                   <Database size={16} color={getStatusColor(health.db)} /> PostgreSQL
                 </div>
-                <span
-                  style={{ color: getStatusColor(health.db), fontSize: "12px", fontWeight: 600 }}
-                >
+                <span style={{ color: getStatusColor(health.db), fontSize: "12px", fontWeight: 600 }}>
                   {health.db}
                 </span>
               </div>
@@ -343,6 +645,208 @@ const DashboardPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal (center) */}
+      {problemModalOpen && (
+        <div style={modalOverlayStyle} onClick={closeProblemModal}>
+          <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={modalHeaderStyle}>
+              <div style={{ fontWeight: 800, color: "#0f172a" }}>
+                {problemModalMode === "create"
+                  ? "Новая проблема"
+                  : problemModalMode === "edit"
+                  ? "Редактирование"
+                  : "Описание проблемы"}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {isAdmin && (problemModalMode === "view") && selectedProblem && (
+                  <button
+                    type="button"
+                    onClick={() => openEditProblem(selectedProblem)}
+                    className="btn"
+                    style={{
+                      background: "white",
+                      color: "#334155",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "10px",
+                      padding: "8px 10px",
+                      fontSize: "12px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                    title="Редактировать"
+                  >
+                    <Edit2 size={16} />
+                    Edit
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={closeProblemModal}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                  title="Закрыть"
+                >
+                  <X size={20} color="#334155" />
+                </button>
+              </div>
+            </div>
+
+            <div style={modalBodyStyle}>
+              {/* VIEW */}
+              {problemModalMode === "view" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ fontSize: "18px", fontWeight: 900, color: "#0f172a" }}>
+                    {selectedProblem?.title}
+                  </div>
+                  {selectedProblem?.created_at && (
+                    <div style={{ fontSize: "12px", color: "#94a3b8" }}>
+                      {formatDate(selectedProblem.created_at)}
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      marginTop: "8px",
+                      padding: "12px",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      color: "#334155",
+                      whiteSpace: "pre-wrap",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {selectedProblem?.description || "Описание не указано."}
+                  </div>
+
+                  {/* Admin delete only inside view (optional) */}
+                  {isAdmin && selectedProblem && (
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => deleteProblem(selectedProblem)}
+                        className="btn"
+                        style={{
+                          background: "#fee2e2",
+                          color: "#991b1b",
+                          border: "1px solid #fecaca",
+                          borderRadius: "10px",
+                          padding: "10px 12px",
+                          fontSize: "12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <Trash2 size={16} />
+                        Удалить
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* CREATE / EDIT (admin only) */}
+              {(problemModalMode === "create" || problemModalMode === "edit") && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {!isAdmin ? (
+                    <div style={{ color: "#991b1b", background: "#fef2f2", padding: 12, borderRadius: 12 }}>
+                      У вас нет прав для изменения проблем.
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", marginBottom: 6 }}>
+                          Название
+                        </div>
+                        <input
+                          value={problemTitle}
+                          onChange={(e) => setProblemTitle(e.target.value)}
+                          placeholder="Например: Ошибка импорта сверки"
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            borderRadius: "12px",
+                            border: "1px solid #cbd5e1",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", marginBottom: 6 }}>
+                          Описание
+                        </div>
+                        <textarea
+                          value={problemDescription}
+                          onChange={(e) => setProblemDescription(e.target.value)}
+                          placeholder="Подробности проблемы, шаги воспроизведения, что должно быть и что происходит..."
+                          rows={6}
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            borderRadius: "12px",
+                            border: "1px solid #cbd5e1",
+                            outline: "none",
+                            resize: "vertical",
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: 4 }}>
+                        <button
+                          type="button"
+                          onClick={closeProblemModal}
+                          className="btn"
+                          style={{
+                            background: "white",
+                            color: "#334155",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "10px",
+                            padding: "10px 12px",
+                            fontSize: "12px",
+                          }}
+                          disabled={savingProblem}
+                        >
+                          Отмена
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={saveProblem}
+                          className="btn"
+                          style={{
+                            borderRadius: "10px",
+                            padding: "10px 12px",
+                            fontSize: "12px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            opacity: savingProblem ? 0.7 : 1,
+                          }}
+                          disabled={savingProblem || !problemTitle.trim()}
+                        >
+                          <Save size={16} />
+                          {savingProblem ? "Сохранение..." : "Сохранить"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

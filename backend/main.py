@@ -141,6 +141,15 @@ class CryptoSchemeCreate(BaseModel):
     nodes: Any
     edges: Any
 
+class ProblemCreate(BaseModel):
+    title: str
+    description: str = ""
+
+
+class ProblemUpdate(BaseModel):
+    title: str
+    description: str = ""
+
 
 def verify_password(plain_password, hashed_password):
     return bcrypt.checkpw(
@@ -947,6 +956,82 @@ async def remove_attachment(
         return {"status": "success"}
 
     raise HTTPException(500, "Error deleting attachment")
+
+
+
+@app.get("/api/problems")
+async def api_get_problems(
+    limit: int = 50,
+    current_user: str = Depends(get_current_user),
+):
+    rows = database_manager.get_problems(limit=limit)
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/problems/{problem_id}")
+async def api_get_problem(
+    problem_id: int,
+    current_user: str = Depends(get_current_user),
+):
+    row = database_manager.get_problem_by_id(problem_id)
+    if not row:
+        raise HTTPException(404, "Problem not found")
+    return dict(row)
+
+
+@app.post("/api/problems")
+async def api_create_problem(
+    payload: ProblemCreate,
+    current_user: str = Depends(require_admin),
+):
+    admin_user = database_manager.get_user_by_username(current_user)
+    if not admin_user:
+        raise HTTPException(404, "User not found")
+
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(400, "title is required")
+
+    row = database_manager.create_problem(
+        title=title,
+        description=(payload.description or "").strip(),
+        created_by_user_id=admin_user[0],
+    )
+    if not row:
+        raise HTTPException(500, "DB error creating problem")
+    return {"status": "success", "problem": dict(row)}
+
+
+@app.put("/api/problems/{problem_id}")
+async def api_update_problem(
+    problem_id: int,
+    payload: ProblemUpdate,
+    current_user: str = Depends(require_admin),
+):
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(400, "title is required")
+
+    row = database_manager.update_problem(
+        problem_id=problem_id,
+        title=title,
+        description=(payload.description or "").strip(),
+    )
+    if not row:
+        raise HTTPException(404, "Problem not found")
+    return {"status": "success", "problem": dict(row)}
+
+
+@app.delete("/api/problems/{problem_id}")
+async def api_delete_problem(
+    problem_id: int,
+    current_user: str = Depends(require_admin),
+):
+    ok = database_manager.delete_problem(problem_id)
+    if not ok:
+        raise HTTPException(404, "Problem not found")
+    return {"status": "success"}
+
 
 
 # ПОЛЬЗОВАТЕЛИ И ПРОФИЛЬ
