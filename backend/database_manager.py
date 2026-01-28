@@ -246,6 +246,7 @@ def init_database():
                 UNIQUE(snapshot_id, row_hash)
             )
         """)
+
         try:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_podft_snapshots_date ON podft_snapshots(snapshot_date)"
