@@ -17,6 +17,72 @@ import {
 } from "lucide-react";
 
 // ------------------------------
+// Helpers (POD/FT selection)
+// ------------------------------
+const parseDateToISO = (v) => {
+  if (!v) return "";
+  // already ISO
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) return v.trim();
+
+  // excel serial date
+  if (typeof v === "number" && Number.isFinite(v)) {
+    const dt = XLSX.SSF.parse_date_code(v);
+    if (!dt) return "";
+    const mm = String(dt.m).padStart(2, "0");
+    const dd = String(dt.d).padStart(2, "0");
+    return `${dt.y}-${mm}-${dd}`;
+  }
+
+  // dd.mm.yyyy or dd/mm/yyyy
+  if (typeof v === "string") {
+    const s = v.trim();
+    const m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+    if (m) {
+      const dd = String(m[1]).padStart(2, "0");
+      const mm = String(m[2]).padStart(2, "0");
+      return `${m[3]}-${mm}-${dd}`;
+    }
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+
+  return "";
+};
+
+const podftRowKey = (r) => {
+  const dt = parseDateToISO(r?.["Дата валютирования"] ?? r?.["value_date"] ?? r?.["Value date"]);
+  const acct = String(r?.["Субсчет"] ?? r?.["Account"] ?? r?.["account"] ?? "").trim();
+  const instr = String(r?.["Instrument"] ?? r?.["инструмент"] ?? r?.["instrument"] ?? "").trim();
+  const amt = String(r?.["Сумма тг"] ?? r?.["amount_tg"] ?? r?.["Amount tg"] ?? "").trim();
+  const side = String(r?.["Side"] ?? r?.["side"] ?? "").trim();
+  // достаточно стабильный ключ для выбора
+  return [dt, acct, instr, side, amt].join("|");
+};
+
+const buildPodftPayloadTrade = (r) => {
+  const value_date = parseDateToISO(r?.["Дата валютирования"] ?? r?.["value_date"] ?? r?.["Value date"]);
+
+  const num = (x) => {
+    if (x === null || x === undefined || x === "") return null;
+    if (typeof x === "number") return x;
+    const s = String(x).replace(/\s+/g, "").replace(",", ".");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  return {
+    account: (r?.["Субсчет"] ?? r?.["Account"] ?? r?.["account"] ?? null) || null,
+    instrument: (r?.["Instrument"] ?? r?.["инструмент"] ?? r?.["instrument"] ?? null) || null,
+    side: (r?.["Side"] ?? r?.["side"] ?? null) || null,
+    trading_dt: (r?.["Trading date"] ?? r?.["trading_dt"] ?? null) || null,
+    deal_dt: (r?.["Deal date"] ?? r?.["deal_dt"] ?? null) || null,
+    value_date: value_date || null,
+    qty: num(r?.["Qty"] ?? r?.["qty"] ?? null),
+    amount_tg: num(r?.["Сумма тг"] ?? r?.["amount_tg"] ?? null),
+  };
+};
+
+// ------------------------------
 // FileSection (upload + detect headers + choose columns)
 // ------------------------------
 const FileSection = ({
@@ -291,6 +357,12 @@ const SverkaPage = () => {
   const [filterText, setFilterText] = useState("");
   const [filterCol, setFilterCol] = useState("");
 
+  // ✅ Admin + PODFT selection states
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [podftSelectMode, setPodftSelectMode] = useState(false);
+  const [podftSelected, setPodftSelected] = useState(() => new Set());
+  const [savingPodft, setSavingPodft] = useState(false);
+
   const [cols, setCols] = useState({
     id_col_1: "",
     acc_col_1: "",
@@ -318,6 +390,14 @@ const SverkaPage = () => {
     fetchLastResult();
   }, []);
 
+  // ✅ load profile (admin)
+  useEffect(() => {
+    api
+      .get("/profile")
+      .then((r) => setIsAdmin(!!r.data?.is_admin))
+      .catch(() => setIsAdmin(false));
+  }, []);
+
   // Load settings defaults
   useEffect(() => {
     api
@@ -335,9 +415,12 @@ const SverkaPage = () => {
       .catch(() => toast.error("Сервер недоступен"));
   }, []);
 
+  // reset filters + podft selection on tab change
   useEffect(() => {
     setFilterText("");
     setFilterCol("");
+    setPodftSelectMode(false);
+    setPodftSelected(new Set());
   }, [activeTab]);
 
   const tabs = useMemo(
@@ -446,6 +529,37 @@ const SverkaPage = () => {
           return headers.some((h) => String(row?.[h] ?? "").toLowerCase().includes(normalizedQuery));
         });
 
+    const isPodftTab = activeTab === "podft_7m_deals";
+
+    const toggleRow = (row) => {
+      const key = podftRowKey(row);
+      setPodftSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    };
+
+    const toggleAllFiltered = (checked) => {
+      if (!isPodftTab) return;
+      setPodftSelected((prev) => {
+        const next = new Set(prev);
+        if (checked) {
+          filtered.forEach((r) => next.add(podftRowKey(r)));
+        } else {
+          filtered.forEach((r) => next.delete(podftRowKey(r)));
+        }
+        return next;
+      });
+    };
+
+    const allChecked =
+      isPodftTab &&
+      podftSelectMode &&
+      filtered.length > 0 &&
+      filtered.every((r) => podftSelected.has(podftRowKey(r)));
+
     return (
       <div
         className="result-table-wrapper"
@@ -458,19 +572,45 @@ const SverkaPage = () => {
         <table className="styled-table">
           <thead style={{ position: "sticky", top: 0, zIndex: 5 }}>
             <tr>
+              {isPodftTab && podftSelectMode && (
+                <th style={{ width: 46, textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={!!allChecked}
+                    onChange={(e) => toggleAllFiltered(e.target.checked)}
+                    title="Выбрать все (по текущему фильтру)"
+                  />
+                </th>
+              )}
               {headers.map((h) => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.slice(0, 2000).map((row, i) => (
-              <tr key={i}>
-                {headers.map((h) => (
-                  <td key={h}>{String(row?.[h] === null ? "" : row?.[h] ?? "")}</td>
-                ))}
-              </tr>
-            ))}
+            {filtered.slice(0, 2000).map((row, i) => {
+              const key = isPodftTab ? podftRowKey(row) : String(i);
+              const checked = isPodftTab && podftSelected.has(key);
+
+              return (
+                <tr
+                  key={key}
+                  style={{
+                    background: checked ? "#fff7ed" : undefined,
+                  }}
+                >
+                  {isPodftTab && podftSelectMode && (
+                    <td style={{ textAlign: "center" }}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleRow(row)} />
+                    </td>
+                  )}
+
+                  {headers.map((h) => (
+                    <td key={`${key}_${h}`}>{String(row?.[h] === null ? "" : row?.[h] ?? "")}</td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
@@ -482,6 +622,8 @@ const SverkaPage = () => {
       </div>
     );
   };
+
+  const showPodftToolbar = isAdmin && activeTab === "podft_7m_deals";
 
   return (
     <div
@@ -623,6 +765,7 @@ const SverkaPage = () => {
               ))}
             </div>
 
+            {/* Search / Filter */}
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748b" }}>
                 <Search size={16} />
@@ -652,6 +795,110 @@ const SverkaPage = () => {
               />
             </div>
 
+            {/* ✅ PODFT toolbar (admin only) */}
+            {showPodftToolbar && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setPodftSelectMode((v) => !v);
+                    setPodftSelected(new Set());
+                  }}
+                  style={{
+                    background: podftSelectMode ? "#fff7ed" : "white",
+                    color: "#92400e",
+                    border: "1px solid #fdba74",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  {podftSelectMode ? "Режим выбора: ON" : "Выбрать сделки"}
+                </button>
+
+                {podftSelectMode && (
+                  <>
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => {
+                        const today = new Date().toISOString().slice(0, 10);
+                        const rows = results?.podft_7m_deals || [];
+                        const keys = rows
+                          .filter(
+                            (r) =>
+                              parseDateToISO(r["Дата валютирования"] ?? r["value_date"] ?? r["Value date"]) === today
+                          )
+                          .map(podftRowKey);
+                        setPodftSelected(new Set(keys));
+                      }}
+                      style={{
+                        background: "white",
+                        color: "#334155",
+                        border: "1px solid #cbd5e1",
+                        padding: "10px 14px",
+                        borderRadius: 8,
+                        fontSize: 14,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Выбрать “сегодня”
+                    </button>
+
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={savingPodft || podftSelected.size === 0}
+                      onClick={async () => {
+                        try {
+                          setSavingPodft(true);
+                          const snapshotDate = new Date().toISOString().slice(0, 10);
+
+                          const selectedRows = (results?.podft_7m_deals || []).filter((r) =>
+                            podftSelected.has(podftRowKey(r))
+                          );
+
+                          const trades = selectedRows
+                            .map(buildPodftPayloadTrade)
+                            .filter((t) => t.value_date); // отсекаем без даты
+
+                          await api.post("/podft/snapshots", {
+                            snapshot_date: snapshotDate,
+                            trades,
+                          });
+
+                          toast.success(`Сохранено в Dashboard: ${trades.length}`);
+                          setPodftSelectMode(false);
+                          setPodftSelected(new Set());
+                        } catch (e) {
+                          toast.error("Ошибка сохранения POD/FT");
+                        } finally {
+                          setSavingPodft(false);
+                        }
+                      }}
+                      style={{
+                        background: savingPodft ? "#94a3b8" : "#f59e0b",
+                        padding: "10px 14px",
+                        fontSize: "14px",
+                        borderRadius: "8px",
+                        cursor: savingPodft ? "wait" : "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        whiteSpace: "nowrap",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {savingPodft ? "Сохранение..." : `Сохранить (${podftSelected.size})`}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Export */}
             <button
               className="btn"
               onClick={handleExport}
