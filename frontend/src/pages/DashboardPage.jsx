@@ -27,12 +27,12 @@ const DashboardPage = () => {
 
   const [health, setHealth] = useState({ api: "Checking...", db: "Checking..." });
 
-  // FIX Problems
+  // Problems
   const [problems, setProblems] = useState([]);
   const [problemsLoading, setProblemsLoading] = useState(true);
   const [problemsUpdatedAt, setProblemsUpdatedAt] = useState(null);
 
-  // Modal state
+  // Modal
   const [problemModalOpen, setProblemModalOpen] = useState(false);
   const [problemModalMode, setProblemModalMode] = useState("view"); // view | create | edit
   const [selectedProblem, setSelectedProblem] = useState(null);
@@ -101,9 +101,9 @@ const DashboardPage = () => {
   };
 
   const getStatusColor = (status) => {
-    if (status === "Online" || status === "Connected") return "#4ade80"; // Green
-    if (status === "Checking...") return "#94a3b8"; // Grey
-    return "#ef4444"; // Red
+    if (status === "Online" || status === "Connected") return "#4ade80";
+    if (status === "Checking...") return "#94a3b8";
+    return "#ef4444";
   };
 
   // Modal helpers
@@ -143,7 +143,6 @@ const DashboardPage = () => {
     if (!isAdmin) return;
     const title = problemTitle.trim();
     const description = problemDescription.trim();
-
     if (!title) return;
 
     try {
@@ -173,7 +172,6 @@ const DashboardPage = () => {
     try {
       await axios.delete(`/api/problems/${p.id}`, { headers: authHeaders() });
       await fetchProblems();
-
       if (selectedProblem?.id === p.id) closeProblemModal();
     } catch (err) {
       console.error("delete problem failed", err);
@@ -233,9 +231,43 @@ const DashboardPage = () => {
   );
 
   // UX constants
-  const LIST_HEIGHT = 340; // fixed height for lists
-  const rowHoverStyle = {
-    transition: "background 0.15s ease, transform 0.15s ease",
+  const LIST_HEIGHT = 340;
+
+  const rowBase = {
+    padding: "15px 20px",
+    borderBottom: "1px solid #f1f5f9",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    transition: "background 0.15s ease",
+  };
+
+  const sectionHeader = {
+    padding: "20px",
+    borderBottom: "1px solid #e2e8f0",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  };
+
+  const iconTitle = {
+    margin: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  };
+
+  const subtleActionBtn = {
+    background: "white",
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px",
+    padding: "8px 10px",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    color: "#334155",
   };
 
   if (loading) return <div style={{ padding: 40 }}>Загрузка аналитики...</div>;
@@ -307,76 +339,105 @@ const DashboardPage = () => {
           marginBottom: "30px",
         }}
       >
-        <div className="card" style={{ padding: "25px", display: "flex", alignItems: "center", gap: "20px", borderLeft: "4px solid #3b82f6" }}>
+        <div
+          className="card"
+          style={{
+            padding: "25px",
+            display: "flex",
+            alignItems: "center",
+            gap: "20px",
+            borderLeft: "4px solid #3b82f6",
+          }}
+        >
           <div style={{ background: "#eff6ff", padding: "15px", borderRadius: "12px" }}>
             <Clock size={30} color="#3b82f6" />
           </div>
           <div>
-            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>{stats?.active_tasks || 0}</div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>
+              {stats?.active_tasks || 0}
+            </div>
             <div style={{ color: "#64748b", fontSize: "14px" }}>Активных задач</div>
           </div>
         </div>
 
-        <div className="card" style={{ padding: "25px", display: "flex", alignItems: "center", gap: "20px", borderLeft: "4px solid #8b5cf6" }}>
+        <div
+          className="card"
+          style={{
+            padding: "25px",
+            display: "flex",
+            alignItems: "center",
+            gap: "20px",
+            borderLeft: "4px solid #8b5cf6",
+          }}
+        >
           <div style={{ background: "#f5f3ff", padding: "15px", borderRadius: "12px" }}>
             <Users size={30} color="#8b5cf6" />
           </div>
           <div>
-            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>{stats?.users || 0}</div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>
+              {stats?.users || 0}
+            </div>
             <div style={{ color: "#64748b", fontSize: "14px" }}>Пользователей</div>
           </div>
         </div>
 
-        <div className="card" style={{ padding: "25px", display: "flex", alignItems: "center", gap: "20px", borderLeft: "4px solid #10b981" }}>
+        <div
+          className="card"
+          style={{
+            padding: "25px",
+            display: "flex",
+            alignItems: "center",
+            gap: "20px",
+            borderLeft: "4px solid #10b981",
+          }}
+        >
           <div style={{ background: "#ecfdf5", padding: "15px", borderRadius: "12px" }}>
             <CheckCircle size={30} color="#10b981" />
           </div>
           <div>
-            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>{stats?.total_tasks || 0}</div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>
+              {stats?.total_tasks || 0}
+            </div>
             <div style={{ color: "#64748b", fontSize: "14px" }}>Всего задач</div>
           </div>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "30px" }}>
-        {/* LEFT COLUMN: 2 separate cards */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        {/* LEFT: теперь 2 карточки В ОДИН РЯД */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: "20px",
+            alignItems: "stretch",
+          }}
+        >
           {/* Активность */}
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <div
-              style={{
-                padding: "20px",
-                borderBottom: "1px solid #e2e8f0",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={sectionHeader}>
+              <h3 style={iconTitle}>
                 <Activity size={20} color="#64748b" /> Активность
               </h3>
 
-              <Link to="/departments" style={{ fontSize: "13px", color: "#3b82f6", textDecoration: "none" }}>
+              <Link
+                to="/departments"
+                style={{ fontSize: "13px", color: "#3b82f6", textDecoration: "none" }}
+              >
                 Все задачи →
               </Link>
             </div>
 
             <div style={{ height: LIST_HEIGHT, overflow: "auto" }}>
               {recentTasks.length === 0 ? (
-                <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>Нет недавней активности</div>
+                <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>
+                  Нет недавней активности
+                </div>
               ) : (
                 recentTasks.map((task, idx) => (
                   <div
                     key={idx}
-                    style={{
-                      padding: "15px 20px",
-                      borderBottom: "1px solid #f1f5f9",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: "12px",
-                      ...rowHoverStyle,
-                    }}
+                    style={rowBase}
                     onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
@@ -402,7 +463,7 @@ const DashboardPage = () => {
                         fontSize: "11px",
                         padding: "4px 8px",
                         borderRadius: "10px",
-                        fontWeight: 700,
+                        fontWeight: 600,
                         background:
                           task.status === "Done"
                             ? "#dcfce7"
@@ -418,7 +479,11 @@ const DashboardPage = () => {
                         flexShrink: 0,
                       }}
                     >
-                      {task.status === "Open" ? "Новая" : task.status === "In Progress" ? "В работе" : "Готово"}
+                      {task.status === "Open"
+                        ? "Новая"
+                        : task.status === "In Progress"
+                        ? "В работе"
+                        : "Готово"}
                     </span>
                   </div>
                 ))
@@ -426,69 +491,44 @@ const DashboardPage = () => {
             </div>
           </div>
 
-          {/* Active Problems */}
+          {/* Active Problems — стиль как у Активности */}
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <div
-              style={{
-                padding: "20px",
-                borderBottom: "1px solid #e2e8f0",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "12px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-                  <AlertTriangle size={20} color="#f59e0b" /> Active Problems
-                </h3>
-
-                {/* Badge count */}
+            <div style={sectionHeader}>
+              <h3 style={iconTitle}>
+                <AlertTriangle size={20} color="#64748b" /> Active Problems
                 <span
                   style={{
-                    fontSize: "12px",
-                    fontWeight: 800,
-                    padding: "4px 10px",
-                    borderRadius: "999px",
-                    background: problemsLoading ? "#f1f5f9" : problems.length > 0 ? "#fff7ed" : "#ecfdf5",
-                    border: `1px solid ${
-                      problemsLoading ? "#e2e8f0" : problems.length > 0 ? "#fed7aa" : "#a7f3d0"
-                    }`,
-                    color: problemsLoading ? "#64748b" : problems.length > 0 ? "#9a3412" : "#065f46",
+                    marginLeft: 8,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    padding: "3px 8px",
+                    borderRadius: 999,
+                    background: "#f1f5f9",
+                    border: "1px solid #e2e8f0",
+                    color: "#475569",
                   }}
                   title="Количество активных проблем"
                 >
-                  {problemsLoading ? "Loading…" : problems.length}
+                  {problemsLoading ? "..." : problems.length}
                 </span>
+              </h3>
 
-                {/* last updated */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {problemsUpdatedAt && (
-                  <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                  <span style={{ fontSize: 12, color: "#94a3b8" }}>
                     обновлено {formatTime(problemsUpdatedAt)}
                   </span>
                 )}
-              </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <button
                   type="button"
                   onClick={fetchProblems}
                   title="Обновить список"
-                  style={{
-                    background: "white",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "10px",
-                    padding: "8px 10px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    color: "#334155",
-                  }}
+                  style={subtleActionBtn}
                   disabled={problemsLoading}
                 >
                   <RefreshCw size={16} />
-                  <span style={{ fontSize: "12px", fontWeight: 700 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>
                     {problemsLoading ? "..." : "Refresh"}
                   </span>
                 </button>
@@ -531,23 +571,17 @@ const DashboardPage = () => {
                     tabIndex={0}
                     onKeyDown={(e) => e.key === "Enter" && openViewProblem(p)}
                     style={{
-                      padding: "14px 20px",
-                      borderBottom: "1px solid #f1f5f9",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "12px",
+                      ...rowBase,
                       cursor: "pointer",
-                      ...rowHoverStyle,
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#fff7ed")}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     <div style={{ minWidth: 0 }}>
                       <div
                         style={{
-                          fontWeight: 800,
-                          color: "#0f172a",
+                          fontWeight: 600,
+                          color: "#334155",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
@@ -555,15 +589,25 @@ const DashboardPage = () => {
                       >
                         {p.title}
                       </div>
-                      <div style={{ fontSize: "12px", color: "#94a3b8" }}>{formatDate(p.created_at)}</div>
+                      <div style={{ fontSize: "12px", color: "#94a3b8" }}>
+                        {formatDate(p.created_at)}
+                      </div>
                     </div>
 
                     {isAdmin && (
-                      <div style={{ display: "flex", gap: "10px", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                      <div
+                        style={{ display: "flex", gap: "10px", flexShrink: 0 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <button
                           type="button"
                           onClick={() => openEditProblem(p)}
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
                           title="Редактировать"
                         >
                           <Edit2 size={16} color="#3b82f6" />
@@ -571,7 +615,12 @@ const DashboardPage = () => {
                         <button
                           type="button"
                           onClick={() => deleteProblem(p)}
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
                           title="Удалить"
                         >
                           <Trash2 size={16} color="#ef4444" />
@@ -585,7 +634,7 @@ const DashboardPage = () => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Quick actions + tech status */}
+        {/* RIGHT COLUMN */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div className="card">
             <h3 style={{ marginTop: 0 }}>Быстрый запуск</h3>
@@ -642,7 +691,7 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      {/* Modal (center) */}
+      {/* Modal */}
       {problemModalOpen && (
         <div style={modalOverlayStyle} onClick={closeProblemModal}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
@@ -754,7 +803,14 @@ const DashboardPage = () => {
               {(problemModalMode === "create" || problemModalMode === "edit") && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   {!isAdmin ? (
-                    <div style={{ color: "#991b1b", background: "#fef2f2", padding: 12, borderRadius: 12 }}>
+                    <div
+                      style={{
+                        color: "#991b1b",
+                        background: "#fef2f2",
+                        padding: 12,
+                        borderRadius: 12,
+                      }}
+                    >
                       У вас нет прав для изменения проблем.
                     </div>
                   ) : (
