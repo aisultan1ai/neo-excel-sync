@@ -120,35 +120,39 @@ const DashboardPage = () => {
   };
 
   const fetchPodftToday = async () => {
-    try {
-      const res = await axios.get("/api/podft/today", { headers: authHeaders() });
-      const parsed = parsePodftToday(res.data);
-      setPodft(parsed);
-    } catch (err) {
-      console.error("podft today request failed", err);
-      setPodft({ count: 0, date: getLocalYMD() });
-    }
-  };
+  try {
+    const day = getLocalYMD();
+    const res = await axios.get(`/api/podft/today?date=${encodeURIComponent(day)}`, {
+      headers: authHeaders(),
+    });
+    const parsed = parsePodftToday(res.data);
+    setPodft(parsed);
+  } catch (err) {
+    console.error("podft today request failed", err);
+    setPodft({ count: 0, date: getLocalYMD() });
+  }
+};
 
-  const fetchPodftTrades = async (dateStr) => {
-    const date = dateStr || podft.date || getLocalYMD();
-    try {
-      setPodftLoading(true);
-      const res = await axios.get(`/api/podft/trades?date=${encodeURIComponent(date)}`, {
-        headers: authHeaders(),
-      });
+const fetchPodftTrades = async (dateStr) => {
+  const day = dateStr || podft.date || getLocalYMD();
+  try {
+    setPodftLoading(true);
+    const res = await axios.get(`/api/podft/trades?date=${encodeURIComponent(day)}`, {
+      headers: authHeaders(),
+    });
 
-      const list = Array.isArray(res.data) ? res.data : res.data?.trades;
-      setPodftTrades(Array.isArray(list) ? list : []);
-      setPodftUpdatedAt(new Date());
-    } catch (err) {
-      console.error("podft trades request failed", err);
-      setPodftTrades([]);
-      setPodftUpdatedAt(new Date());
-    } finally {
-      setPodftLoading(false);
-    }
-  };
+    const list = Array.isArray(res.data) ? res.data : res.data?.trades;
+    setPodftTrades(Array.isArray(list) ? list : []);
+    setPodftUpdatedAt(new Date());
+  } catch (err) {
+    console.error("podft trades request failed", err);
+    setPodftTrades([]);
+    setPodftUpdatedAt(new Date());
+  } finally {
+    setPodftLoading(false);
+  }
+};
+
 
   const fetchDashboard = async () => {
     try {

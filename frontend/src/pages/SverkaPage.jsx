@@ -49,6 +49,13 @@ const parseDateToISO = (v) => {
   return "";
 };
 
+ const getLocalYMD = (d = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 const podftRowKey = (r) => {
   const dt = parseDateToISO(r?.["Дата валютирования"] ?? r?.["value_date"] ?? r?.["Value date"]);
   const acct = String(r?.["Субсчет"] ?? r?.["Account"] ?? r?.["account"] ?? "").trim();
@@ -824,7 +831,7 @@ const SverkaPage = () => {
                       className="btn"
                       type="button"
                       onClick={() => {
-                        const today = new Date().toISOString().slice(0, 10);
+                        const today = getLocalYMD();
                         const rows = results?.podft_7m_deals || [];
                         const keys = rows
                           .filter(
@@ -854,7 +861,7 @@ const SverkaPage = () => {
                       onClick={async () => {
                         try {
                           setSavingPodft(true);
-                          const snapshotDate = new Date().toISOString().slice(0, 10);
+                          const snapshotDate = getLocalYMD();
 
                           const selectedRows = (results?.podft_7m_deals || []).filter((r) =>
                             podftSelected.has(podftRowKey(r))

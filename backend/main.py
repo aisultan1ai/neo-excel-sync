@@ -14,7 +14,7 @@ from threading import Lock
 from datetime import date
 from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -1125,15 +1125,19 @@ async def save_podft_snapshot(
 
 
 @app.get("/api/podft/today")
-async def podft_today(current_user: str = Depends(get_current_user)):
-    today = date.today()
-    snap = database_manager.get_latest_podft_snapshot_for_date(today)
+async def podft_today(
+    day: Optional[date] = Query(None, alias="date"),
+    current_user: str = Depends(get_current_user),
+):
+    target_day = day or date.today()
+
+    snap = database_manager.get_latest_podft_snapshot_for_date(target_day)
     if not snap:
-        return {"date": str(today), "count": 0, "updated_at": None, "snapshot_id": None}
+        return {"date": str(target_day), "count": 0, "updated_at": None, "snapshot_id": None}
 
     count = database_manager.get_podft_snapshot_count(snap["id"])
     return {
-        "date": str(today),
+        "date": str(target_day),
         "count": count,
         "updated_at": str(snap.get("created_at")),
         "snapshot_id": snap["id"],
@@ -1142,10 +1146,10 @@ async def podft_today(current_user: str = Depends(get_current_user)):
 
 @app.get("/api/podft/trades")
 async def podft_trades(
-    date_: date,
+    day: date = Query(..., alias="date"),
     current_user: str = Depends(get_current_user),
 ):
-    snap = database_manager.get_latest_podft_snapshot_for_date(date_)
+    snap = database_manager.get_latest_podft_snapshot_for_date(day)
     if not snap:
         return []
 
@@ -1494,8 +1498,9 @@ def api_create_crypto_account(
 
     row = database_manager.create_crypto_account(provider, name, asset)
     if not row:
-        raise HTTPException(500, "DB error creating account")
-    return row
+        raise HTTPException(500, "DB error creating crypto account")
+
+    return {"status": "success", "account": dict(row)}
 
 
 @app.put("/api/crypto/accounts/{account_id}")
