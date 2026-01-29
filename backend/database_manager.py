@@ -6,7 +6,7 @@ import json
 import logging
 import os
 from datetime import date as _date
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor, register_default_json, register_default_jsonb
@@ -62,7 +62,8 @@ def _safe_ddl(cur, sql: str) -> None:
         cur.execute(sql)
     except Exception as e:
         # In autocommit mode this won't rollback previous DDL
-        log.warning("DDL skipped/failed: %s | err=%s", sql.splitlines()[0][:120], e)
+        first_line = (sql.splitlines() or [""])[0]
+        log.warning("DDL skipped/failed: %s | err=%s", first_line[:120], e)
 
 
 def init_database():
@@ -295,6 +296,7 @@ def init_database():
                 """
             )
 
+            # PODFT SNAPSHOT TRADES  ✅ FIXED
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS podft_snapshot_trades (
@@ -311,7 +313,7 @@ def init_database():
                     qty NUMERIC,
                     amount_tg NUMERIC,
 
-                   Json(t.get("raw") or t), -- вся исходная строка
+                    raw JSONB,  -- вся исходная строка/объект сделки (как пришло)
 
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE (snapshot_id, row_hash)
@@ -319,9 +321,13 @@ def init_database():
                 """
             )
 
+            # upgrades for older DBs
+            _safe_ddl(cursor, "ALTER TABLE podft_snapshot_trades ADD COLUMN IF NOT EXISTS raw JSONB")
+
             _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_podft_snapshots_date ON podft_snapshots(snapshot_date)")
             _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_snapshot ON podft_snapshot_trades(snapshot_id)")
             _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_value_date ON podft_snapshot_trades(value_date)")
+            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_created_at ON podft_snapshot_trades(created_at DESC)")
 
         log.info("БД инициализирована успешно.")
 
