@@ -7,6 +7,9 @@ import logging
 import os
 from datetime import date as _date
 from typing import Any, Dict, List, Optional
+from datetime import datetime
+from decimal import Decimal
+
 
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor, register_default_json, register_default_jsonb
@@ -16,6 +19,31 @@ register_default_json(loads=json.loads, globally=True)
 register_default_jsonb(loads=json.loads, globally=True)
 
 log = logging.getLogger(__name__)
+
+def _json_default(o):
+    # dates / datetimes
+    if isinstance(o, (_date, datetime)):
+        return o.isoformat()
+
+    # decimals
+    if isinstance(o, Decimal):
+        return float(o)
+
+    # sets
+    if isinstance(o, set):
+        return list(o)
+
+    # fallback (covers numpy types etc.)
+    return str(o)
+
+
+def _json_dumps(obj):
+    return json.dumps(obj, ensure_ascii=False, default=_json_default)
+
+
+def _to_jsonb(obj):
+    return Json(obj, dumps=_json_dumps)
+
 
 
 def _build_db_config() -> Optional[dict]:
@@ -299,9 +327,21 @@ def init_database():
             # PODFT SNAPSHOT TRADES  ✅ FIXED
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXISTS podft_snapshot_trades (
-                    id SERIAL PRIMARY KEY,
-                    snapshot_id INTEGER NOT NULL REFERENCES podft_snapshots(id) ON DELETE CASCADE,
+                CREATE TABLE IF NOT EXISTS podft_snapshot_trades
+                (
+                    id
+                    SERIAL
+                    PRIMARY
+                    KEY,
+                    snapshot_id
+                    INTEGER
+                    NOT
+                    NULL
+                    REFERENCES
+                    podft_snapshots
+                (
+                    id
+                ) ON DELETE CASCADE,
                     row_hash TEXT NOT NULL,
 
                     account TEXT,
@@ -313,11 +353,15 @@ def init_database():
                     qty NUMERIC,
                     amount_tg NUMERIC,
 
-                    raw JSONB,  -- вся исходная строка/объект сделки (как пришло)
+                    raw JSONB, -- вся исходная строка (сериализованная)
 
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE (snapshot_id, row_hash)
+                    UNIQUE
+                (
+                    snapshot_id,
+                    row_hash
                 )
+                    )
                 """
             )
 
@@ -1487,10 +1531,9 @@ def add_podft_snapshot_trades(snapshot_id: int, trades: List[Dict[str, Any]]) ->
                 cur.execute(
                     """
                     INSERT INTO podft_snapshot_trades
-                      (snapshot_id, row_hash, account, instrument, side, trading_dt, deal_dt, value_date, qty, amount_tg, raw)
-                    VALUES
-                      (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    ON CONFLICT (snapshot_id, row_hash) DO NOTHING
+                    (snapshot_id, row_hash, account, instrument, side, trading_dt, deal_dt, value_date, qty, amount_tg,
+                     raw)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (snapshot_id, row_hash) DO NOTHING
                     """,
                     (
                         snapshot_id,
@@ -1503,7 +1546,7 @@ def add_podft_snapshot_trades(snapshot_id: int, trades: List[Dict[str, Any]]) ->
                         t.get("value_date"),
                         t.get("qty"),
                         t.get("amount_tg"),
-                        Json(t),
+                        _to_jsonb(t.get("raw") or t),  # ✅ теперь date нормально уйдёт как ISO строка
                     ),
                 )
                 if cur.rowcount > 0:
