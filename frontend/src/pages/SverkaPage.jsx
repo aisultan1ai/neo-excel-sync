@@ -86,6 +86,8 @@ const buildPodftPayloadTrade = (r) => {
     value_date: value_date || null,
     qty: num(r?.["Qty"] ?? r?.["qty"] ?? null),
     amount_tg: num(r?.["Сумма тг"] ?? r?.["amount_tg"] ?? null),
+
+      raw: r,
   };
 };
 

@@ -161,6 +161,10 @@ class PodftTradeIn(BaseModel):
     qty: Optional[float] = None
     amount_tg: Optional[float] = None
 
+    # ✅ новое: сохраняем всю исходную строку
+    raw: Optional[Dict[str, Any]] = None
+
+
 
 class PodftSnapshotSaveIn(BaseModel):
     snapshot_date: date

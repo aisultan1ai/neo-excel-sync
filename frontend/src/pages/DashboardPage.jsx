@@ -1,5 +1,5 @@
 // DashboardPage.jsx
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import {
   Activity,
@@ -53,59 +53,53 @@ const DashboardPage = () => {
   const [podftUpdatedAt, setPodftUpdatedAt] = useState(null);
   const [podftFilter, setPodftFilter] = useState("");
 
-  useEffect(() => {
-    fetchDashboard();
-    checkSystemHealth();
-
-    const interval = setInterval(checkSystemHealth, 30000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const authHeaders = () => {
+  const authHeaders = useCallback(() => {
     const token = localStorage.getItem("token");
     return token ? { Authorization: `Bearer ${token}` } : {};
-  };
+  }, []);
 
-  const getLocalYMD = (d = new Date()) => {
+  const getLocalYMD = useCallback((d = new Date()) => {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
-  };
+  }, []);
 
-  const parsePodftToday = (data) => {
-    const fallback = { count: 0, date: getLocalYMD() };
+  const parsePodftToday = useCallback(
+    (data) => {
+      const fallback = { count: 0, date: getLocalYMD() };
 
-    if (data == null) return fallback;
+      if (data == null) return fallback;
 
-    if (typeof data === "number") {
-      return { count: Number.isFinite(data) ? data : 0, date: getLocalYMD() };
-    }
+      if (typeof data === "number") {
+        return { count: Number.isFinite(data) ? data : 0, date: getLocalYMD() };
+      }
 
-    if (typeof data === "object") {
-      const rawCount = data.count ?? data.total ?? data.n ?? data.value ?? 0;
-      const rawDate = data.date ?? data.day ?? data.today ?? getLocalYMD();
-      const count = Number(rawCount);
-      return {
-        count: Number.isFinite(count) ? count : 0,
-        date: String(rawDate || getLocalYMD()),
-      };
-    }
+      if (typeof data === "object") {
+        const rawCount = data.count ?? data.total ?? data.n ?? data.value ?? 0;
+        const rawDate = data.date ?? data.day ?? data.today ?? getLocalYMD();
+        const count = Number(rawCount);
+        return {
+          count: Number.isFinite(count) ? count : 0,
+          date: String(rawDate || getLocalYMD()),
+        };
+      }
 
-    return fallback;
-  };
+      return fallback;
+    },
+    [getLocalYMD]
+  );
 
-  const checkSystemHealth = async () => {
+  const checkSystemHealth = useCallback(async () => {
     try {
       const res = await axios.get("/api/health", { timeout: 2000 });
       setHealth(res.data);
     } catch {
       setHealth({ api: "Offline", db: "Disconnected" });
     }
-  };
+  }, []);
 
-  const fetchProblems = async () => {
+  const fetchProblems = useCallback(async () => {
     try {
       setProblemsLoading(true);
       const res = await axios.get("/api/problems", { headers: authHeaders() });
@@ -117,44 +111,58 @@ const DashboardPage = () => {
     } finally {
       setProblemsLoading(false);
     }
-  };
+  }, [authHeaders]);
 
-  const fetchPodftToday = async () => {
-  try {
-    const day = getLocalYMD();
-    const res = await axios.get(`/api/podft/today?date=${encodeURIComponent(day)}`, {
-      headers: authHeaders(),
+  const fetchPodftToday = useCallback(async () => {
+    try {
+      const day = getLocalYMD();
+      const res = await axios.get(`/api/podft/today?date=${encodeURIComponent(day)}`, {
+        headers: authHeaders(),
+      });
+      const parsed = parsePodftToday(res.data);
+      setPodft(parsed);
+    } catch (err) {
+      console.error("podft today request failed", err);
+      setPodft({ count: 0, date: getLocalYMD() });
+    }
+  }, [authHeaders, getLocalYMD, parsePodftToday]);
+
+  const fetchPodftTrades = useCallback(
+    async (dateStr) => {
+      const day = dateStr || podft.date || getLocalYMD();
+      try {
+        setPodftLoading(true);
+
+        const res = await axios.get(`/api/podft/trades?date=${encodeURIComponent(day)}`, {
+          headers: authHeaders(),
+        });
+
+        const list = Array.isArray(res.data) ? res.data : res.data?.trades;
+        setPodftTrades(Array.isArray(list) ? list : []);
+        setPodftUpdatedAt(new Date());
+      } catch (err) {
+        console.error("podft trades request failed", err);
+        setPodftTrades([]);
+        setPodftUpdatedAt(new Date());
+      } finally {
+        setPodftLoading(false);
+      }
+    },
+    [authHeaders, getLocalYMD, podft.date]
+  );
+
+  const normalizedPodftTrades = useMemo(() => {
+    return (podftTrades || []).map((t) => {
+      const raw = t?.raw;
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        // raw слева, чтобы поля из t могли перезаписать при конфликте
+        return { ...raw, ...t };
+      }
+      return t;
     });
-    const parsed = parsePodftToday(res.data);
-    setPodft(parsed);
-  } catch (err) {
-    console.error("podft today request failed", err);
-    setPodft({ count: 0, date: getLocalYMD() });
-  }
-};
+  }, [podftTrades]);
 
-const fetchPodftTrades = async (dateStr) => {
-  const day = dateStr || podft.date || getLocalYMD();
-  try {
-    setPodftLoading(true);
-    const res = await axios.get(`/api/podft/trades?date=${encodeURIComponent(day)}`, {
-      headers: authHeaders(),
-    });
-
-    const list = Array.isArray(res.data) ? res.data : res.data?.trades;
-    setPodftTrades(Array.isArray(list) ? list : []);
-    setPodftUpdatedAt(new Date());
-  } catch (err) {
-    console.error("podft trades request failed", err);
-    setPodftTrades([]);
-    setPodftUpdatedAt(new Date());
-  } finally {
-    setPodftLoading(false);
-  }
-};
-
-
-  const fetchDashboard = async () => {
+  const fetchDashboard = useCallback(async () => {
     try {
       const resProfile = await axios.get("/api/profile", { headers: authHeaders() });
       setUsername(resProfile.data?.username || "User");
@@ -168,12 +176,20 @@ const fetchPodftTrades = async (dateStr) => {
       setStats(res.data);
 
       await Promise.all([fetchProblems(), fetchPodftToday()]);
-      setLoading(false);
     } catch (err) {
       console.error("request failed", err);
+    } finally {
       setLoading(false);
     }
-  };
+  }, [authHeaders, fetchProblems, fetchPodftToday]);
+
+  useEffect(() => {
+    fetchDashboard();
+    checkSystemHealth();
+
+    const interval = setInterval(checkSystemHealth, 30000);
+    return () => clearInterval(interval);
+  }, [fetchDashboard, checkSystemHealth]);
 
   const getStatusColor = (status) => {
     if (status === "Online" || status === "Connected") return "#4ade80";
@@ -224,7 +240,11 @@ const fetchPodftTrades = async (dateStr) => {
       setSavingProblem(true);
 
       if (problemModalMode === "create") {
-        await axios.post("/api/problems", { title, description }, { headers: authHeaders() });
+        await axios.post(
+          "/api/problems",
+          { title, description },
+          { headers: authHeaders() }
+        );
       } else if (problemModalMode === "edit" && selectedProblem?.id != null) {
         await axios.put(
           `/api/problems/${selectedProblem.id}`,
@@ -296,7 +316,7 @@ const fetchPodftTrades = async (dateStr) => {
   const LIST_HEIGHT = 340;
   const HEADER_HEIGHT = 64;
 
-  // ===== Reusable styles (to keep both cards identical) =====
+  // ===== Reusable styles =====
   const sectionHeader = {
     padding: "16px 20px",
     borderBottom: "1px solid #e2e8f0",
@@ -420,20 +440,43 @@ const fetchPodftTrades = async (dateStr) => {
 
   // ===== POD/FT modal table helpers =====
   const podftColumns = useMemo(() => {
-    if (!podftTrades || podftTrades.length === 0) return [];
-    const first = podftTrades[0] || {};
-    return Object.keys(first);
-  }, [podftTrades]);
+    const rows = normalizedPodftTrades || [];
+    if (rows.length === 0) return [];
+
+    const keys = new Set();
+    rows.slice(0, 1000).forEach((r) => {
+      Object.keys(r || {}).forEach((k) => keys.add(k));
+    });
+
+    const preferred = [
+      "account",
+      "instrument",
+      "side",
+      "trading_dt",
+      "deal_dt",
+      "value_date",
+      "qty",
+      "amount_tg",
+      "created_at",
+      "id",
+    ];
+
+    const rest = [...keys]
+      .filter((k) => !preferred.includes(k))
+      .sort((a, b) => a.localeCompare(b, "ru"));
+
+    return [...preferred.filter((k) => keys.has(k)), ...rest];
+  }, [normalizedPodftTrades]);
 
   const filteredPodftTrades = useMemo(() => {
     const q = (podftFilter || "").trim().toLowerCase();
-    if (!q) return podftTrades;
+    if (!q) return normalizedPodftTrades;
 
-    return (podftTrades || []).filter((row) => {
+    return (normalizedPodftTrades || []).filter((row) => {
       const cols = podftColumns.length ? podftColumns : Object.keys(row || {});
       return cols.some((k) => String(row?.[k] ?? "").toLowerCase().includes(q));
     });
-  }, [podftFilter, podftTrades, podftColumns]);
+  }, [podftFilter, normalizedPodftTrades, podftColumns]);
 
   if (loading) return <div style={{ padding: 40 }}>Загрузка аналитики...</div>;
 
@@ -460,7 +503,9 @@ const fetchPodftTrades = async (dateStr) => {
           >
             Добро пожаловать, {username}!
           </h1>
-          <p style={{ color: "#64748b", marginTop: "5px" }}>Вот обзор системы на сегодня.</p>
+          <p style={{ color: "#64748b", marginTop: "5px" }}>
+            Вот обзор системы на сегодня.
+          </p>
         </div>
 
         <div
@@ -546,7 +591,7 @@ const fetchPodftTrades = async (dateStr) => {
           </div>
         </div>
 
-        {/* ✅ REPLACED: "Всего задач" -> "ПОД/ФТ сделки" + modal list */}
+        {/* ✅ POD/FT card */}
         <div
           className="card"
           role="button"
@@ -579,7 +624,14 @@ const fetchPodftTrades = async (dateStr) => {
             </div>
           </div>
 
-          <div style={{ marginLeft: "auto", color: "#94a3b8", fontSize: 12, whiteSpace: "nowrap" }}>
+          <div
+            style={{
+              marginLeft: "auto",
+              color: "#94a3b8",
+              fontSize: 12,
+              whiteSpace: "nowrap",
+            }}
+          >
             {podft?.date ? podft.date : getLocalYMD()}
           </div>
         </div>
@@ -775,12 +827,7 @@ const fetchPodftTrades = async (dateStr) => {
                         <button
                           type="button"
                           onClick={() => openEditProblem(p)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                          }}
+                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
                           title="Редактировать"
                         >
                           <Edit2 size={16} color="#3b82f6" />
@@ -788,12 +835,7 @@ const fetchPodftTrades = async (dateStr) => {
                         <button
                           type="button"
                           onClick={() => deleteProblem(p)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                          }}
+                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
                           title="Удалить"
                         >
                           <Trash2 size={16} color="#ef4444" />
@@ -864,7 +906,7 @@ const fetchPodftTrades = async (dateStr) => {
         </div>
       </div>
 
-      {/* ===== POD/FT Modal (list of trades) ===== */}
+      {/* ===== POD/FT Modal ===== */}
       {podftModalOpen && (
         <div style={modalOverlayStyle} onClick={closePodftModal}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
@@ -889,10 +931,12 @@ const fetchPodftTrades = async (dateStr) => {
                   style={{ ...subtleActionBtn, opacity: podftLoading ? 0.7 : 1 }}
                   disabled={podftLoading}
                 >
-                  {podftLoading ? <Loader2 size={16} className="spin-anim" /> : <RefreshCw size={16} />}
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>
-                    {podftLoading ? "..." : "Refresh"}
-                  </span>
+                  {podftLoading ? (
+                    <Loader2 size={16} className="spin-anim" />
+                  ) : (
+                    <RefreshCw size={16} />
+                  )}
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>{podftLoading ? "..." : "Refresh"}</span>
                 </button>
 
                 <button
@@ -953,13 +997,7 @@ const fetchPodftTrades = async (dateStr) => {
                   <div style={modalMetaStyle}>(или фильтр слишком строгий)</div>
                 </div>
               ) : (
-                <div
-                  style={{
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 12,
-                    overflow: "hidden",
-                  }}
-                >
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
                   <div style={{ maxHeight: "60vh", overflow: "auto" }}>
                     <table className="styled-table" style={{ width: "100%" }}>
                       <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
@@ -993,10 +1031,13 @@ const fetchPodftTrades = async (dateStr) => {
         </div>
       )}
 
-      {/* ===== Problems Modal (как было) ===== */}
+      {/* ===== Problems Modal ===== */}
       {problemModalOpen && (
         <div style={modalOverlayStyle} onClick={closeProblemModal}>
-          <div style={{ ...modalCardStyle, width: "min(560px, 95vw)" }} onClick={(e) => e.stopPropagation()}>
+          <div
+            style={{ ...modalCardStyle, width: "min(560px, 95vw)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div style={modalHeaderStyle}>
               <div style={modalHeaderTitleStyle}>
                 {problemModalMode === "create"
@@ -1176,14 +1217,7 @@ const fetchPodftTrades = async (dateStr) => {
                         />
                       </div>
 
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "flex-end",
-                          gap: "10px",
-                          marginTop: 4,
-                        }}
-                      >
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: 4 }}>
                         <button
                           type="button"
                           onClick={closeProblemModal}
