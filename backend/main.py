@@ -14,7 +14,16 @@ from threading import Lock
 from datetime import date
 from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, status, Query
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    Form,
+    HTTPException,
+    Depends,
+    status,
+    Query,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -163,7 +172,6 @@ class PodftTradeIn(BaseModel):
 
     # ✅ новое: сохраняем всю исходную строку
     raw: Optional[Dict[str, Any]] = None
-
 
 
 class PodftSnapshotSaveIn(BaseModel):
@@ -1137,7 +1145,12 @@ async def podft_today(
 
     snap = database_manager.get_latest_podft_snapshot_for_date(target_day)
     if not snap:
-        return {"date": str(target_day), "count": 0, "updated_at": None, "snapshot_id": None}
+        return {
+            "date": str(target_day),
+            "count": 0,
+            "updated_at": None,
+            "snapshot_id": None,
+        }
 
     count = database_manager.get_podft_snapshot_count(snap["id"])
     return {

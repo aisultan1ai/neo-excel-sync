@@ -12,13 +12,19 @@ from decimal import Decimal
 
 
 import psycopg2
-from psycopg2.extras import Json, RealDictCursor, register_default_json, register_default_jsonb
+from psycopg2.extras import (
+    Json,
+    RealDictCursor,
+    register_default_json,
+    register_default_jsonb,
+)
 
 # Ensure JSON/JSONB from Postgres is parsed into Python objects
 register_default_json(loads=json.loads, globally=True)
 register_default_jsonb(loads=json.loads, globally=True)
 
 log = logging.getLogger(__name__)
+
 
 def _json_default(o):
     # dates / datetimes
@@ -43,7 +49,6 @@ def _json_dumps(obj):
 
 def _to_jsonb(obj):
     return Json(obj, dumps=_json_dumps)
-
 
 
 def _build_db_config() -> Optional[dict]:
@@ -191,11 +196,24 @@ def init_database():
             )
 
             # upgrades for older DBs
-            _safe_ddl(cursor, "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS to_user_id INTEGER")
-            _safe_ddl(cursor, "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS accepted_by_user_id INTEGER")
-            _safe_ddl(cursor, "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP")
-            _safe_ddl(cursor, "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date DATE")
-            _safe_ddl(cursor, "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'normal'")
+            _safe_ddl(
+                cursor, "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS to_user_id INTEGER"
+            )
+            _safe_ddl(
+                cursor,
+                "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS accepted_by_user_id INTEGER",
+            )
+            _safe_ddl(
+                cursor,
+                "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP",
+            )
+            _safe_ddl(
+                cursor, "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date DATE"
+            )
+            _safe_ddl(
+                cursor,
+                "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'normal'",
+            )
 
             # add FK constraints if missing (older DBs)
             _safe_ddl(
@@ -218,11 +236,25 @@ def init_database():
                 """,
             )
 
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_tasks_to_dept ON tasks(to_department)")
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_tasks_accepted_by ON tasks(accepted_by_user_id)")
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_tasks_to_user ON tasks(to_user_id)")
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC)")
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_tasks_to_dept ON tasks(to_department)",
+            )
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_tasks_accepted_by ON tasks(accepted_by_user_id)",
+            )
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_tasks_to_user ON tasks(to_user_id)",
+            )
+            _safe_ddl(
+                cursor, "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)"
+            )
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC)",
+            )
 
             # 4) COMMENTS
             cursor.execute(
@@ -236,7 +268,10 @@ def init_database():
                 )
                 """
             )
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id)")
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id)",
+            )
 
             # 5) TASK_ATTACHMENTS
             cursor.execute(
@@ -250,7 +285,10 @@ def init_database():
                 )
                 """
             )
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments(task_id)")
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments(task_id)",
+            )
 
             # PROBLEMS
             cursor.execute(
@@ -265,7 +303,10 @@ def init_database():
                 )
                 """
             )
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_problems_created_at ON problems(created_at DESC)")
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_problems_created_at ON problems(created_at DESC)",
+            )
 
             # CRYPTO
             cursor.execute(
@@ -279,7 +320,10 @@ def init_database():
                 )
                 """
             )
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_crypto_accounts_created_at ON crypto_accounts(created_at DESC)")
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_crypto_accounts_created_at ON crypto_accounts(created_at DESC)",
+            )
 
             cursor.execute(
                 """
@@ -297,7 +341,10 @@ def init_database():
                 )
                 """
             )
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_crypto_transfers_date ON crypto_transfers(date DESC)")
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_crypto_transfers_date ON crypto_transfers(date DESC)",
+            )
 
             cursor.execute(
                 """
@@ -310,7 +357,10 @@ def init_database():
                 )
                 """
             )
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_crypto_schemes_created_at ON crypto_schemes(created_at DESC)")
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_crypto_schemes_created_at ON crypto_schemes(created_at DESC)",
+            )
 
             # PODFT SNAPSHOTS
             cursor.execute(
@@ -366,12 +416,27 @@ def init_database():
             )
 
             # upgrades for older DBs
-            _safe_ddl(cursor, "ALTER TABLE podft_snapshot_trades ADD COLUMN IF NOT EXISTS raw JSONB")
+            _safe_ddl(
+                cursor,
+                "ALTER TABLE podft_snapshot_trades ADD COLUMN IF NOT EXISTS raw JSONB",
+            )
 
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_podft_snapshots_date ON podft_snapshots(snapshot_date)")
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_snapshot ON podft_snapshot_trades(snapshot_id)")
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_value_date ON podft_snapshot_trades(value_date)")
-            _safe_ddl(cursor, "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_created_at ON podft_snapshot_trades(created_at DESC)")
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_podft_snapshots_date ON podft_snapshots(snapshot_date)",
+            )
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_snapshot ON podft_snapshot_trades(snapshot_id)",
+            )
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_value_date ON podft_snapshot_trades(value_date)",
+            )
+            _safe_ddl(
+                cursor,
+                "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_created_at ON podft_snapshot_trades(created_at DESC)",
+            )
 
         log.info("БД инициализирована успешно.")
 
@@ -427,7 +492,9 @@ def get_client_details(client_id: int):
         conn.close()
 
 
-def add_client(name: str, email: str, account: str, folder_path_override: Optional[str] = None):
+def add_client(
+    name: str, email: str, account: str, folder_path_override: Optional[str] = None
+):
     if not name:
         return False, "Имя клиента обязательно."
 
@@ -465,7 +532,9 @@ def add_client(name: str, email: str, account: str, folder_path_override: Option
         conn.close()
 
 
-def update_client(client_id: int, name: str, email: str, account: str, folder_path: str):
+def update_client(
+    client_id: int, name: str, email: str, account: str, folder_path: str
+):
     conn = get_db_connection()
     if not conn:
         return False, "Ошибка БД"
@@ -587,7 +656,9 @@ def get_users_basic():
         return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT id, username, department FROM users ORDER BY department, username")
+            cur.execute(
+                "SELECT id, username, department FROM users ORDER BY department, username"
+            )
             return cur.fetchall()
     finally:
         conn.close()
@@ -599,13 +670,17 @@ def get_all_users():
         return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute("SELECT id, username, department, is_admin FROM users ORDER BY id")
+            cursor.execute(
+                "SELECT id, username, department, is_admin FROM users ORDER BY id"
+            )
             return cursor.fetchall()
     finally:
         conn.close()
 
 
-def create_new_user(username: str, password_hash: str, department: str, is_admin: bool = False):
+def create_new_user(
+    username: str, password_hash: str, department: str, is_admin: bool = False
+):
     conn = get_db_connection()
     if not conn:
         return False
@@ -739,9 +814,17 @@ def rename_department(dept_id: int, new_name: str):
                 return False
             old_name = res[0]
 
-            cursor.execute("UPDATE departments SET name = %s WHERE id = %s", (new_name, dept_id))
-            cursor.execute("UPDATE users SET department = %s WHERE department = %s", (new_name, old_name))
-            cursor.execute("UPDATE tasks SET to_department = %s WHERE to_department = %s", (new_name, old_name))
+            cursor.execute(
+                "UPDATE departments SET name = %s WHERE id = %s", (new_name, dept_id)
+            )
+            cursor.execute(
+                "UPDATE users SET department = %s WHERE department = %s",
+                (new_name, old_name),
+            )
+            cursor.execute(
+                "UPDATE tasks SET to_department = %s WHERE to_department = %s",
+                (new_name, old_name),
+            )
         conn.commit()
         return True
     except Exception as e:
@@ -775,7 +858,15 @@ def create_task(
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (title, description, from_user_id, to_department, to_user_id, due_date, priority),
+                (
+                    title,
+                    description,
+                    from_user_id,
+                    to_department,
+                    to_user_id,
+                    due_date,
+                    priority,
+                ),
             )
             task_id = cursor.fetchone()[0]
         conn.commit()
@@ -926,7 +1017,9 @@ def update_task_status(task_id: int, new_status: str):
         return False
     try:
         with conn.cursor() as cursor:
-            cursor.execute("UPDATE tasks SET status = %s WHERE id = %s", (new_status, task_id))
+            cursor.execute(
+                "UPDATE tasks SET status = %s WHERE id = %s", (new_status, task_id)
+            )
         conn.commit()
         return True
     except Exception as e:
@@ -944,7 +1037,9 @@ def delete_task(task_id: int):
     try:
         with conn.cursor() as cursor:
             cursor.execute("DELETE FROM comments WHERE task_id = %s", (task_id,))
-            cursor.execute("DELETE FROM task_attachments WHERE task_id = %s", (task_id,))
+            cursor.execute(
+                "DELETE FROM task_attachments WHERE task_id = %s", (task_id,)
+            )
             cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
         conn.commit()
         return True
@@ -1047,7 +1142,9 @@ def delete_task_attachment(attachment_id: int):
         return False
     try:
         with conn.cursor() as cursor:
-            cursor.execute("DELETE FROM task_attachments WHERE id = %s", (attachment_id,))
+            cursor.execute(
+                "DELETE FROM task_attachments WHERE id = %s", (attachment_id,)
+            )
         conn.commit()
         return True
     except Exception as e:
@@ -1064,7 +1161,9 @@ def get_attachment_by_id(attachment_id: int):
         return None
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute("SELECT * FROM task_attachments WHERE id = %s", (attachment_id,))
+            cursor.execute(
+                "SELECT * FROM task_attachments WHERE id = %s", (attachment_id,)
+            )
             return cursor.fetchone()
     finally:
         conn.close()
@@ -1079,7 +1178,9 @@ def get_user_stats(user_id: int):
         return {"created": 0, "completed": 0}
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM tasks WHERE from_user_id = %s", (user_id,))
+            cursor.execute(
+                "SELECT COUNT(*) FROM tasks WHERE from_user_id = %s", (user_id,)
+            )
             created = int(cursor.fetchone()[0])
 
             cursor.execute(
@@ -1256,7 +1357,9 @@ def get_crypto_accounts():
         return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute("SELECT * FROM crypto_accounts ORDER BY created_at DESC, id DESC")
+            cursor.execute(
+                "SELECT * FROM crypto_accounts ORDER BY created_at DESC, id DESC"
+            )
             return cursor.fetchall()
     finally:
         conn.close()
@@ -1378,7 +1481,16 @@ def create_crypto_transfer(
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (date, type_, from_id, to_id, amount, asset, comment or None, label or None),
+                (
+                    date,
+                    type_,
+                    from_id,
+                    to_id,
+                    amount,
+                    asset,
+                    comment or None,
+                    label or None,
+                ),
             )
             row = cursor.fetchone()
         conn.commit()
@@ -1418,7 +1530,9 @@ def get_crypto_schemes():
         return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute("SELECT * FROM crypto_schemes ORDER BY created_at DESC, id DESC")
+            cursor.execute(
+                "SELECT * FROM crypto_schemes ORDER BY created_at DESC, id DESC"
+            )
             return cursor.fetchall()
     finally:
         conn.close()
@@ -1546,7 +1660,9 @@ def add_podft_snapshot_trades(snapshot_id: int, trades: List[Dict[str, Any]]) ->
                         t.get("value_date"),
                         t.get("qty"),
                         t.get("amount_tg"),
-                        _to_jsonb(t.get("raw") or t),  # ✅ теперь date нормально уйдёт как ISO строка
+                        _to_jsonb(
+                            t.get("raw") or t
+                        ),  # ✅ теперь date нормально уйдёт как ISO строка
                     ),
                 )
                 if cur.rowcount > 0:
