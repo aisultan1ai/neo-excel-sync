@@ -135,7 +135,7 @@ class CryptoAccountUpdate(BaseModel):
 
 class CryptoTransferCreate(BaseModel):
     date: date
-    type: str  # transfer | deposit | withdraw
+    type: str
     fromId: Optional[int] = None
     toId: Optional[int] = None
     amount: float
@@ -170,7 +170,6 @@ class PodftTradeIn(BaseModel):
     qty: Optional[float] = None
     amount_tg: Optional[float] = None
 
-    # ✅ новое: сохраняем всю исходную строку
     raw: Optional[Dict[str, Any]] = None
 
 
@@ -236,9 +235,8 @@ def ensure_task_owner_or_admin(task_row: dict, user_row: tuple):
 
 def save_upload_file(upload_file: UploadFile) -> str:
     try:
-        # ЗАЩИТА ОТ PATH TRAVERSAL: используем basename
         safe_filename = os.path.basename(upload_file.filename).replace(" ", "_")
-        # Добавляем UUID для уникальности, чтобы файлы не перезаписывали друг друга
+
         unique_name = f"{uuid.uuid4().hex}_{safe_filename}"
         file_path = os.path.join(TEMP_DIR, unique_name)
 
@@ -265,7 +263,7 @@ def cleanup_cache():
     ttl = timedelta(minutes=CACHE_TTL_MINUTES)
 
     with CACHE_LOCK:
-        # 1) удалить просроченные
+
         expired_keys = [
             k
             for k, v in COMPARISON_CACHE.items()
@@ -274,7 +272,6 @@ def cleanup_cache():
         for k in expired_keys:
             COMPARISON_CACHE.pop(k, None)
 
-        # 2) ограничить размер (удаляем самые старые)
         while len(COMPARISON_CACHE) > CACHE_MAX_ITEMS:
             oldest = min(
                 COMPARISON_CACHE.keys(), key=lambda k: COMPARISON_CACHE[k]["created_at"]
@@ -288,7 +285,6 @@ def cleanup_cache():
 
 
 # --- API ---
-
 
 @app.on_event("startup")
 def startup_event():
@@ -833,7 +829,6 @@ async def create_new_task(
     if task_id:
         return {"status": "success", "id": task_id}
     raise HTTPException(500, "Error creating task")
-
 
 @app.post("/api/tasks/{task_id}/accept")
 async def accept_task_endpoint(
