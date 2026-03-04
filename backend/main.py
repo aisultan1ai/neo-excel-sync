@@ -1687,7 +1687,7 @@ def api_delete_crypto_transfer(
         raise HTTPException(404, "Transfer not found")
     return {"ok": True}
 
-@app.post("/api/tools/unity-exchange/run")
+@app.post("/api/unity-exchange/run")
 async def run_unity_exchange(
     unity_file: UploadFile = File(...),
     exchange_file: UploadFile = File(...),
@@ -1749,7 +1749,7 @@ async def run_unity_exchange(
     finally:
         cleanup_files(unity_path, ex_path)
 
-@app.get("/api/tools/unity-exchange/export/{run_id}")
+@app.get("/api/unity-exchange/export/{run_id}")
 async def export_unity_exchange_report(
     run_id: str,
     current_user: str = Depends(get_current_user),

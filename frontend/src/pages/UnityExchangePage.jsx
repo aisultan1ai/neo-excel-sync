@@ -259,9 +259,9 @@ const UnityExchangePage = () => {
       fd.append("params_json", JSON.stringify(params));
       fd.append("preview_limit", "2000");
 
-      const { data } = await api.post("/tools/unity-exchange/run", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const { data } = await api.post("/unity-exchange/run", fd, {
+  headers: { "Content-Type": "multipart/form-data" },
+});
 
       setResult(data);
       setActiveTab("matches");
@@ -277,9 +277,9 @@ const exportExcel = async () => {
   if (!result?.run_id) return toast.error("Нет run_id для экспорта");
   setLoadingExport(true);
   try {
-    const res = await api.get(`/tools/unity-exchange/export/${result.run_id}`, {
-      responseType: "blob",
-    });
+    const res = await api.get(`/unity-exchange/export/${result.run_id}`, {
+  responseType: "blob",
+});
 
     const url = window.URL.createObjectURL(new Blob([res.data]));
     const a = document.createElement("a");

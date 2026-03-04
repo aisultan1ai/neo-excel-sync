@@ -91,7 +91,7 @@ const AppLayout = () => {
           <NavButton to="/reports" icon={FileSpreadsheet} label="Отчеты" />
           <NavButton to="/departments" icon={Users} label="Департаменты" />
           <NavButton to="/instruments" icon={Binary} label="Инструменты" />
-            <NavButton to="/instruments/unity-exchange" icon={FileDiff} label="Unity ↔ Биржа" />
+            <NavButton to="/unity-exchange" icon={FileDiff} label="Unity ↔ Биржа" />
           <NavButton to="/crypto" icon={Wallet} label="Крипто-счета" />
 
           <div className="spacer" style={{ flex: 1 }} />
@@ -185,7 +185,7 @@ function App() {
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/departments" element={<DepartmentsPage />} />
             <Route path="/instruments" element={<InstrumentsPage />} />
-              <Route path="/instruments/unity-exchange" element={<UnityExchangePage />} />
+              <Route path="/unity-exchange" element={<UnityExchangePage />} />
             <Route path="/crypto" element={<AccountsPage />} />
             <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
             <Route path="/settings" element={<SettingsPage />} />

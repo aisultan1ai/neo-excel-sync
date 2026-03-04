@@ -248,6 +248,80 @@ def _prepare_okx_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# ---------- Binance mapping (умнее) ----------
+
+def _norm_col(s: str) -> str:
+    s = str(s).replace("\ufeff", "").strip()
+    s = re.sub(r"\s+", " ", s)
+    return s.lower()
+
+
+def _pick_col(df: pd.DataFrame, candidates: List[str], required_name: str) -> str:
+    norm_map = {_norm_col(c): c for c in df.columns}
+    for cand in candidates:
+        key = _norm_col(cand)
+        if key in norm_map:
+            return norm_map[key]
+    raise ValueError(
+        f"Не найдена колонка для '{required_name}'. "
+        f"Искал: {candidates}. "
+        f"В файле есть: {list(df.columns)}"
+    )
+
+
+def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Приводит Binance CSV к стандарту:
+      Symbol, Side, Quantity, Price, Insert Time, Fee, Commission Asset (если есть)
+    """
+    out = df.copy()
+    out.columns = [str(c).replace("\ufeff", "").strip() for c in out.columns]
+
+    col_time = _pick_col(out, ["Insert Time", "Time", "Date(UTC)", "Date (UTC)", "Trade Time"], "Insert Time")
+    col_symbol = _pick_col(out, ["Symbol", "Pair", "Market", "Instrument"], "Symbol")
+    col_side = _pick_col(out, ["Side", "Action", "Direction"], "Side")
+    col_price = _pick_col(out, ["Price", "Avg Price", "Filled Price"], "Price")
+
+    col_qty = None
+    for cand in ["Quantity", "Qty", "Executed", "Amount"]:
+        try:
+            col_qty = _pick_col(out, [cand], "Quantity")
+            break
+        except Exception:
+            pass
+    if not col_qty:
+        raise ValueError(f"Не найдена колонка количества (Quantity/Qty/Executed/Amount). Колонки: {list(out.columns)}")
+
+    col_fee = None
+    for cand in ["Fee", "Commission", "Trading Fee"]:
+        try:
+            col_fee = _pick_col(out, [cand], "Fee")
+            break
+        except Exception:
+            pass
+
+    col_fee_asset = None
+    for cand in ["Commission Asset", "Fee Unit", "Fee Asset", "Commission Coin"]:
+        try:
+            col_fee_asset = _pick_col(out, [cand], "Commission Asset")
+            break
+        except Exception:
+            pass
+
+    std = pd.DataFrame()
+    std["Insert Time"] = out[col_time]
+    std["Symbol"] = out[col_symbol]
+    std["Side"] = out[col_side]
+    std["Quantity"] = out[col_qty]
+    std["Price"] = out[col_price]
+    if col_fee:
+        std["Fee"] = out[col_fee]
+    if col_fee_asset:
+        std["Commission Asset"] = out[col_fee_asset]
+
+    return std
+
+
 # -----------------------------
 # Normalization
 # -----------------------------
@@ -321,8 +395,7 @@ def _normalize_exchange_common(
     """
     Standard exchange schema required columns:
       Symbol, Side, Quantity, Price, Insert Time
-    Insert Time is treated as LOCAL time with time_offset_hours (e.g. OKX UTC+5).
-    Binance usually is already UTC => offset 0.
+    Insert Time is treated as LOCAL time with time_offset_hours.
     """
     need_cols = ["Symbol", "Side", "Quantity", "Price", "Insert Time"]
     for c in need_cols:
@@ -344,6 +417,7 @@ def _normalize_exchange_common(
     out["qty"] = out["Quantity"]
     out["price"] = out["Price"]
 
+    # dayfirst=True безопасно для DD.MM.YYYY и не ломает ISO 'YYYY-MM-DD ...'
     out["trade_dt_local"] = pd.to_datetime(out["Insert Time"], dayfirst=True, errors="coerce")
     out["trade_dt_utc"] = out["trade_dt_local"] - pd.Timedelta(hours=int(time_offset_hours))
     out["minute_utc"] = out["trade_dt_utc"].dt.floor("min")
@@ -390,20 +464,30 @@ def _within_tol(bv: float, uv: float, rel: float, abs_tol: float) -> bool:
     return diff <= thresh
 
 
+def _group_indices_sorted(df: pd.DataFrame, key_col: str) -> Dict[Any, List[int]]:
+    """
+    Возвращает {key: [индексы строк]} в порядке времени (trade_dt_utc).
+    Без groupby.apply => без FutureWarning.
+    """
+    if df.empty:
+        return {}
+
+    df_sorted = df.sort_values("trade_dt_utc", kind="mergesort")
+    idx_map = df_sorted.groupby(key_col, sort=False).indices
+    return {k: df_sorted.index.take(pos).tolist() for k, pos in idx_map.items()}
+
+
 def _reconcile_multiset_by_key(
     unity_n: pd.DataFrame,
     exchange_n: pd.DataFrame,
     key_col: str,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Multiset match by key_col. Duplicates matched by time order.
-    Returns:
-      matched_pairs: (exchange_idx, unity_idx, key)
-      missing_in_unity: exchange rows that didn't match
-      extra_in_unity: unity rows that didn't match
+    Multiset match по key_col (учитывает дубликаты).
+    Матчим по времени (trade_dt_utc), чтобы пары были стабильные и понятные.
     """
-    u_groups = unity_n.groupby(key_col, sort=False).apply(lambda g: list(g.sort_values("trade_dt_utc").index)).to_dict()
-    e_groups = exchange_n.groupby(key_col, sort=False).apply(lambda g: list(g.sort_values("trade_dt_utc").index)).to_dict()
+    u_groups = _group_indices_sorted(unity_n, key_col)
+    e_groups = _group_indices_sorted(exchange_n, key_col)
 
     matched: List[Tuple[int, int, str]] = []
     missing_ex: List[int] = []
@@ -412,8 +496,10 @@ def _reconcile_multiset_by_key(
     for k, e_idxs in e_groups.items():
         u_idxs = u_groups.get(k, [])
         n = min(len(e_idxs), len(u_idxs))
+
         for i in range(n):
             matched.append((e_idxs[i], u_idxs[i], str(k)))
+
         if len(e_idxs) > n:
             missing_ex.extend(e_idxs[n:])
         if len(u_idxs) > n:
@@ -435,11 +521,12 @@ def _reconcile_fuzzy(
     params: ReconcileParams,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Greedy one-to-one fuzzy match among remaining trades:
-      - same symbol & side
-      - abs(time diff) <= window
-      - qty within tolerance
-      - price within tolerance
+    Умный FUZZY:
+      - совпадает symbol+side
+      - время в окне +- time_window_seconds
+      - qty/price в пределах толерансов
+      - выбираем лучшую пару по score
+    Быстрее, чем полный перебор: кандидаты ищутся через searchsorted по времени.
     """
     if missing_exchange.empty or extra_unity.empty:
         return (
@@ -451,79 +538,94 @@ def _reconcile_fuzzy(
     b = missing_exchange.copy()
     u = extra_unity.copy()
 
-    b["_idx"] = b.index
-    u["_idx"] = u.index
+    b["_idx"] = b.index.astype(int)
+    u["_idx"] = u.index.astype(int)
 
     b["grp"] = b["symbol"].astype(str) + "|" + b["side"].astype(str)
     u["grp"] = u["symbol"].astype(str) + "|" + u["side"].astype(str)
 
-    b = b.sort_values("trade_dt_utc")
-    u = u.sort_values("trade_dt_utc")
+    b = b.sort_values("trade_dt_utc", kind="mergesort")
+    u = u.sort_values("trade_dt_utc", kind="mergesort")
 
-    time_window = pd.Timedelta(seconds=int(params.time_window_seconds))
-
-    unity_by_group: Dict[str, List[int]] = {}
-    for grp, g in u.groupby("grp", sort=False):
-        unity_by_group[grp] = list(g["_idx"].tolist())
+    win = pd.Timedelta(seconds=int(params.time_window_seconds))
+    win_ns = np.int64(win.value)
 
     u_lookup = u.set_index("_idx", drop=False)
 
-    matched_rows: List[Dict[str, Any]] = []
+    groups: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
+    for grp, g in u.groupby("grp", sort=False):
+        times = g["trade_dt_utc"].to_numpy(dtype="datetime64[ns]")
+        ids = g["_idx"].to_numpy(dtype=np.int64)
+        groups[grp] = (times, ids)
+
     used_unity: set[int] = set()
+    matched_rows: List[Dict[str, Any]] = []
 
     for _, brow in b.iterrows():
         grp = brow["grp"]
-        cand_ids = unity_by_group.get(grp, [])
-        if not cand_ids:
+        if grp not in groups:
             continue
 
         bt = brow["trade_dt_utc"]
         if pd.isna(bt):
             continue
 
-        best = None  # (score, uid)
-        for uid in cand_ids:
-            if uid in used_unity:
+        b_time = np.datetime64(bt.to_datetime64())
+        times_u, ids_u = groups[grp]
+
+        left = np.searchsorted(times_u, b_time - np.timedelta64(win_ns, "ns"), side="left")
+        right = np.searchsorted(times_u, b_time + np.timedelta64(win_ns, "ns"), side="right")
+        if left >= right:
+            continue
+
+        b_qty = float(brow["qty"]) if not pd.isna(brow["qty"]) else np.nan
+        b_price = float(brow["price"]) if not pd.isna(brow["price"]) else np.nan
+        if pd.isna(b_qty) or pd.isna(b_price):
+            continue
+
+        best_score = None
+        best_uid = None
+
+        for uid in ids_u[left:right]:
+            uid_int = int(uid)
+            if uid_int in used_unity:
                 continue
 
-            urow = u_lookup.loc[uid]
+            urow = u_lookup.loc[uid_int]
             ut = urow["trade_dt_utc"]
             if pd.isna(ut):
                 continue
 
-            dt = abs(ut - bt)
-            if dt > time_window:
+            u_qty = float(urow["qty"]) if not pd.isna(urow["qty"]) else np.nan
+            u_price = float(urow["price"]) if not pd.isna(urow["price"]) else np.nan
+            if pd.isna(u_qty) or pd.isna(u_price):
                 continue
-
-            b_qty = float(brow["qty"])
-            u_qty = float(urow["qty"])
-            b_price = float(brow["price"])
-            u_price = float(urow["price"])
 
             if not _within_tol(b_qty, u_qty, params.qty_rel_tol, params.qty_abs_tol):
                 continue
             if not _within_tol(b_price, u_price, params.price_rel_tol, params.price_abs_tol):
                 continue
 
-            time_s = dt.total_seconds()
+            dt_sec = abs((ut - bt).total_seconds())
             qty_rel = abs(u_qty - b_qty) / (abs(b_qty) if abs(b_qty) > 0 else 1.0)
             price_rel = abs(u_price - b_price) / (abs(b_price) if abs(b_price) > 0 else 1.0)
-            score = time_s + 1000.0 * qty_rel + 1000.0 * price_rel
+            score = dt_sec + 1000.0 * qty_rel + 1000.0 * price_rel
 
-            if best is None or score < best[0]:
-                best = (score, uid)
+            if best_score is None or score < best_score:
+                best_score = score
+                best_uid = uid_int
 
-        if best is not None:
-            score, uid = best
-            used_unity.add(uid)
-            matched_rows.append({"exchange_idx": int(brow["_idx"]), "unity_idx": int(uid), "score": float(score)})
+        if best_uid is not None:
+            used_unity.add(best_uid)
+            matched_rows.append(
+                {"exchange_idx": int(brow["_idx"]), "unity_idx": int(best_uid), "score": float(best_score)}
+            )
 
     matched_fuzzy = pd.DataFrame(matched_rows, columns=["exchange_idx", "unity_idx", "score"])
 
     if not matched_fuzzy.empty:
         matched_b = set(matched_fuzzy["exchange_idx"].tolist())
         matched_u = set(matched_fuzzy["unity_idx"].tolist())
-
         missing_after = missing_exchange[~missing_exchange.index.isin(matched_b)].copy()
         extra_after = extra_unity[~extra_unity.index.isin(matched_u)].copy()
     else:
@@ -646,7 +748,8 @@ def _build_pretty_tables(
     *,
     exchange_name: str,
 ) -> Dict[str, Optional[pd.DataFrame]]:
-    prefix = "B" if exchange_name.upper() == "BINANCE" else ("O" if exchange_name.upper() == "OKX" else "X")
+    exn = exchange_name.strip().lower()
+    prefix = "B" if exn == "binance" else ("O" if exn == "okx" else "X")
     p = f"{prefix}_"
 
     ex_sel = exchange_n.reset_index().rename(columns={"index": "exchange_idx"})
@@ -707,6 +810,26 @@ def _build_pretty_tables(
 
     m = m.merge(ex_view, on="exchange_idx", how="left").merge(u_view, on="unity_idx", how="left")
 
+    # --- Deltas (делает отчёт понятнее) ---
+    ex_utc = f"{p}UTC"
+    ex_qty = f"{p}Qty"
+    ex_price = f"{p}Цена"
+    ex_not = f"{p}Объем"
+
+    if ex_utc in m.columns and "U_UTC" in m.columns:
+        t1 = pd.to_datetime(m[ex_utc], errors="coerce")
+        t2 = pd.to_datetime(m["U_UTC"], errors="coerce")
+        m["Δt_sec"] = (t1 - t2).abs().dt.total_seconds()
+
+    if ex_qty in m.columns and "U_Qty" in m.columns:
+        m["ΔQty"] = pd.to_numeric(m[ex_qty], errors="coerce") - pd.to_numeric(m["U_Qty"], errors="coerce")
+
+    if ex_price in m.columns and "U_Цена" in m.columns:
+        m["ΔЦена"] = pd.to_numeric(m[ex_price], errors="coerce") - pd.to_numeric(m["U_Цена"], errors="coerce")
+
+    if ex_not in m.columns and "U_Объем" in m.columns:
+        m["ΔОбъем"] = pd.to_numeric(m[ex_not], errors="coerce") - pd.to_numeric(m["U_Объем"], errors="coerce")
+
     m = _safe_rename(m, {
         "match_type": "Тип_совпадения",
         "key_used": "Ключ",
@@ -716,7 +839,7 @@ def _build_pretty_tables(
     })
 
     front = [c for c in [
-        "Тип_совпадения", "Ключ", "Score",
+        "Тип_совпадения", "Ключ", "Score", "Δt_sec", "ΔQty", "ΔЦена", "ΔОбъем",
         f"{p}TradeID", f"{p}OrderID", f"{p}Время", f"{p}UTC", f"{p}Символ", f"{p}Сторона", f"{p}Qty", f"{p}Цена", f"{p}Объем",
         "U_ID", "U_Время", "U_UTC", "U_Instrument", "U_Символ", "U_Сторона", "U_Qty", "U_Цена", "U_Объем",
         "Биржа_idx", "Unity_idx",
@@ -1040,7 +1163,7 @@ def _apply_column_formats(ws, params: ReconcileParams) -> None:
                 ws.cell(row=r, column=col).number_format = dt_fmt
             continue
 
-        if h == "Score":
+        if h == "Score" or h == "Δt_sec":
             for r in range(2, ws.max_row + 1):
                 ws.cell(row=r, column=col).number_format = score_fmt
             continue
@@ -1135,14 +1258,17 @@ def reconcile_to_report(
     action_filter: Optional[set[str]] = None
 
     if exchange_type == "BINANCE":
-        exchange_raw = _read_binance_csv(exchange_path, params.binance_delimiter)
+        exchange_raw0 = _read_binance_csv(exchange_path, params.binance_delimiter)
+        exchange_raw = _prepare_binance_to_standard(exchange_raw0)
+
         exchange_name = "Binance"
-        exchange_offset = 0  # assume Insert Time in UTC
-        symbol_mapper = lambda x: str(x).upper().strip() if x is not None else ""
-        action_filter = None  # already trade rows
+        exchange_offset = 0  # Binance Date(UTC) обычно UTC
+        symbol_mapper = lambda x: re.sub(r"[^A-Z0-9]", "", str(x).upper()) if x is not None else ""
+        action_filter = {"BUY", "SELL"}
     else:
         okx_df, tz = _read_okx_xlsx(exchange_path)
         exchange_raw = _prepare_okx_to_standard(okx_df)
+
         exchange_name = "OKX"
         detected = tz
         exchange_offset = (
@@ -1163,13 +1289,17 @@ def reconcile_to_report(
     )
 
     # 1) STRICT
-    matched_strict, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(unity_n, exchange_n, "match_key")
+    matched_strict, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(
+        unity_n, exchange_n, "match_key"
+    )
 
     # 2) FUZZY
     matched_fuzzy = pd.DataFrame(columns=["exchange_idx", "unity_idx", "score"])
     matched_fuzzy_count = 0
     if params.enable_fuzzy:
-        matched_fuzzy, missing_in_unity, extra_in_unity = _reconcile_fuzzy(missing_in_unity, extra_in_unity, params)
+        matched_fuzzy, missing_in_unity, extra_in_unity = _reconcile_fuzzy(
+            missing_in_unity, extra_in_unity, params
+        )
         matched_fuzzy_count = int(len(matched_fuzzy))
 
     # 3) NOTIONAL fallback
@@ -1335,6 +1465,7 @@ def reconcile_to_report(
 
     return ReconcileResult(report_id=report_id, report_path=report_path, summary=summary)
 
+
 # --- WEB helper: return preview tables for UI (limited rows) ---
 
 def reconcile_to_report_with_preview(
@@ -1357,10 +1488,6 @@ def reconcile_to_report_with_preview(
         params=params,
     )
 
-    # Чтобы не парсить Excel обратно, делаем упрощённый preview:
-    # Читаем уже готовый XLSX (листами 01..07) и отдаём первые N строк.
-    # Это чуть медленнее, но супер надёжно и без переписывания логики.
-    # Если захочешь быстрее — сделаем возврат DataFrame до экспорта.
     wb = pd.ExcelFile(result.report_path)
     sheet_map = {
         "matches": "01_Совпадения",
@@ -1380,7 +1507,6 @@ def reconcile_to_report_with_preview(
         df = wb.parse(sheet_name=sheet_name)
         if preview_limit and len(df) > preview_limit:
             df = df.head(preview_limit)
-        # JSON-friendly
         df = df.replace({np.nan: None})
         preview[key] = df.to_dict(orient="records")
 
