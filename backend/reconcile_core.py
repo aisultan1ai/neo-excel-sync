@@ -1593,13 +1593,13 @@ def reconcile_to_report_with_preview(
 
     wb = pd.ExcelFile(result.report_path)
     sheet_map = {
-        "matches": "01_Совпадения",
-        "missing": "02_Нет_в_Unity",
-        "extra": "03_Лишнее_в_Unity",
-        "exchange_status": f"04_Статус_{result.summary.exchange_name}",
-        "unity_status": "05_Статус_Unity",
-        "volume_symbol": "06_Объем_Инстр",
-        "volume_symbol_side": "07_Объем_Инстр_Сторона",
+        "matches": "Совпадения",
+        "missing": "Нет в Unity",
+        "extra": "Лишнее в Unity",
+        "exchange_status": f"Статус_{result.summary.exchange_name}",
+        "unity_status": "Статус Unity",
+        "volume_symbol": "Объем Инстр",
+        "volume_symbol_side": "Объем Инстр Сторона",
     }
 
     preview: Dict[str, List[Dict[str, Any]]] = {}
