@@ -15,6 +15,7 @@ from openpyxl import load_workbook
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
 
 # -----------------------------
@@ -62,6 +63,7 @@ class ReconcileParams:
 
     # Export
     export_debug_sheets: bool = False  # True => add TopDiffs + RAW sheets
+    export_mode: str = "compact"  # "compact" | "full"
 
 
 @dataclass(frozen=True)
@@ -102,8 +104,36 @@ class ReconcileResult:
 
 
 # -----------------------------
-# Helpers
+# Helpers (text/columns)
 # -----------------------------
+
+def _norm_col(s: str) -> str:
+    s = str(s).replace("\ufeff", "").strip()
+    s = re.sub(r"\s+", " ", s)
+    return s.lower()
+
+
+def _pick_col(df: pd.DataFrame, candidates: List[str], required_name: str) -> str:
+    norm_map = {_norm_col(c): c for c in df.columns}
+    for cand in candidates:
+        key = _norm_col(cand)
+        if key in norm_map:
+            return norm_map[key]
+    raise ValueError(
+        f"Не найдена колонка для '{required_name}'. "
+        f"Искал: {candidates}. "
+        f"В файле есть: {list(df.columns)}"
+    )
+
+
+def _pick_col_optional(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
+    norm_map = {_norm_col(c): c for c in df.columns}
+    for cand in candidates:
+        key = _norm_col(cand)
+        if key in norm_map:
+            return norm_map[key]
+    return None
+
 
 def _detect_unity_offset_hours_from_text(s: Any, default_hours: int = 5) -> int:
     if s is None or (isinstance(s, float) and np.isnan(s)):
@@ -184,6 +214,10 @@ def _qround_float(v: Any, decimals: int) -> float:
     return float(d.quantize(q, rounding=ROUND_HALF_UP))
 
 
+# -----------------------------
+# Readers
+# -----------------------------
+
 def _read_binance_csv(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
     if delimiter:
         df = pd.read_csv(path, sep=delimiter, engine="python")
@@ -199,16 +233,43 @@ def _read_binance_csv(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
     return pd.read_csv(path, engine="python")
 
 
+def _detect_okx_header_row(path: Path, max_rows: int = 20) -> int:
+    """
+    OKX Excel иногда имеет метаданные в первых строках.
+    Ищем строку, где встречаются ключевые колонки (Time + Symbol/Instrument + Action/Side).
+    Возвращаем индекс строки (0-based) для header=...
+    """
+    try:
+        raw = pd.read_excel(path, header=None, nrows=max_rows)
+    except Exception:
+        return 1
+
+    def row_has(tokens: List[str], row_values: List[Any]) -> bool:
+        s = " | ".join([str(v) for v in row_values if v is not None]).lower()
+        return all(t.lower() in s for t in tokens)
+
+    for i in range(min(max_rows, len(raw))):
+        vals = raw.iloc[i].tolist()
+        # базовые сигналы
+        has_time = row_has(["time"], vals)
+        has_symbol = row_has(["symbol"], vals) or row_has(["instrument"], vals) or row_has(["inst"], vals)
+        has_action = row_has(["action"], vals) or row_has(["side"], vals) or row_has(["direction"], vals)
+        if has_time and has_symbol and has_action:
+            return i
+
+    return 1
+
+
 def _read_okx_xlsx(path: Path) -> Tuple[pd.DataFrame, Optional[int]]:
     """
     OKX excel often:
       Row0: UID... / Account Type... / Time Zone:UTC+5
-      Row1: header (id, Order id, Time, Trade Type, Symbol, Action, Amount, Filled Price, Fee, Fee Unit, ...)
+      Далее: строка с заголовками может быть не строго на 1
     """
     tz_offset = None
     try:
-        head = pd.read_excel(path, header=None, nrows=1)
-        for v in head.iloc[0].tolist():
+        head = pd.read_excel(path, header=None, nrows=3)
+        for v in head.values.flatten().tolist():
             if v is None:
                 continue
             txt = str(v)
@@ -220,59 +281,60 @@ def _read_okx_xlsx(path: Path) -> Tuple[pd.DataFrame, Optional[int]]:
     except Exception:
         tz_offset = None
 
-    df = pd.read_excel(path, header=1)
+    header_row = _detect_okx_header_row(path)
+    df = pd.read_excel(path, header=header_row)
     df.columns = [str(c).replace("\ufeff", "").strip() for c in df.columns]
     return df, tz_offset
 
 
+# -----------------------------
+# Exchange standardizers
+# -----------------------------
+
 def _prepare_okx_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Convert OKX columns -> standard exchange schema used by matcher:
-      Trade ID, Order ID, Insert Time, Symbol, Side, Quantity, Price, Fee, Commission Asset
+    Приводит OKX Excel к стандарту:
+      Symbol, Side, Quantity, Price, Insert Time, Trade ID?, Order ID?, Fee?, Commission Asset?
+    Делает это "умно" по разным названиям колонок.
     """
-    cols = {c: str(c).replace("\ufeff", "").strip() for c in df.columns}
-    df = df.rename(columns=cols).copy()
+    out = df.copy()
+    out.columns = [str(c).replace("\ufeff", "").strip() for c in out.columns]
 
-    mapping = {
-        "id": "Trade ID",
-        "Order id": "Order ID",
-        "Time": "Insert Time",
-        "Symbol": "Symbol",
-        "Action": "Side",
-        "Amount": "Quantity",
-        "Filled Price": "Price",
-        "Fee": "Fee",
-        "Fee Unit": "Commission Asset",
-    }
-    df = df.rename(columns={k: v for k, v in mapping.items() if k in df.columns})
-    return df
+    # required for normalization
+    col_time = _pick_col(out, ["Time", "Trade Time", "Fill Time", "Timestamp"], "Insert Time(Time)")
+    col_symbol = _pick_col(out, ["Symbol", "Instrument", "Inst", "Trading Pair", "Currency Pair"], "Symbol")
+    col_side = _pick_col(out, ["Action", "Side", "Direction"], "Side")
+    col_qty = _pick_col(out, ["Amount", "Quantity", "Size", "Filled Amount", "Qty"], "Quantity")
+    col_price = _pick_col(out, ["Filled Price", "Price", "Fill Price", "Avg Price"], "Price")
 
+    col_trade_id = _pick_col_optional(out, ["id", "Trade ID", "Fill ID", "trade id"])
+    col_order_id = _pick_col_optional(out, ["Order id", "Order ID", "order id"])
+    col_fee = _pick_col_optional(out, ["Fee", "Trading Fee", "Commission"])
+    col_fee_unit = _pick_col_optional(out, ["Fee Unit", "Commission Asset", "Fee Currency", "Fee Coin"])
 
-# ---------- Binance mapping (умнее) ----------
+    std = pd.DataFrame()
+    std["Insert Time"] = out[col_time]
+    std["Symbol"] = out[col_symbol]
+    std["Side"] = out[col_side]
+    std["Quantity"] = out[col_qty]
+    std["Price"] = out[col_price]
 
-def _norm_col(s: str) -> str:
-    s = str(s).replace("\ufeff", "").strip()
-    s = re.sub(r"\s+", " ", s)
-    return s.lower()
+    if col_trade_id:
+        std["Trade ID"] = out[col_trade_id]
+    if col_order_id:
+        std["Order ID"] = out[col_order_id]
+    if col_fee:
+        std["Fee"] = out[col_fee]
+    if col_fee_unit:
+        std["Commission Asset"] = out[col_fee_unit]
 
-
-def _pick_col(df: pd.DataFrame, candidates: List[str], required_name: str) -> str:
-    norm_map = {_norm_col(c): c for c in df.columns}
-    for cand in candidates:
-        key = _norm_col(cand)
-        if key in norm_map:
-            return norm_map[key]
-    raise ValueError(
-        f"Не найдена колонка для '{required_name}'. "
-        f"Искал: {candidates}. "
-        f"В файле есть: {list(df.columns)}"
-    )
+    return std
 
 
 def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     """
     Приводит Binance CSV к стандарту:
-      Symbol, Side, Quantity, Price, Insert Time, Fee, Commission Asset (если есть)
+      Symbol, Side, Quantity, Price, Insert Time, Fee?, Commission Asset?
     """
     out = df.copy()
     out.columns = [str(c).replace("\ufeff", "").strip() for c in out.columns]
@@ -292,21 +354,8 @@ def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     if not col_qty:
         raise ValueError(f"Не найдена колонка количества (Quantity/Qty/Executed/Amount). Колонки: {list(out.columns)}")
 
-    col_fee = None
-    for cand in ["Fee", "Commission", "Trading Fee"]:
-        try:
-            col_fee = _pick_col(out, [cand], "Fee")
-            break
-        except Exception:
-            pass
-
-    col_fee_asset = None
-    for cand in ["Commission Asset", "Fee Unit", "Fee Asset", "Commission Coin"]:
-        try:
-            col_fee_asset = _pick_col(out, [cand], "Commission Asset")
-            break
-        except Exception:
-            pass
+    col_fee = _pick_col_optional(out, ["Fee", "Commission", "Trading Fee"])
+    col_fee_asset = _pick_col_optional(out, ["Commission Asset", "Fee Unit", "Fee Asset", "Commission Coin"])
 
     std = pd.DataFrame()
     std["Insert Time"] = out[col_time]
@@ -400,7 +449,7 @@ def _normalize_exchange_common(
     need_cols = ["Symbol", "Side", "Quantity", "Price", "Insert Time"]
     for c in need_cols:
         if c not in df.columns:
-            raise ValueError(f"Exchange file missing required column: {c}")
+            raise ValueError(f"Exchange file missing required column: {c}. Available: {list(df.columns)}")
 
     out = df.copy()
 
@@ -617,9 +666,7 @@ def _reconcile_fuzzy(
 
         if best_uid is not None:
             used_unity.add(best_uid)
-            matched_rows.append(
-                {"exchange_idx": int(brow["_idx"]), "unity_idx": int(best_uid), "score": float(best_score)}
-            )
+            matched_rows.append({"exchange_idx": int(brow["_idx"]), "unity_idx": int(best_uid), "score": float(best_score)})
 
     matched_fuzzy = pd.DataFrame(matched_rows, columns=["exchange_idx", "unity_idx", "score"])
 
@@ -704,7 +751,7 @@ def _compare_volume(
     m["notional_sum_unity"] = m["notional_sum_unity"].map(lambda x: _qround_float(x, params.notional_decimals))
     m["notional_diff"] = m["notional_diff"].map(lambda x: _qround_float(x, params.notional_decimals))
 
-    m["_abs_not"] = m["notional_diff"].abs()
+    m["_abs_not"] = pd.to_numeric(m["notional_diff"], errors="coerce").abs()
     m = m.sort_values("_abs_not", ascending=False).drop(columns=["_abs_not"])
     return m
 
@@ -747,6 +794,7 @@ def _build_pretty_tables(
     volume_by_symbol_side: Optional[pd.DataFrame],
     *,
     exchange_name: str,
+    params: ReconcileParams,
 ) -> Dict[str, Optional[pd.DataFrame]]:
     exn = exchange_name.strip().lower()
     prefix = "B" if exn == "binance" else ("O" if exn == "okx" else "X")
@@ -810,7 +858,7 @@ def _build_pretty_tables(
 
     m = m.merge(ex_view, on="exchange_idx", how="left").merge(u_view, on="unity_idx", how="left")
 
-    # --- Deltas (делает отчёт понятнее) ---
+    # --- Deltas ---
     ex_utc = f"{p}UTC"
     ex_qty = f"{p}Qty"
     ex_price = f"{p}Цена"
@@ -838,14 +886,34 @@ def _build_pretty_tables(
         "unity_idx": "Unity_idx",
     })
 
-    front = [c for c in [
+    # Сортировка: сначала большие расхождения
+    if "ΔОбъем" in m.columns:
+        m["_abs_diff"] = pd.to_numeric(m["ΔОбъем"], errors="coerce").abs()
+        m = m.sort_values(["_abs_diff"], ascending=False).drop(columns=["_abs_diff"])
+    elif "Δt_sec" in m.columns:
+        m = m.sort_values(["Δt_sec"], ascending=True)
+
+    # Колонки
+    full_front = [c for c in [
         "Тип_совпадения", "Ключ", "Score", "Δt_sec", "ΔQty", "ΔЦена", "ΔОбъем",
         f"{p}TradeID", f"{p}OrderID", f"{p}Время", f"{p}UTC", f"{p}Символ", f"{p}Сторона", f"{p}Qty", f"{p}Цена", f"{p}Объем",
         "U_ID", "U_Время", "U_UTC", "U_Instrument", "U_Символ", "U_Сторона", "U_Qty", "U_Цена", "U_Объем",
         "Биржа_idx", "Unity_idx",
     ] if c in m.columns]
-    rest = [c for c in m.columns if c not in front]
-    m_pretty = m[front + rest].copy()
+    rest = [c for c in m.columns if c not in full_front]
+    m_pretty = m[full_front + rest].copy()
+
+    if params.export_mode == "compact":
+        compact_cols = [c for c in [
+            "Тип_совпадения",
+            "Δt_sec", "ΔQty", "ΔЦена", "ΔОбъем",
+            f"{p}TradeID", f"{p}OrderID",
+            f"{p}Время", f"{p}UTC", f"{p}Символ", f"{p}Сторона",
+            f"{p}Qty", f"{p}Цена", f"{p}Объем",
+            "U_ID", "U_Время", "U_UTC", "U_Instrument", "U_Символ", "U_Сторона",
+            "U_Qty", "U_Цена", "U_Объем",
+        ] if c in m_pretty.columns]
+        m_pretty = m_pretty[compact_cols].copy()
 
     # 02_Нет_в_Unity
     miss = missing_in_unity.copy()
@@ -863,6 +931,8 @@ def _build_pretty_tables(
     })
     miss_cols = _cols(miss, ["TradeID", "OrderID", "Время", "Символ", "Сторона", "Qty", "Цена", "Объем", "Fee", "Комиссия_Asset"])
     miss_pretty = miss[miss_cols].copy() if miss_cols else miss
+    if "Символ" in miss_pretty.columns and "Время" in miss_pretty.columns:
+        miss_pretty = miss_pretty.sort_values(["Символ", "Время"], ascending=[True, True])
 
     # 03_Лишнее_в_Unity
     extra = extra_in_unity.copy()
@@ -879,6 +949,8 @@ def _build_pretty_tables(
     })
     extra_cols = _cols(extra, ["ID", "Время", "Instrument", "Символ", "Сторона", "Qty", "Цена", "Объем", "Комиссия"])
     extra_pretty = extra[extra_cols].copy() if extra_cols else extra
+    if "Символ" in extra_pretty.columns and "Время" in extra_pretty.columns:
+        extra_pretty = extra_pretty.sort_values(["Символ", "Время"], ascending=[True, True])
 
     # 04/05 Статусы
     exs = ex_status.copy()
@@ -964,6 +1036,12 @@ def _build_pretty_tables(
             "last_time_unity": "Время_последнее_Unity",
             "status": "Статус",
         })
+
+        # sort by abs ΔОбъем
+        if "ΔОбъем" in vv.columns:
+            vv["_absV"] = pd.to_numeric(vv["ΔОбъем"], errors="coerce").abs()
+            vv = vv.sort_values(["_absV"], ascending=False).drop(columns=["_absV"])
+
         front_cols = _cols(vv, [
             "Статус", "Символ", "Сторона",
             f"Qty_{exchange_name}", "Qty_Unity", "ΔQty",
@@ -989,6 +1067,19 @@ def _build_pretty_tables(
 # -----------------------------
 # Export XLSX + Styling
 # -----------------------------
+
+def _clean_df_for_excel(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Убирает "nan/NaT" как текст и бесконечности.
+    Обычный NaN в to_excel и так будет пустой — но это помогает, если колонку где-то привели к str.
+    """
+    out = df.copy()
+    out = out.replace([np.inf, -np.inf], np.nan)
+    for c in out.columns:
+        if out[c].dtype == object:
+            out[c] = out[c].replace({"nan": "", "NaN": "", "NaT": "", "None": ""})
+    return out
+
 
 def _export_report_xlsx(
     report_path: Path,
@@ -1020,7 +1111,6 @@ def _export_report_xlsx(
                 "Совпало NOTIONAL (qty*price)",
                 "Нет в Unity (есть в бирже)",
                 "Лишнее в Unity (нет в бирже)",
-                "",
                 f"Объем: символов {exchange_name}",
                 "Объем: символов Unity",
                 "Объем: OK",
@@ -1031,7 +1121,6 @@ def _export_report_xlsx(
                 "Объем: Σ Qty Unity",
                 f"Объем: Σ Notional {exchange_name}",
                 "Объем: Σ Notional Unity",
-                "",
                 f"Диапазон времени {exchange_name} (UTC)",
                 "Диапазон времени Unity (UTC)",
                 "Warning",
@@ -1044,7 +1133,6 @@ def _export_report_xlsx(
                 summary.matched_notional,
                 summary.missing_in_unity,
                 summary.extra_in_unity,
-                "",
                 summary.volume_symbols_exchange,
                 summary.volume_symbols_unity,
                 summary.volume_symbols_ok,
@@ -1055,7 +1143,6 @@ def _export_report_xlsx(
                 summary.volume_total_qty_unity,
                 summary.volume_total_notional_exchange,
                 summary.volume_total_notional_unity,
-                "",
                 summary.exchange_time_range_utc,
                 summary.unity_time_range_utc,
                 summary.warning,
@@ -1064,31 +1151,50 @@ def _export_report_xlsx(
     )
 
     with pd.ExcelWriter(report_path, engine="openpyxl") as writer:
-        summary_df.to_excel(writer, sheet_name="00_Сводка", index=False)
+        _clean_df_for_excel(summary_df).to_excel(writer, sheet_name="00_Сводка", index=False)
 
-        matched_pretty.to_excel(writer, sheet_name="01_Совпадения", index=False)
-        missing_pretty.to_excel(writer, sheet_name="02_Нет_в_Unity", index=False)
-        extra_pretty.to_excel(writer, sheet_name="03_Лишнее_в_Unity", index=False)
+        _clean_df_for_excel(matched_pretty).to_excel(writer, sheet_name="01_Совпадения", index=False)
+        _clean_df_for_excel(missing_pretty).to_excel(writer, sheet_name="02_Нет_в_Unity", index=False)
+        _clean_df_for_excel(extra_pretty).to_excel(writer, sheet_name="03_Лишнее_в_Unity", index=False)
 
-        ex_status_pretty.to_excel(writer, sheet_name=f"04_Статус_{exchange_name}", index=False)
-        unity_status_pretty.to_excel(writer, sheet_name="05_Статус_Unity", index=False)
+        _clean_df_for_excel(ex_status_pretty).to_excel(writer, sheet_name=f"04_Статус_{exchange_name}", index=False)
+        _clean_df_for_excel(unity_status_pretty).to_excel(writer, sheet_name="05_Статус_Unity", index=False)
 
         if volume_by_symbol_pretty is not None:
-            volume_by_symbol_pretty.to_excel(writer, sheet_name="06_Объем_Инстр", index=False)
+            _clean_df_for_excel(volume_by_symbol_pretty).to_excel(writer, sheet_name="06_Объем_Инстр", index=False)
         if volume_by_symbol_side_pretty is not None:
-            volume_by_symbol_side_pretty.to_excel(writer, sheet_name="07_Объем_Инстр_Сторона", index=False)
+            _clean_df_for_excel(volume_by_symbol_side_pretty).to_excel(writer, sheet_name="07_Объем_Инстр_Сторона", index=False)
 
         if params.export_debug_sheets:
             if top_diffs_strict is not None:
-                top_diffs_strict.to_excel(writer, sheet_name="90_TopDiffs_STRICT", index=False)
+                _clean_df_for_excel(top_diffs_strict).to_excel(writer, sheet_name="90_TopDiffs_STRICT", index=False)
             if top_diffs_notional is not None:
-                top_diffs_notional.to_excel(writer, sheet_name="91_TopDiffs_Объем", index=False)
+                _clean_df_for_excel(top_diffs_notional).to_excel(writer, sheet_name="91_TopDiffs_Объем", index=False)
             if raw_exchange is not None:
-                raw_exchange.to_excel(writer, sheet_name=f"RAW_{exchange_name}", index=False)
+                _clean_df_for_excel(raw_exchange).to_excel(writer, sheet_name=f"RAW_{exchange_name}", index=False)
             if raw_unity is not None:
-                raw_unity.to_excel(writer, sheet_name="RAW_Unity", index=False)
+                _clean_df_for_excel(raw_unity).to_excel(writer, sheet_name="RAW_Unity", index=False)
 
     _style_workbook(report_path, params)
+
+
+def _apply_excel_table(ws) -> None:
+    """Делает лист таблицей Excel (полоски, фильтры, аккуратный вид)."""
+    if ws.max_row < 2 or ws.max_column < 1:
+        return
+
+    safe = re.sub(r"[^A-Za-z0-9_]", "_", ws.title)
+    name = f"T_{safe}"[:250]
+
+    tab = Table(displayName=name, ref=ws.dimensions)
+    tab.tableStyleInfo = TableStyleInfo(
+        name="TableStyleMedium2",
+        showFirstColumn=False,
+        showLastColumn=False,
+        showRowStripes=True,
+        showColumnStripes=False,
+    )
+    ws.add_table(tab)
 
 
 def _style_workbook(report_path: Path, params: ReconcileParams) -> None:
@@ -1101,6 +1207,7 @@ def _style_workbook(report_path: Path, params: ReconcileParams) -> None:
         _apply_sheet_basics(ws)
         _apply_header_style(ws)
         _apply_auto_filter(ws)
+        _apply_excel_table(ws)
         _apply_column_formats(ws, params)
         _apply_conditional_styles(ws)
         _autosize_columns(ws)
@@ -1163,7 +1270,7 @@ def _apply_column_formats(ws, params: ReconcileParams) -> None:
                 ws.cell(row=r, column=col).number_format = dt_fmt
             continue
 
-        if h == "Score" or h == "Δt_sec":
+        if h in {"Score", "Δt_sec"}:
             for r in range(2, ws.max_row + 1):
                 ws.cell(row=r, column=col).number_format = score_fmt
             continue
@@ -1246,7 +1353,6 @@ def reconcile_to_report(
     params: Optional[ReconcileParams] = None,
 ) -> ReconcileResult:
     params = params or ReconcileParams()
-
     exchange_type = exchange_type.upper().strip()
     if exchange_type not in {"BINANCE", "OKX"}:
         raise ValueError(f"Unsupported exchange_type: {exchange_type}")
@@ -1289,17 +1395,13 @@ def reconcile_to_report(
     )
 
     # 1) STRICT
-    matched_strict, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(
-        unity_n, exchange_n, "match_key"
-    )
+    matched_strict, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(unity_n, exchange_n, "match_key")
 
     # 2) FUZZY
     matched_fuzzy = pd.DataFrame(columns=["exchange_idx", "unity_idx", "score"])
     matched_fuzzy_count = 0
     if params.enable_fuzzy:
-        matched_fuzzy, missing_in_unity, extra_in_unity = _reconcile_fuzzy(
-            missing_in_unity, extra_in_unity, params
-        )
+        matched_fuzzy, missing_in_unity, extra_in_unity = _reconcile_fuzzy(missing_in_unity, extra_in_unity, params)
         matched_fuzzy_count = int(len(matched_fuzzy))
 
     # 3) NOTIONAL fallback
@@ -1437,6 +1539,7 @@ def reconcile_to_report(
         volume_by_symbol=volume_by_symbol,
         volume_by_symbol_side=volume_by_symbol_side,
         exchange_name=exchange_name,
+        params=params,
     )
 
     report_id = str(uuid.uuid4())
