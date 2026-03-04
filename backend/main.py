@@ -31,6 +31,8 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from jose import JWTError, jwt
 from excel_reconcile_single import register_excel_reconcile
+from pathlib import Path
+from reconcile_core import ReconcileParams, reconcile_to_report
 
 import processor
 import settings_manager
@@ -78,6 +80,13 @@ CACHE_LOCK = Lock()
 
 CACHE_TTL_MINUTES = int(os.getenv("CACHE_TTL_MINUTES", "30"))
 CACHE_MAX_ITEMS = int(os.getenv("CACHE_MAX_ITEMS", "15"))
+
+BASE_DIR = Path(__file__).resolve().parent  # backend/
+UNITY_EXCHANGE_REPORT_DIR = BASE_DIR / "client_reports" / "unity_exchange"
+UNITY_EXCHANGE_REPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+UNITY_EXCHANGE_CACHE: Dict[str, Any] = {}
+LAST_UNITY_EXCHANGE_BY_USER: Dict[str, str] = {}
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
@@ -283,6 +292,38 @@ def cleanup_cache():
             if cid not in valid_ids:
                 LAST_RESULT_BY_USER.pop(user, None)
 
+def cleanup_unity_exchange_cache():
+    now = datetime.now()
+    ttl = timedelta(minutes=CACHE_TTL_MINUTES)
+
+    with CACHE_LOCK:
+        expired = [
+            k for k, v in UNITY_EXCHANGE_CACHE.items()
+            if (now - v.get("created_at", now)) > ttl
+        ]
+        for k in expired:
+            try:
+                rp = UNITY_EXCHANGE_CACHE[k].get("report_path")
+                if rp and os.path.exists(rp):
+                    os.remove(rp)
+            except Exception:
+                pass
+            UNITY_EXCHANGE_CACHE.pop(k, None)
+
+        while len(UNITY_EXCHANGE_CACHE) > CACHE_MAX_ITEMS:
+            oldest = min(UNITY_EXCHANGE_CACHE.keys(), key=lambda k: UNITY_EXCHANGE_CACHE[k]["created_at"])
+            try:
+                rp = UNITY_EXCHANGE_CACHE[oldest].get("report_path")
+                if rp and os.path.exists(rp):
+                    os.remove(rp)
+            except Exception:
+                pass
+            UNITY_EXCHANGE_CACHE.pop(oldest, None)
+
+        valid = set(UNITY_EXCHANGE_CACHE.keys())
+        for user, rid in list(LAST_UNITY_EXCHANGE_BY_USER.items()):
+            if rid not in valid:
+                LAST_UNITY_EXCHANGE_BY_USER.pop(user, None)
 
 # --- API ---
 
@@ -495,6 +536,23 @@ def _process_comparison_sync(
     results["found_overlaps"] = found_overlaps  # Добавляем в общий словарь для кэша
     return results
 
+def _process_unity_exchange_sync(unity_path: str, exchange_path: str, exchange_type: str, params_dict: dict):
+    params = ReconcileParams(**(params_dict or {}))
+
+    res = reconcile_to_report(
+        unity_xlsx_path=Path(unity_path),
+        exchange_path=Path(exchange_path),
+        report_dir=UNITY_EXCHANGE_REPORT_DIR,
+        exchange_type=exchange_type,
+        params=params,
+    )
+
+    return {
+        "report_path": str(res.report_path),
+        "report_filename": os.path.basename(str(res.report_path)),
+        "exchange_name": res.summary.exchange_name,
+        "summary": res.summary.__dict__,
+    }
 
 @app.get("/api/export/{comparison_id}")
 async def export_excel_file(
@@ -1628,3 +1686,90 @@ def api_delete_crypto_transfer(
     if not ok:
         raise HTTPException(404, "Transfer not found")
     return {"ok": True}
+
+@app.post("/api/tools/unity-exchange/run")
+async def run_unity_exchange(
+    unity_file: UploadFile = File(...),
+    exchange_file: UploadFile = File(...),
+    exchange_type: str = Form("BINANCE"),
+    params_json: str = Form("{}"),
+    current_user: str = Depends(get_current_user),
+):
+    cleanup_unity_exchange_cache()
+
+    unity_path = None
+    ex_path = None
+    try:
+        exchange_type = (exchange_type or "BINANCE").strip().upper()
+        if exchange_type not in ("BINANCE", "OKX"):
+            raise HTTPException(400, "exchange_type must be BINANCE or OKX")
+
+        unity_path = save_upload_file(unity_file)
+        ex_path = save_upload_file(exchange_file)
+
+        try:
+            params_dict = json.loads(params_json or "{}")
+            if not isinstance(params_dict, dict):
+                params_dict = {}
+        except Exception:
+            params_dict = {}
+
+        result = await run_in_threadpool(
+            _process_unity_exchange_sync,
+            unity_path,
+            ex_path,
+            exchange_type,
+            params_dict,
+        )
+
+        run_id = uuid.uuid4().hex
+
+        with CACHE_LOCK:
+            UNITY_EXCHANGE_CACHE[run_id] = {
+                "created_at": datetime.now(),
+                "owner": current_user,
+                "report_path": result["report_path"],
+                "exchange_name": result["exchange_name"],
+            }
+            LAST_UNITY_EXCHANGE_BY_USER[current_user] = run_id
+
+        cleanup_unity_exchange_cache()
+
+        return {
+            "status": "success",
+            "run_id": run_id,
+            "exchange_name": result["exchange_name"],
+            "report_filename": result["report_filename"],
+            "summary": result["summary"],
+        }
+
+    except Exception as e:
+        log.error(f"unity-exchange run error: {e}", exc_info=True)
+        raise HTTPException(500, detail=str(e))
+    finally:
+        cleanup_files(unity_path, ex_path)
+
+@app.get("/api/tools/unity-exchange/export/{run_id}")
+async def export_unity_exchange_report(
+    run_id: str,
+    current_user: str = Depends(get_current_user),
+):
+    cleanup_unity_exchange_cache()
+
+    with CACHE_LOCK:
+        cached = UNITY_EXCHANGE_CACHE.get(run_id)
+
+    if not cached:
+        raise HTTPException(404, "Report expired or not found")
+    if cached.get("owner") != current_user:
+        raise HTTPException(403, "Forbidden")
+
+    report_path = cached.get("report_path")
+    if not report_path or not os.path.exists(report_path):
+        raise HTTPException(404, "Report file not found")
+
+    return FileResponse(
+        report_path,
+        filename=os.path.basename(report_path),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
