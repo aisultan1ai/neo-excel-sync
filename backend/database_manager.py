@@ -1094,6 +1094,7 @@ def get_comments(task_id: int):
     finally:
         conn.close()
 
+
 # -------------------------
 # ATTACHMENTS
 # -------------------------
@@ -1166,7 +1167,6 @@ def get_attachment_by_id(attachment_id: int):
             return cursor.fetchone()
     finally:
         conn.close()
-
 
 
 # -------------------------

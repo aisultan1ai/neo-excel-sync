@@ -272,7 +272,6 @@ def cleanup_cache():
     ttl = timedelta(minutes=CACHE_TTL_MINUTES)
 
     with CACHE_LOCK:
-
         expired_keys = [
             k
             for k, v in COMPARISON_CACHE.items()
@@ -292,13 +291,15 @@ def cleanup_cache():
             if cid not in valid_ids:
                 LAST_RESULT_BY_USER.pop(user, None)
 
+
 def cleanup_unity_exchange_cache():
     now = datetime.now()
     ttl = timedelta(minutes=CACHE_TTL_MINUTES)
 
     with CACHE_LOCK:
         expired = [
-            k for k, v in UNITY_EXCHANGE_CACHE.items()
+            k
+            for k, v in UNITY_EXCHANGE_CACHE.items()
             if (now - v.get("created_at", now)) > ttl
         ]
         for k in expired:
@@ -311,7 +312,10 @@ def cleanup_unity_exchange_cache():
             UNITY_EXCHANGE_CACHE.pop(k, None)
 
         while len(UNITY_EXCHANGE_CACHE) > CACHE_MAX_ITEMS:
-            oldest = min(UNITY_EXCHANGE_CACHE.keys(), key=lambda k: UNITY_EXCHANGE_CACHE[k]["created_at"])
+            oldest = min(
+                UNITY_EXCHANGE_CACHE.keys(),
+                key=lambda k: UNITY_EXCHANGE_CACHE[k]["created_at"],
+            )
             try:
                 rp = UNITY_EXCHANGE_CACHE[oldest].get("report_path")
                 if rp and os.path.exists(rp):
@@ -325,7 +329,9 @@ def cleanup_unity_exchange_cache():
             if rid not in valid:
                 LAST_UNITY_EXCHANGE_BY_USER.pop(user, None)
 
+
 # --- API ---
+
 
 @app.on_event("startup")
 def startup_event():
@@ -536,7 +542,10 @@ def _process_comparison_sync(
     results["found_overlaps"] = found_overlaps  # Добавляем в общий словарь для кэша
     return results
 
-def _process_unity_exchange_sync(unity_path: str, exchange_path: str, exchange_type: str, params_dict: dict):
+
+def _process_unity_exchange_sync(
+    unity_path: str, exchange_path: str, exchange_type: str, params_dict: dict
+):
     params = ReconcileParams(**(params_dict or {}))
 
     res = reconcile_to_report(
@@ -553,6 +562,7 @@ def _process_unity_exchange_sync(unity_path: str, exchange_path: str, exchange_t
         "exchange_name": res.summary.exchange_name,
         "summary": res.summary.__dict__,
     }
+
 
 @app.get("/api/export/{comparison_id}")
 async def export_excel_file(
@@ -887,6 +897,7 @@ async def create_new_task(
     if task_id:
         return {"status": "success", "id": task_id}
     raise HTTPException(500, "Error creating task")
+
 
 @app.post("/api/tasks/{task_id}/accept")
 async def accept_task_endpoint(
@@ -1687,6 +1698,7 @@ def api_delete_crypto_transfer(
         raise HTTPException(404, "Transfer not found")
     return {"ok": True}
 
+
 @app.post("/api/unity-exchange/run")
 async def run_unity_exchange(
     unity_file: UploadFile = File(...),
@@ -1748,6 +1760,7 @@ async def run_unity_exchange(
         raise HTTPException(500, detail=str(e))
     finally:
         cleanup_files(unity_path, ex_path)
+
 
 @app.get("/api/unity-exchange/export/{run_id}")
 async def export_unity_exchange_report(
