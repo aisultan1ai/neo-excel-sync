@@ -75,9 +75,8 @@ const DepartmentsPage = () => {
   const [showDeleteFileConfirm, setShowDeleteFileConfirm] = useState(false);
   const [fileToDeleteId, setFileToDeleteId] = useState(null);
 
-  // -----------------------
   // API helpers
-  // -----------------------
+
   const fetchMe = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -158,9 +157,7 @@ const DepartmentsPage = () => {
     return users;
   }, [users, activeDept]);
 
-  // -----------------------
   // actions
-  // -----------------------
   const resetCreateModal = () => {
     setShowModal(false);
     setNewTaskTitle("");
@@ -299,7 +296,7 @@ const DepartmentsPage = () => {
     } catch (e2) {
       toast.error("Ошибка загрузки");
     } finally {
-      // чтобы можно было загрузить тот же файл повторно
+
       e.target.value = "";
     }
   };
@@ -329,7 +326,6 @@ const DepartmentsPage = () => {
     setShowDeleteFileConfirm(true);
   };
 
-  // only author/admin can delete file (UI hides, backend enforces)
   const executeDeleteFile = async () => {
     if (!fileToDeleteId) return;
 
@@ -368,7 +364,6 @@ const DepartmentsPage = () => {
 
   const openDeleteTaskModal = () => setShowDeleteTaskConfirm(true);
 
-  // only author/admin can delete
   const executeDeleteTask = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -386,7 +381,6 @@ const DepartmentsPage = () => {
     }
   };
 
-  // only author/admin can edit (UI hides, but still safe)
   const handleSaveEdit = async () => {
     try {
       const token = localStorage.getItem("token");

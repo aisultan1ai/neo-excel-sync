@@ -15,7 +15,7 @@ import {
   Upload,
   Briefcase,
   RotateCcw,
-  AlertTriangle, // <--- Добавил иконку
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "react-toastify";
 
@@ -86,7 +86,7 @@ const ReportsPage = () => {
   const [clientDetails, setClientDetails] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  // Ref для таймера закрытия (FIX БЕЛОГО ЭКРАНА)
+  // Ref для таймера закрытия
   const closeTimerRef = useRef(null);
 
   // --- МОДАЛКИ ---
@@ -100,7 +100,6 @@ const ReportsPage = () => {
     folder_path: "",
   });
 
-  // Стейт для кастомного подтверждения сброса
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // 1. ПРОВЕРКА ПРАВ
@@ -255,9 +254,7 @@ const ReportsPage = () => {
     }
   };
 
-  // --- ЛОГИКА СБРОСА СТАТУСОВ ---
-
-  const openResetModal = () => {
+    const openResetModal = () => {
     setShowResetConfirm(true);
   };
 

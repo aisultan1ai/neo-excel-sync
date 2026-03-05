@@ -1,4 +1,3 @@
-// src/pages/SverkaPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { toast } from "react-toastify";
@@ -16,15 +15,11 @@ import {
   Search,
 } from "lucide-react";
 
-// ------------------------------
-// Helpers (POD/FT selection)
-// ------------------------------
+// (POD/FT selection)
 const parseDateToISO = (v) => {
   if (!v) return "";
-  // already ISO
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) return v.trim();
 
-  // excel serial date
   if (typeof v === "number" && Number.isFinite(v)) {
     const dt = XLSX.SSF.parse_date_code(v);
     if (!dt) return "";
@@ -33,7 +28,6 @@ const parseDateToISO = (v) => {
     return `${dt.y}-${mm}-${dd}`;
   }
 
-  // dd.mm.yyyy or dd/mm/yyyy
   if (typeof v === "string") {
     const s = v.trim();
     const m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
@@ -91,9 +85,6 @@ const buildPodftPayloadTrade = (r) => {
   };
 };
 
-// ------------------------------
-// FileSection (upload + detect headers + choose columns)
-// ------------------------------
 const FileSection = ({
   title,
   file,
@@ -126,7 +117,6 @@ const FileSection = ({
           const foundHeaders = data[0] || [];
           headers?.onLoad?.(foundHeaders);
 
-          // Try auto-select ID column
           if (defaultIdName) {
             const foundId = foundHeaders.find((h) =>
               String(h || "")
@@ -137,7 +127,6 @@ const FileSection = ({
             if (foundId) setIdCol(foundId);
           }
 
-          // Try auto-select Account/Subaccount column
           const foundAcc = foundHeaders.find((h) => {
             const hs = String(h || "").toLowerCase();
             return (
@@ -349,9 +338,6 @@ const FileSection = ({
   );
 };
 
-// ------------------------------
-// SverkaPage
-// ------------------------------
 const SverkaPage = () => {
   const [file1, setFile1] = useState(null);
   const [file2, setFile2] = useState(null);
@@ -366,7 +352,7 @@ const SverkaPage = () => {
   const [filterText, setFilterText] = useState("");
   const [filterCol, setFilterCol] = useState("");
 
-  // ✅ Admin + PODFT selection states
+  // Admin + PODFT selection
   const [isAdmin, setIsAdmin] = useState(false);
   const [podftSelectMode, setPodftSelectMode] = useState(false);
   const [podftSelected, setPodftSelected] = useState(() => new Set());
@@ -399,7 +385,6 @@ const SverkaPage = () => {
     fetchLastResult();
   }, []);
 
-  // ✅ load profile (admin)
   useEffect(() => {
     api
       .get("/profile")
@@ -804,7 +789,7 @@ const SverkaPage = () => {
               />
             </div>
 
-            {/* ✅ PODFT toolbar (admin only) */}
+            {/* PODFT toolbar (admin only) */}
             {showPodftToolbar && (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <button

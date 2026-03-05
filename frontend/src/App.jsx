@@ -37,12 +37,9 @@ import InstrumentsPage from "./pages/InstrumentsPage";
 import AccountsPage from "./pages/AccountsPage";
 import UnityExchangePage from "./pages/UnityExchangePage";
 
-// ---------------------------
-// helpers
-// ---------------------------
 const getToken = () => localStorage.getItem("token");
 
-// Подсветка меню: активна и на вложенных роутах
+// Подсветка
 const isActivePath = (pathname, to) => {
   if (to === "/") return pathname === "/";
   return pathname === to || pathname.startsWith(to + "/");
@@ -60,9 +57,6 @@ const NavButton = ({ to, icon: Icon, label }) => {
   );
 };
 
-// ---------------------------
-// Protected guard (token check)
-// ---------------------------
 const ProtectedRoute = ({ token }) => {
   const location = useLocation();
   const authed = !!token;
@@ -105,20 +99,15 @@ const AppLayout = () => {
         <Outlet />
       </main>
 
-      {/* ОДИН toast container на всё приложение */}
       <ToastContainer position="bottom-right" theme="light" />
     </div>
   );
 };
 
-// ---------------------------
-// Login wrapper (redirect to next)
-// ---------------------------
 const LoginRoute = ({ token, onLogin }) => {
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
-  // если уже авторизован — не показываем логин
   useEffect(() => {
     if (token) navigate("/", { replace: true });
   }, [token, navigate]);
@@ -144,13 +133,11 @@ const LoginRoute = ({ token, onLogin }) => {
 function App() {
   const [isLoading, setIsLoading] = useState(true);
 
-  // источник истины: token
   const [token, setToken] = useState(() => getToken());
 
   useEffect(() => {
     setIsLoading(false);
 
-    // изменения token из другой вкладки
     const onStorage = (e) => {
       if (e.key === "token") setToken(e.newValue);
     };
@@ -164,7 +151,6 @@ function App() {
   };
 
   const handleLoginState = () => {
-    // LoginPage сохраняет token в localStorage → подтягиваем сюда
     setToken(getToken());
   };
 

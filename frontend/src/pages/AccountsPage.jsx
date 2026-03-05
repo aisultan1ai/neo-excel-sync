@@ -1,4 +1,3 @@
-// src/pages/AccountsPage.jsx
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { api } from "../api";
 import { toast } from "react-toastify";
@@ -30,9 +29,8 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-// =====================================================
 // CONSTS
-// =====================================================
+
 const PROVIDERS = ["Binance", "ByBit", "OKX", "HRP", "Winermute"];
 
 const TX_TYPES = [
@@ -67,7 +65,7 @@ const normalizeTransfer = (t) => ({
 });
 
 const normalizeEdge = (e) => {
-  // чтобы при загрузке схемы стрелки всегда были "как реальные"
+
   const id = e?.id ?? `e-${e?.source}-${e?.target}-${Date.now()}`;
   const label = e?.label ?? "";
   return {
@@ -87,9 +85,8 @@ const normalizeEdge = (e) => {
   };
 };
 
-// =====================================================
 // API CALLS
-// =====================================================
+
 const fetchCryptoAccounts = async () => unwrap((await api.get("/crypto/accounts")).data);
 const createCryptoAccount = async (payload) =>
   unwrap((await api.post("/crypto/accounts", payload)).data);
@@ -102,8 +99,6 @@ const fetchTransfers = async () => unwrap((await api.get("/crypto/transfers")).d
 const createTransfer = async (payload) =>
   unwrap((await api.post("/crypto/transfers", payload)).data);
 
-// ВАЖНО: этот endpoint должен быть добавлен на backend:
-// DELETE /api/crypto/transfers/{transfer_id}
 const deleteTransferApi = async (id) =>
   unwrap((await api.delete(`/crypto/transfers/${id}`)).data);
 
@@ -112,9 +107,8 @@ const createSchemeApi = async (payload) =>
   unwrap((await api.post("/crypto/schemes", payload)).data);
 const deleteSchemeApi = async (id) => unwrap((await api.delete(`/crypto/schemes/${id}`)).data);
 
-// =====================================================
 // UI PRIMITIVES
-// =====================================================
+
 const Modal = ({ open, title, subtitle, children, onClose, footer, width = 860 }) => {
   useEffect(() => {
     if (!open) return;
@@ -367,9 +361,8 @@ const ProviderInput = ({
   );
 };
 
-// =====================================================
 // REACT FLOW NODE
-// =====================================================
+
 const AccountNode = ({ data }) => {
   return (
     <div
@@ -439,9 +432,8 @@ const AccountNode = ({ data }) => {
 };
 const nodeTypes = { accountNode: AccountNode };
 
-// =====================================================
 // MODALS
-// =====================================================
+
 const EdgeTxModal = ({ open, onClose, onSubmit, fromTitle, toTitle }) => {
   const [form, setForm] = useState({ type: "transfer", amount: "", asset: "USDT", comment: "" });
 
@@ -611,13 +603,6 @@ const SaveSchemeModal = ({ open, onClose, onSave }) => {
   );
 };
 
-// =====================================================
-// VISUAL EDITOR
-// FIX для "сохранил схему — не видно стрелки":
-// 1) при загрузке схемы нормализуем edges (markerEnd/style/labelStyle)
-// 2) при добавлении edge сохраняем data.tx + label
-// 3) при сохранении схемы сохраняем ТЕКУЩИЕ edges из state (уже с нормальными стилями)
-// =====================================================
 const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSaveScheme }) => {
   const baseNodes = useMemo(() => {
     if (initialData?.nodes && Array.isArray(initialData.nodes) && initialData.nodes.length > 0) {
@@ -856,9 +841,8 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
   );
 };
 
-// =====================================================
 // CRYPTO TAB
-// =====================================================
+
 const CryptoTab = () => {
   const { confirm, ConfirmDialog } = useConfirm();
 
@@ -963,7 +947,6 @@ const CryptoTab = () => {
     }
   };
 
-  // ✅ custom confirm
   const deleteAccount = async (id) => {
     const ok = await confirm({
       title: "Удалить счет?",
@@ -1040,7 +1023,6 @@ const CryptoTab = () => {
     }
   };
 
-  // ✅ custom confirm
   const deleteTransfer = async (id) => {
     const ok = await confirm({
       title: "Удалить операцию?",
@@ -1071,7 +1053,6 @@ const CryptoTab = () => {
     }
   };
 
-  // ✅ custom confirm
   const deleteScheme = async (id) => {
     const ok = await confirm({
       title: "Удалить схему?",
@@ -1725,9 +1706,8 @@ const CryptoTab = () => {
   );
 };
 
-// =====================================================
 // MAIN PAGE
-// =====================================================
+
 const AccountsPage = () => {
   return (
     <div

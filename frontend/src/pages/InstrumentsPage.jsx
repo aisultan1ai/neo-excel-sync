@@ -65,7 +65,6 @@ const SimpleFileBlock = ({
 
   const handleFile = (e) => processFile(e.target.files[0]);
 
-  // Drag & Drop handlers
   const onDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
@@ -699,7 +698,6 @@ const ReconcileView = () => {
 
   const [twoRes, setTwoRes] = useState(null);
 
-  // --- duplicates ---
   const [fd, setFd] = useState(null);
   const [hd, setHd] = useState([]);
   const [paperCol, setPaperCol] = useState("Ценная бумага");

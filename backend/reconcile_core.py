@@ -1,5 +1,3 @@
-
-# reconcile_core.py
 from __future__ import annotations
 
 import re
@@ -1148,11 +1146,6 @@ def _build_pretty_tables(
         "vol_ss": _vol_pretty(volume_by_symbol_side),
     }
 
-
-# -----------------------------
-# Export XLSX + Styling
-# -----------------------------
-
 SHEET_SUMMARY = "Сводка"
 SHEET_MATCHES = "Совпадения"
 SHEET_MISSING = "Нет в Unity"
@@ -1500,10 +1493,7 @@ def _reconcile_core(
     )
     return exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, None, used_unity_offset
 
-
-# -----------------------------
 # Public API
-# -----------------------------
 
 def reconcile_to_report(
     unity_xlsx_path: Path,
@@ -1521,15 +1511,12 @@ def reconcile_to_report(
         params=params,
     )
 
-    # 1) STRICT
     matched_strict, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(unity_n, exchange_n, "match_key")
 
-    # 2) FUZZY
     matched_fuzzy = pd.DataFrame(columns=["exchange_idx", "unity_idx", "score"])
     if params.enable_fuzzy:
         matched_fuzzy, missing_in_unity, extra_in_unity = _reconcile_fuzzy(missing_in_unity, extra_in_unity, params)
 
-    # 3) NOTIONAL fallback
     matched_notional = pd.DataFrame(columns=["exchange_idx", "unity_idx", "key"])
     if params.enable_notional_fallback:
         matched_notional, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(extra_in_unity, missing_in_unity, "notional_key")
@@ -1544,7 +1531,6 @@ def reconcile_to_report(
 
     matched_all = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=["exchange_idx", "unity_idx", "match_type", "key_used", "score"])
 
-    # Status tables
     ex_status = exchange_n.copy()
     ex_status["status"] = "НЕТ_В_UNITY"
     ex_status["matched_unity_idx"] = np.nan
@@ -1588,7 +1574,6 @@ def reconcile_to_report(
     if contract_map:
         warning = (warning + " | " if warning else "") + f"OKX contracts→base: {contract_map}"
 
-    # Volume recon
     volume_by_symbol = None
     volume_by_symbol_side = None
 
@@ -1704,7 +1689,6 @@ def reconcile_to_report_with_preview(
     """
     params = params or ReconcileParams()
 
-    # Run reconcile, but we also need preview frames.
     exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, contract_map, used_unity_offset = _reconcile_core(
         unity_xlsx_path=unity_xlsx_path,
         exchange_path=exchange_path,

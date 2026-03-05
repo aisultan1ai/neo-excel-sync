@@ -17,13 +17,12 @@ import {
 import { toast } from "react-toastify";
 
 const SplitsPage = () => {
-  // --- СОСТОЯНИЕ ДЛЯ ПРОВЕРКИ (ОСНОВНОЕ) ---
+
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  // --- СОСТОЯНИЕ ДЛЯ СПРАВОЧНИКА ---
   const [refFile, setRefFile] = useState(null);
   const [uploadingRef, setUploadingRef] = useState(false);
   const [viewData, setViewData] = useState(null);
@@ -88,7 +87,6 @@ const SplitsPage = () => {
       setRefFile(null);
       toast.success("Справочник сплитов успешно обновлен!");
 
-      // Если таблица открыта, обновим её данные
       if (showTable) {
         handleViewCurrentList(true); // true = force update
       }

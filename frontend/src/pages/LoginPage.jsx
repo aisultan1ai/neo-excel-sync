@@ -19,7 +19,7 @@ const LoginPage = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [systemStatus, setSystemStatus] = useState("CHECKING");
 
-  // Проверка доступности backend
+  // Проверка доступ backend
   useEffect(() => {
     const checkHealth = async () => {
       try {
@@ -34,7 +34,6 @@ const LoginPage = ({ onLogin }) => {
     checkHealth();
   }, []);
 
-  // если токен уже есть — не показываем логин
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;

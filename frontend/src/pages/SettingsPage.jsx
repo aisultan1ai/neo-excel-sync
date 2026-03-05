@@ -85,7 +85,6 @@ const SettingsPage = () => {
     const toastId = toast.loading("Загрузка...");
     try {
       const res = await axios.post("/api/settings/upload-split-list", formData);
-      // Direct state update is fine here since it comes from server response
       setSettings((prev) => ({ ...prev, split_list_path: res.data.new_path }));
       toast.update(toastId, {
         render: "Файл обновлен",

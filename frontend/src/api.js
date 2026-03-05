@@ -15,7 +15,7 @@ api.interceptors.response.use(
   (err) => {
     if (err?.response?.status === 401) {
       localStorage.removeItem("token");
-      window.location.reload(); // вернёт на Login
+      window.location.reload();
     }
     return Promise.reject(err);
   }
