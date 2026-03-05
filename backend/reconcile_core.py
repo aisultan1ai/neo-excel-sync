@@ -19,6 +19,25 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 
 # -----------------------------
+# Sheet names (single source of truth)
+# -----------------------------
+
+SHEET_SUMMARY = "Сводка"
+SHEET_MATCHES = "Совпадения"
+SHEET_MISSING = "Нет в Unity"
+SHEET_EXTRA = "Лишнее в Unity"
+SHEET_UNITY_STATUS = "Статус Unity"
+SHEET_VOLUME_SYMBOL = "Объем Инстр"
+SHEET_VOLUME_SYMBOL_SIDE = "Объем Инстр Сторона"
+
+
+def sheet_exchange_status(exchange_name: str) -> str:
+    # Excel sheet name limit: 31 chars
+    name = f"Статус {exchange_name}"
+    return name[:31]
+
+
+# -----------------------------
 # DTO / Config
 # -----------------------------
 
@@ -250,20 +269,20 @@ def _detect_okx_header_row(path: Path, max_rows: int = 20) -> int:
 
     for i in range(min(max_rows, len(raw))):
         vals = raw.iloc[i].tolist()
-        # базовые сигналы
         has_time = row_has(["time"], vals)
         has_symbol = row_has(["symbol"], vals) or row_has(["instrument"], vals) or row_has(["inst"], vals)
         has_action = row_has(["action"], vals) or row_has(["side"], vals) or row_has(["direction"], vals)
         if has_time and has_symbol and has_action:
             return i
 
+    # в большинстве OKX выгрузок header на 1
     return 1
 
 
 def _read_okx_xlsx(path: Path) -> Tuple[pd.DataFrame, Optional[int]]:
     """
     OKX excel often:
-      Row0: UID... / Account Type... / Time Zone:UTC+5
+      Row0..: UID... / Account Type... / Time Zone:UTC+5
       Далее: строка с заголовками может быть не строго на 1
     """
     tz_offset = None
@@ -300,7 +319,6 @@ def _prepare_okx_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     out.columns = [str(c).replace("\ufeff", "").strip() for c in out.columns]
 
-    # required for normalization
     col_time = _pick_col(out, ["Time", "Trade Time", "Fill Time", "Timestamp"], "Insert Time(Time)")
     col_symbol = _pick_col(out, ["Symbol", "Instrument", "Inst", "Trading Pair", "Currency Pair"], "Symbol")
     col_side = _pick_col(out, ["Action", "Side", "Direction"], "Side")
@@ -466,7 +484,6 @@ def _normalize_exchange_common(
     out["qty"] = out["Quantity"]
     out["price"] = out["Price"]
 
-    # dayfirst=True безопасно для DD.MM.YYYY и не ломает ISO 'YYYY-MM-DD ...'
     out["trade_dt_local"] = pd.to_datetime(out["Insert Time"], dayfirst=True, errors="coerce")
     out["trade_dt_utc"] = out["trade_dt_local"] - pd.Timedelta(hours=int(time_offset_hours))
     out["minute_utc"] = out["trade_dt_utc"].dt.floor("min")
@@ -666,7 +683,9 @@ def _reconcile_fuzzy(
 
         if best_uid is not None:
             used_unity.add(best_uid)
-            matched_rows.append({"exchange_idx": int(brow["_idx"]), "unity_idx": int(best_uid), "score": float(best_score)})
+            matched_rows.append(
+                {"exchange_idx": int(brow["_idx"]), "unity_idx": int(best_uid), "score": float(best_score)}
+            )
 
     matched_fuzzy = pd.DataFrame(matched_rows, columns=["exchange_idx", "unity_idx", "score"])
 
@@ -849,7 +868,7 @@ def _build_pretty_tables(
         "Net commission amount": "U_Комиссия",
     })
 
-    # 01_Совпадения
+    # --- Matches ---
     m = matched_all.copy()
     if "score" not in m.columns:
         m["score"] = np.nan
@@ -858,7 +877,7 @@ def _build_pretty_tables(
 
     m = m.merge(ex_view, on="exchange_idx", how="left").merge(u_view, on="unity_idx", how="left")
 
-    # --- Deltas ---
+    # Deltas
     ex_utc = f"{p}UTC"
     ex_qty = f"{p}Qty"
     ex_price = f"{p}Цена"
@@ -886,14 +905,13 @@ def _build_pretty_tables(
         "unity_idx": "Unity_idx",
     })
 
-    # Сортировка: сначала большие расхождения
+    # Sort: show biggest mismatches first (if any)
     if "ΔОбъем" in m.columns:
         m["_abs_diff"] = pd.to_numeric(m["ΔОбъем"], errors="coerce").abs()
         m = m.sort_values(["_abs_diff"], ascending=False).drop(columns=["_abs_diff"])
     elif "Δt_sec" in m.columns:
         m = m.sort_values(["Δt_sec"], ascending=True)
 
-    # Колонки
     full_front = [c for c in [
         "Тип_совпадения", "Ключ", "Score", "Δt_sec", "ΔQty", "ΔЦена", "ΔОбъем",
         f"{p}TradeID", f"{p}OrderID", f"{p}Время", f"{p}UTC", f"{p}Символ", f"{p}Сторона", f"{p}Qty", f"{p}Цена", f"{p}Объем",
@@ -915,7 +933,7 @@ def _build_pretty_tables(
         ] if c in m_pretty.columns]
         m_pretty = m_pretty[compact_cols].copy()
 
-    # 02_Нет_в_Unity
+    # --- Missing in Unity ---
     miss = missing_in_unity.copy()
     miss = _safe_rename(miss, {
         "Trade ID": "TradeID",
@@ -934,7 +952,7 @@ def _build_pretty_tables(
     if "Символ" in miss_pretty.columns and "Время" in miss_pretty.columns:
         miss_pretty = miss_pretty.sort_values(["Символ", "Время"], ascending=[True, True])
 
-    # 03_Лишнее_в_Unity
+    # --- Extra in Unity ---
     extra = extra_in_unity.copy()
     extra = _safe_rename(extra, {
         "ID": "ID",
@@ -952,11 +970,10 @@ def _build_pretty_tables(
     if "Символ" in extra_pretty.columns and "Время" in extra_pretty.columns:
         extra_pretty = extra_pretty.sort_values(["Символ", "Время"], ascending=[True, True])
 
-    # 04/05 Статусы
+    # --- Status tables ---
     exs = ex_status.copy()
     uns = uni_status.copy()
 
-    # Exchange -> Unity ID (по matched_unity_idx)
     u_id_map: Dict[int, Any] = unity_n["ID"].to_dict() if "ID" in unity_n.columns else {}
     if "matched_unity_idx" in exs.columns:
         def _map_uid(x: Any) -> str:
@@ -985,7 +1002,6 @@ def _build_pretty_tables(
     exs_cols = _cols(exs, ["Статус", "TradeID", "OrderID", "Время", "Символ", "Сторона", "Qty", "Цена", "Объем", "Связанный_Unity_ID"])
     exs_pretty = exs[exs_cols].copy() if exs_cols else exs
 
-    # Unity -> Exchange Trade ID (по matched_exchange_idx)
     ex_tid_map: Dict[int, Any] = exchange_n["Trade ID"].to_dict() if "Trade ID" in exchange_n.columns else {}
     if "matched_exchange_idx" in uns.columns:
         def _map_etid(x: Any) -> str:
@@ -1014,7 +1030,7 @@ def _build_pretty_tables(
     uns_cols = _cols(uns, ["Статус", "ID", "Время", "Instrument", "Символ", "Сторона", "Qty", "Цена", "Объем", f"Связанный_{exchange_name}_TradeID"])
     uns_pretty = uns[uns_cols].copy() if uns_cols else uns
 
-    # Volume pretty
+    # --- Volume pretty ---
     def _vol_pretty(v: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
         if v is None:
             return None
@@ -1037,7 +1053,6 @@ def _build_pretty_tables(
             "status": "Статус",
         })
 
-        # sort by abs ΔОбъем
         if "ΔОбъем" in vv.columns:
             vv["_absV"] = pd.to_numeric(vv["ΔОбъем"], errors="coerce").abs()
             vv = vv.sort_values(["_absV"], ascending=False).drop(columns=["_absV"])
@@ -1070,8 +1085,8 @@ def _build_pretty_tables(
 
 def _clean_df_for_excel(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Убирает "nan/NaT" как текст и бесконечности.
-    Обычный NaN в to_excel и так будет пустой — но это помогает, если колонку где-то привели к str.
+    Убирает бесконечности и "nan/NaT" как текст.
+    NaN в to_excel будет пустой, но если колонка стала object/str — лучше подчистить.
     """
     out = df.copy()
     out = out.replace([np.inf, -np.inf], np.nan)
@@ -1151,40 +1166,44 @@ def _export_report_xlsx(
     )
 
     with pd.ExcelWriter(report_path, engine="openpyxl") as writer:
-        _clean_df_for_excel(summary_df).to_excel(writer, sheet_name="00_Сводка", index=False)
+        _clean_df_for_excel(summary_df).to_excel(writer, sheet_name=SHEET_SUMMARY, index=False)
 
-        _clean_df_for_excel(matched_pretty).to_excel(writer, sheet_name="01_Совпадения", index=False)
-        _clean_df_for_excel(missing_pretty).to_excel(writer, sheet_name="02_Нет_в_Unity", index=False)
-        _clean_df_for_excel(extra_pretty).to_excel(writer, sheet_name="03_Лишнее_в_Unity", index=False)
+        _clean_df_for_excel(matched_pretty).to_excel(writer, sheet_name=SHEET_MATCHES, index=False)
+        _clean_df_for_excel(missing_pretty).to_excel(writer, sheet_name=SHEET_MISSING, index=False)
+        _clean_df_for_excel(extra_pretty).to_excel(writer, sheet_name=SHEET_EXTRA, index=False)
 
-        _clean_df_for_excel(ex_status_pretty).to_excel(writer, sheet_name=f"04_Статус_{exchange_name}", index=False)
-        _clean_df_for_excel(unity_status_pretty).to_excel(writer, sheet_name="05_Статус_Unity", index=False)
+        _clean_df_for_excel(ex_status_pretty).to_excel(writer, sheet_name=sheet_exchange_status(exchange_name), index=False)
+        _clean_df_for_excel(unity_status_pretty).to_excel(writer, sheet_name=SHEET_UNITY_STATUS, index=False)
 
         if volume_by_symbol_pretty is not None:
-            _clean_df_for_excel(volume_by_symbol_pretty).to_excel(writer, sheet_name="06_Объем_Инстр", index=False)
+            _clean_df_for_excel(volume_by_symbol_pretty).to_excel(writer, sheet_name=SHEET_VOLUME_SYMBOL, index=False)
         if volume_by_symbol_side_pretty is not None:
-            _clean_df_for_excel(volume_by_symbol_side_pretty).to_excel(writer, sheet_name="07_Объем_Инстр_Сторона", index=False)
+            _clean_df_for_excel(volume_by_symbol_side_pretty).to_excel(writer, sheet_name=SHEET_VOLUME_SYMBOL_SIDE, index=False)
 
         if params.export_debug_sheets:
             if top_diffs_strict is not None:
-                _clean_df_for_excel(top_diffs_strict).to_excel(writer, sheet_name="90_TopDiffs_STRICT", index=False)
+                _clean_df_for_excel(top_diffs_strict).to_excel(writer, sheet_name="TopDiffs STRICT", index=False)
             if top_diffs_notional is not None:
-                _clean_df_for_excel(top_diffs_notional).to_excel(writer, sheet_name="91_TopDiffs_Объем", index=False)
+                _clean_df_for_excel(top_diffs_notional).to_excel(writer, sheet_name="TopDiffs Объем", index=False)
             if raw_exchange is not None:
-                _clean_df_for_excel(raw_exchange).to_excel(writer, sheet_name=f"RAW_{exchange_name}", index=False)
+                _clean_df_for_excel(raw_exchange).to_excel(writer, sheet_name=f"RAW {exchange_name}"[:31], index=False)
             if raw_unity is not None:
-                _clean_df_for_excel(raw_unity).to_excel(writer, sheet_name="RAW_Unity", index=False)
+                _clean_df_for_excel(raw_unity).to_excel(writer, sheet_name="RAW Unity", index=False)
 
     _style_workbook(report_path, params)
 
 
-def _apply_excel_table(ws) -> None:
+def _apply_excel_table(ws, idx: int) -> None:
     """Делает лист таблицей Excel (полоски, фильтры, аккуратный вид)."""
     if ws.max_row < 2 or ws.max_column < 1:
         return
 
     safe = re.sub(r"[^A-Za-z0-9_]", "_", ws.title)
-    name = f"T_{safe}"[:250]
+    if not safe.strip("_"):
+        safe = "Sheet"
+
+    # table name must be unique in workbook and start with a letter
+    name = f"T{idx}_{safe}"[:250]
 
     tab = Table(displayName=name, ref=ws.dimensions)
     tab.tableStyleInfo = TableStyleInfo(
@@ -1200,14 +1219,14 @@ def _apply_excel_table(ws) -> None:
 def _style_workbook(report_path: Path, params: ReconcileParams) -> None:
     wb = load_workbook(report_path)
 
-    for ws in wb.worksheets:
+    for i, ws in enumerate(wb.worksheets, start=1):
         if ws.max_row < 1 or ws.max_column < 1:
             continue
 
         _apply_sheet_basics(ws)
         _apply_header_style(ws)
         _apply_auto_filter(ws)
-        _apply_excel_table(ws)
+        _apply_excel_table(ws, i)
         _apply_column_formats(ws, params)
         _apply_conditional_styles(ws)
         _autosize_columns(ws)
@@ -1435,7 +1454,7 @@ def reconcile_to_report(
     uni_status["status"] = "ЛИШНЕЕ_В_UNITY"
     uni_status["matched_exchange_idx"] = np.nan
 
-    def _apply_matches(mdf: pd.DataFrame, label: str):
+    def _apply_matches(mdf: pd.DataFrame, label: str) -> None:
         if mdf is None or mdf.empty:
             return
         for _, r in mdf.iterrows():
@@ -1593,13 +1612,13 @@ def reconcile_to_report_with_preview(
 
     wb = pd.ExcelFile(result.report_path)
     sheet_map = {
-        "matches": "Совпадения",
-        "missing": "Нет в Unity",
-        "extra": "Лишнее в Unity",
-        "exchange_status": f"Статус_{result.summary.exchange_name}",
-        "unity_status": "Статус Unity",
-        "volume_symbol": "Объем Инстр",
-        "volume_symbol_side": "Объем Инстр Сторона",
+        "matches": SHEET_MATCHES,
+        "missing": SHEET_MISSING,
+        "extra": SHEET_EXTRA,
+        "exchange_status": sheet_exchange_status(result.summary.exchange_name),
+        "unity_status": SHEET_UNITY_STATUS,
+        "volume_symbol": SHEET_VOLUME_SYMBOL,
+        "volume_symbol_side": SHEET_VOLUME_SYMBOL_SIDE,
     }
 
     preview: Dict[str, List[Dict[str, Any]]] = {}
@@ -1607,9 +1626,17 @@ def reconcile_to_report_with_preview(
         if sheet_name not in wb.sheet_names:
             preview[key] = []
             continue
+
         df = wb.parse(sheet_name=sheet_name)
         if preview_limit and len(df) > preview_limit:
             df = df.head(preview_limit)
+
+        # make datetimes frontend-friendly (optional, but helps)
+        df = df.copy()
+        for col in df.columns:
+            if np.issubdtype(df[col].dtype, np.datetime64):
+                df[col] = pd.to_datetime(df[col], errors="coerce").dt.strftime("%Y-%m-%d %H:%M:%S")
+
         df = df.replace({np.nan: None})
         preview[key] = df.to_dict(orient="records")
 
