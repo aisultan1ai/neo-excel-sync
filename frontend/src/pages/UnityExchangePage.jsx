@@ -296,7 +296,7 @@ const UnityExchangePage = () => {
     }
   };
 
-  const accept = exchangeType === "BINANCE" ? ".csv,.txt" : ".xlsx,.xls";
+  const accept = exchangeType === "BINANCE" ? ".csv,.txt,.xlsx,.xls" : ".xlsx,.xls";
 
   return (
     <div style={{ width: "100%", height: "calc(100vh - 40px)", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -331,7 +331,7 @@ const UnityExchangePage = () => {
           <FileCard title="Unity (.xlsx)" color="#3b82f6" file={unityFile} setFile={setUnityFile} accept=".xlsx,.xls" />
           <div style={{ width: 1, background: "#e2e8f0", margin: "10px 0" }} />
           <FileCard
-            title={exchangeType === "BINANCE" ? "Binance (.csv)" : "OKX (.xlsx)"}
+            title={exchangeType === "BINANCE" ? "Binance (.csv/.xlsx)" : "OKX (.xlsx)"}
             color="#8b5cf6"
             file={exchangeFile}
             setFile={setExchangeFile}

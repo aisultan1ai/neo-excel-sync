@@ -109,9 +109,7 @@ class ReconcileResult:
     summary: ReconcileSummary
 
 
-# -----------------------------
 # Helpers (text/columns/num)
-# -----------------------------
 
 def _norm_col(s: Any) -> str:
     s2 = str(s).replace("\ufeff", "").strip()
@@ -265,6 +263,21 @@ def _read_binance_csv(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
             pass
     return pd.read_csv(path, engine="python")
 
+def _read_binance_file(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
+    """
+    Binance может быть:
+      - CSV/TXT (с разными разделителями)
+      - XLSX/XLS
+    """
+    suf = path.suffix.lower()
+
+    if suf in {".xlsx", ".xls"}:
+        df = pd.read_excel(path)
+        df.columns = [str(c).replace("\ufeff", "").strip() for c in df.columns]
+        return df
+
+    # иначе читаем как CSV/TXT
+    return _read_binance_csv(path, delimiter)
 
 def _detect_okx_header_row(path: Path, max_rows: int = 25) -> int:
     """
@@ -404,9 +417,7 @@ def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     return std
 
 
-# -----------------------------
 # Normalization
-# -----------------------------
 
 def _normalize_unity(df: pd.DataFrame, params: ReconcileParams) -> Tuple[pd.DataFrame, int]:
     need_cols = ["Instrument", "Side", "Transact time", "Price"]
@@ -1446,7 +1457,7 @@ def _reconcile_core(
     trading_unit_col: Optional[str] = None
 
     if exchange_type == "BINANCE":
-        exchange_raw0 = _read_binance_csv(exchange_path, params.binance_delimiter)
+        exchange_raw0 = _read_binance_file(exchange_path, params.binance_delimiter)
         exchange_raw = _prepare_binance_to_standard(exchange_raw0)
 
         exchange_name = "Binance"

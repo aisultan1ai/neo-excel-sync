@@ -1,4 +1,3 @@
-# database_manager.py
 from __future__ import annotations
 
 import hashlib
@@ -374,7 +373,7 @@ def init_database():
                 """
             )
 
-            # PODFT SNAPSHOT TRADES  ✅ FIXED
+            # PODFT SNAPSHOT TRADES
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS podft_snapshot_trades
@@ -415,7 +414,6 @@ def init_database():
                 """
             )
 
-            # upgrades for older DBs
             _safe_ddl(
                 cursor,
                 "ALTER TABLE podft_snapshot_trades ADD COLUMN IF NOT EXISTS raw JSONB",
@@ -609,10 +607,8 @@ def reset_all_clients_statuses():
     finally:
         conn.close()
 
-
-# -------------------------
 # USERS
-# -------------------------
+
 def get_user_by_username(username: str):
     """
     Returns tuple (id, username, password_hash, department, is_admin) or None.
