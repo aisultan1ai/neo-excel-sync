@@ -37,6 +37,10 @@ class ReconcileParams:
     okx_contract_value_snap: bool = True  # snap to common values (1, 0.1, 0.01, ...)
     okx_contract_value_candidates: Tuple[float, ...] = (1.0, 0.1, 0.01, 0.001, 0.0001)
 
+    # BYBIT time offset (usually UTC+0 in exports)
+    bybit_utc_offset_hours: Optional[int] = 0
+    bybit_filter_trade_actions: bool = True  # keep only Buy/Sell after mapping
+
     qty_decimals: int = 8
     price_decimals: int = 8
 
@@ -109,7 +113,9 @@ class ReconcileResult:
     summary: ReconcileSummary
 
 
+# -----------------------------
 # Helpers (text/columns/num)
+# -----------------------------
 
 def _norm_col(s: Any) -> str:
     s2 = str(s).replace("\ufeff", "").strip()
@@ -199,6 +205,7 @@ def _extract_symbol_from_unity(inst: Any) -> str:
     Unity Instrument example:
       "[FU]XRPUSDT.Dec2099 :: BINA" -> XRPUSDT
       "[CFD]BTCUSDT.TOD :: OKXE"    -> BTCUSDT
+      "[FU]BTCUSDT.Dec2099 :: BYBE" -> BTCUSDT
     """
     if inst is None or (isinstance(inst, float) and np.isnan(inst)):
         return ""
@@ -228,6 +235,12 @@ def _extract_symbol_from_okx(sym: Any) -> str:
     return re.sub(r"[^A-Z0-9]", "", s)
 
 
+def _extract_symbol_basic(sym: Any) -> str:
+    if sym is None or (isinstance(sym, float) and np.isnan(sym)):
+        return ""
+    return re.sub(r"[^A-Z0-9]", "", str(sym).upper().strip())
+
+
 def _snap_value(x: float, candidates: Tuple[float, ...], rel_tol: float = 0.05) -> Optional[float]:
     if not np.isfinite(x) or x <= 0:
         return None
@@ -249,7 +262,7 @@ def _snap_value(x: float, candidates: Tuple[float, ...], rel_tol: float = 0.05) 
 # Readers
 # -----------------------------
 
-def _read_binance_csv(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
+def _read_delimited_text(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
     if delimiter:
         df = pd.read_csv(path, sep=delimiter, engine="python")
         if df.shape[1] > 1:
@@ -263,6 +276,7 @@ def _read_binance_csv(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
             pass
     return pd.read_csv(path, engine="python")
 
+
 def _read_binance_file(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
     """
     Binance может быть:
@@ -270,14 +284,24 @@ def _read_binance_file(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
       - XLSX/XLS
     """
     suf = path.suffix.lower()
-
     if suf in {".xlsx", ".xls"}:
         df = pd.read_excel(path)
         df.columns = [str(c).replace("\ufeff", "").strip() for c in df.columns]
         return df
+    return _read_delimited_text(path, delimiter)
 
-    # иначе читаем как CSV/TXT
-    return _read_binance_csv(path, delimiter)
+
+def _read_bybit_file(path: Path, delimiter: Optional[str] = None) -> pd.DataFrame:
+    """
+    Bybit обычно XLSX, но может быть CSV.
+    """
+    suf = path.suffix.lower()
+    if suf in {".xlsx", ".xls"}:
+        df = pd.read_excel(path)
+        df.columns = [str(c).replace("\ufeff", "").strip() for c in df.columns]
+        return df
+    return _read_delimited_text(path, delimiter)
+
 
 def _detect_okx_header_row(path: Path, max_rows: int = 25) -> int:
     """
@@ -339,7 +363,6 @@ def _prepare_okx_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     """
     Приводит OKX Excel к стандарту:
       Symbol, Side, Quantity, Price, Insert Time, Trade ID?, Order ID?, Fee?, Commission Asset?, Trading Unit?
-    Делает это "умно" по разным названиям колонок.
     """
     out = df.copy()
     out.columns = [str(c).replace("\ufeff", "").strip() for c in out.columns]
@@ -379,7 +402,7 @@ def _prepare_okx_to_standard(df: pd.DataFrame) -> pd.DataFrame:
 
 def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Приводит Binance CSV к стандарту:
+    Приводит Binance CSV/XLSX к стандарту:
       Symbol, Side, Quantity, Price, Insert Time, Fee?, Commission Asset?
     """
     out = df.copy()
@@ -400,6 +423,8 @@ def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     if not col_qty:
         raise ValueError(f"Не найдена колонка количества (Quantity/Qty/Executed/Amount). Колонки: {list(out.columns)}")
 
+    col_trade_id = _pick_col_optional(out, ["Trade ID", "TradeId", "ID", "id"])
+    col_order_id = _pick_col_optional(out, ["Order ID", "OrderId", "Order id", "Order No.", "Order No"])
     col_fee = _pick_col_optional(out, ["Fee", "Commission", "Trading Fee"])
     col_fee_asset = _pick_col_optional(out, ["Commission Asset", "Fee Unit", "Fee Asset", "Commission Coin"])
 
@@ -409,6 +434,10 @@ def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     std["Side"] = out[col_side]
     std["Quantity"] = out[col_qty]
     std["Price"] = out[col_price]
+    if col_trade_id:
+        std["Trade ID"] = out[col_trade_id]
+    if col_order_id:
+        std["Order ID"] = out[col_order_id]
     if col_fee:
         std["Fee"] = out[col_fee]
     if col_fee_asset:
@@ -417,7 +446,104 @@ def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     return std
 
 
+def _map_bybit_side(v: Any) -> str:
+    """
+    Bybit Direction:
+      - "Buy"/"Sell"
+      - "Long"/"Short" (futures)
+      - possible: "Close Long"/"Close Short"
+    Convert to BUY/SELL.
+    """
+    if v is None or (isinstance(v, float) and np.isnan(v)):
+        return ""
+    s = str(v).strip().upper()
+
+    if s in {"BUY", "B"}:
+        return "BUY"
+    if s in {"SELL", "S"}:
+        return "SELL"
+
+    # Futures style:
+    if s == "LONG":
+        return "BUY"
+    if s == "SHORT":
+        return "SELL"
+
+    # Close variants (be tolerant)
+    if "CLOSE" in s and "LONG" in s:
+        return "SELL"
+    if "CLOSE" in s and "SHORT" in s:
+        return "BUY"
+
+    # Fallback: try keywords
+    if "BUY" in s:
+        return "BUY"
+    if "SELL" in s:
+        return "SELL"
+    if "LONG" in s:
+        return "BUY"
+    if "SHORT" in s:
+        return "SELL"
+    return s
+
+
+def _prepare_bybit_to_standard(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Приводит Bybit (XLSX/CSV) к стандарту:
+      Symbol, Side, Quantity, Price, Insert Time, Trade ID?, Order ID?, Fee?, Commission Asset?
+    Поддерживает реальные заголовки Bybit вроде:
+      Market, Direction, Filled Quantity, Filled Price, Trading Fee, feeCoin, Trasaction ID, Order No., Transaction Time(UTC+0)
+    """
+    out = df.copy()
+    out.columns = [str(c).replace("\ufeff", "").strip() for c in out.columns]
+
+    col_time = _pick_col(
+        out,
+        [
+            "Transaction Time(UTC+0)",
+            "Transaction Time (UTC+0)",
+            "Transaction Time",
+            "Time",
+            "Date(UTC)",
+            "Date (UTC)",
+        ],
+        "Insert Time",
+    )
+
+    col_symbol = _pick_col(out, ["Market", "Symbol", "Pair", "Instrument"], "Symbol")
+    col_side = _pick_col(out, ["Direction", "Side", "Action"], "Side")
+
+    # Prefer Filled Quantity / Filled Price
+    col_qty = _pick_col(out, ["Filled Quantity", "Qty", "Quantity", "Executed", "Amount", "Size"], "Quantity")
+    col_price = _pick_col(out, ["Filled Price", "Price", "Avg Price", "Executed Price"], "Price")
+
+    col_trade_id = _pick_col_optional(out, ["Transaction ID", "Trasaction ID", "Trade ID", "Exec ID", "Fill ID", "ID", "id"])
+    col_order_id = _pick_col_optional(out, ["Order No.", "Order No", "Order ID", "OrderId", "Order id"])
+    col_fee = _pick_col_optional(out, ["Trading Fee", "Fee", "Commission", "ExecFeeV2", "Exec Fee", "ExecFee"])
+    col_fee_asset = _pick_col_optional(out, ["feeCoin", "Fee Coin", "Commission Asset", "Fee Unit", "Fee Asset"])
+
+    std = pd.DataFrame()
+    std["Insert Time"] = out[col_time]
+    std["Symbol"] = out[col_symbol]
+    std["Side"] = out[col_side].map(_map_bybit_side)
+    std["Quantity"] = out[col_qty]
+    std["Price"] = out[col_price]
+
+    if col_trade_id:
+        std["Trade ID"] = out[col_trade_id]
+    if col_order_id:
+        std["Order ID"] = out[col_order_id]
+    if col_fee:
+        std["Fee"] = out[col_fee]
+    if col_fee_asset:
+        std["Commission Asset"] = out[col_fee_asset]
+
+    return std
+
+
+# -----------------------------
 # Normalization
+# -----------------------------
 
 def _normalize_unity(df: pd.DataFrame, params: ReconcileParams) -> Tuple[pd.DataFrame, int]:
     need_cols = ["Instrument", "Side", "Transact time", "Price"]
@@ -604,10 +730,7 @@ def _infer_okx_contract_value_map(
         ratio = num / denom
         if params.okx_contract_value_snap:
             snapped = _snap_value(ratio, params.okx_contract_value_candidates, rel_tol=0.10)
-            if snapped is not None:
-                out[sym] = float(snapped)
-            else:
-                out[sym] = float(ratio)
+            out[sym] = float(snapped if snapped is not None else ratio)
         else:
             out[sym] = float(ratio)
 
@@ -632,7 +755,6 @@ def _group_indices_sorted(df: pd.DataFrame, key_col: str) -> Dict[Any, List[int]
         return {}
     df_sorted = df.sort_values("trade_dt_utc", kind="mergesort")
     idx_map = df_sorted.groupby(key_col, sort=False).indices
-    # idx_map values are positional indexes (numpy arrays)
     res: Dict[Any, List[int]] = {}
     idx_values = df_sorted.index.to_numpy()
     for k, pos in idx_map.items():
@@ -912,7 +1034,7 @@ def _build_pretty_tables(
     params: ReconcileParams,
 ) -> Dict[str, Optional[pd.DataFrame]]:
     exn = exchange_name.strip().lower()
-    prefix = "B" if exn == "binance" else ("O" if exn == "okx" else "X")
+    prefix = "B" if exn == "binance" else ("O" if exn == "okx" else ("Y" if exn == "bybit" else "X"))
     p = f"{prefix}_"
 
     ex_sel = exchange_n.reset_index().rename(columns={"index": "exchange_idx"})
@@ -998,12 +1120,10 @@ def _build_pretty_tables(
         "score": "Score",
     })
 
-    # sort by abs ΔОбъем
     if "ΔОбъем" in m.columns:
         m["_abs_diff"] = pd.to_numeric(m["ΔОбъем"], errors="coerce").abs()
         m = m.sort_values(["_abs_diff"], ascending=False).drop(columns=["_abs_diff"])
 
-    # Column order
     full_front = [c for c in [
         "Тип_совпадения", "Score", "Δt_sec", "ΔQty", "ΔЦена", "ΔОбъем",
         f"{p}TradeID", f"{p}OrderID",
@@ -1112,7 +1232,6 @@ def _build_pretty_tables(
     uns_cols = _cols(uns, ["Статус", "ID", "Время", "Instrument", "Символ", "Сторона", "Qty", "Цена", "Объем", f"Связанный_{exchange_name}_TradeID"])
     uns_pretty = uns[uns_cols].copy() if uns_cols else uns
 
-    # Volume pretty
     def _vol_pretty(v: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
         if v is None:
             return None
@@ -1157,6 +1276,7 @@ def _build_pretty_tables(
         "vol_ss": _vol_pretty(volume_by_symbol_side),
     }
 
+
 SHEET_SUMMARY = "Сводка"
 SHEET_MATCHES = "Совпадения"
 SHEET_MISSING = "Нет в Unity"
@@ -1187,7 +1307,6 @@ def _export_report_xlsx(
     unity_status_pretty: pd.DataFrame,
     volume_by_symbol_pretty: Optional[pd.DataFrame],
     volume_by_symbol_side_pretty: Optional[pd.DataFrame],
-    # debug
     top_diffs_strict: Optional[pd.DataFrame] = None,
     top_diffs_notional: Optional[pd.DataFrame] = None,
     raw_exchange: Optional[pd.DataFrame] = None,
@@ -1244,8 +1363,7 @@ def _export_report_xlsx(
         }
     )
 
-    sheet_exchange_status = f"Статус {exchange_name}"
-    sheet_exchange_status = sheet_exchange_status[:31]  # Excel limit
+    sheet_exchange_status = f"Статус {exchange_name}"[:31]
 
     with pd.ExcelWriter(report_path, engine="openpyxl") as writer:
         _clean_df_for_excel(summary_df).to_excel(writer, sheet_name=SHEET_SUMMARY, index=False)
@@ -1438,14 +1556,9 @@ def _reconcile_core(
     exchange_path: Path,
     exchange_type: str,
     params: ReconcileParams,
-) -> Tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, Optional[pd.DataFrame], Optional[pd.DataFrame], ReconcileSummary, str, str, Optional[pd.DataFrame], Optional[pd.DataFrame], pd.DataFrame, pd.DataFrame]:
-    """
-    Returns:
-      exchange_name, unity_raw, exchange_raw_std, unity_n, exchange_n, matched_all, missing, extra,
-      volume_by_symbol, volume_by_symbol_side, summary, used_offsets info, plus pretty dict items are built later.
-    """
+) -> Tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, Optional[Dict[str, float]], int]:
     exchange_type = exchange_type.upper().strip()
-    if exchange_type not in {"BINANCE", "OKX"}:
+    if exchange_type not in {"BINANCE", "OKX", "BYBIT"}:
         raise ValueError(f"Unsupported exchange_type: {exchange_type}")
 
     unity_raw = pd.read_excel(unity_xlsx_path)
@@ -1462,8 +1575,17 @@ def _reconcile_core(
 
         exchange_name = "Binance"
         exchange_offset = 0  # Binance Date(UTC) usually UTC
-        symbol_mapper = lambda x: re.sub(r"[^A-Z0-9]", "", str(x).upper()) if x is not None else ""
+        symbol_mapper = _extract_symbol_basic
         action_filter = {"BUY", "SELL"}
+
+    elif exchange_type == "BYBIT":
+        exchange_raw0 = _read_bybit_file(exchange_path)
+        exchange_raw = _prepare_bybit_to_standard(exchange_raw0)
+
+        exchange_name = "Bybit"
+        exchange_offset = int(params.bybit_utc_offset_hours or 0)
+        symbol_mapper = _extract_symbol_basic
+        action_filter = {"BUY", "SELL"} if params.bybit_filter_trade_actions else None
 
     else:
         okx_df, tz = _read_okx_xlsx(exchange_path)
@@ -1475,7 +1597,6 @@ def _reconcile_core(
         symbol_mapper = _extract_symbol_from_okx
         action_filter = {"BUY", "SELL"} if params.okx_filter_trade_actions else None
 
-        # build unity first to infer contract values if needed
         unity_n, used_unity_offset = _normalize_unity(unity_raw, params)
         contract_map = _infer_okx_contract_value_map(unity_n, exchange_raw, symbol_mapper, action_filter, params)
         trading_unit_col = "Trading Unit" if "Trading Unit" in exchange_raw.columns else None
@@ -1491,7 +1612,6 @@ def _reconcile_core(
         )
         return exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, contract_map, used_unity_offset
 
-    # BINANCE path
     unity_n, used_unity_offset = _normalize_unity(unity_raw, params)
     exchange_n = _normalize_exchange_common(
         exchange_raw,
@@ -1504,7 +1624,10 @@ def _reconcile_core(
     )
     return exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, None, used_unity_offset
 
+
+# -----------------------------
 # Public API
+# -----------------------------
 
 def reconcile_to_report(
     unity_xlsx_path: Path,
@@ -1540,7 +1663,9 @@ def reconcile_to_report(
     if not matched_notional.empty:
         parts.append(matched_notional.assign(match_type="NOTIONAL").rename(columns={"key": "key_used"}))
 
-    matched_all = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=["exchange_idx", "unity_idx", "match_type", "key_used", "score"])
+    matched_all = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(
+        columns=["exchange_idx", "unity_idx", "match_type", "key_used", "score"]
+    )
 
     ex_status = exchange_n.copy()
     ex_status["status"] = "НЕТ_В_UNITY"
@@ -1696,7 +1821,7 @@ def reconcile_to_report_with_preview(
 ) -> Tuple[ReconcileResult, Dict[str, List[Dict[str, Any]]]]:
     """
     Делает reconcile_to_report, и дополнительно возвращает preview-таблицы для UI.
-    Preview берём из DataFrame (НЕ читаем XLSX обратно) => UI всегда будет показывать данные.
+    Preview берём из DataFrame (НЕ читаем XLSX обратно).
     """
     params = params or ReconcileParams()
 
@@ -1707,15 +1832,12 @@ def reconcile_to_report_with_preview(
         params=params,
     )
 
-    # 1) STRICT
     matched_strict, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(unity_n, exchange_n, "match_key")
 
-    # 2) FUZZY
     matched_fuzzy = pd.DataFrame(columns=["exchange_idx", "unity_idx", "score"])
     if params.enable_fuzzy:
         matched_fuzzy, missing_in_unity, extra_in_unity = _reconcile_fuzzy(missing_in_unity, extra_in_unity, params)
 
-    # 3) NOTIONAL fallback
     matched_notional = pd.DataFrame(columns=["exchange_idx", "unity_idx", "key"])
     if params.enable_notional_fallback:
         matched_notional, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(extra_in_unity, missing_in_unity, "notional_key")
@@ -1727,7 +1849,9 @@ def reconcile_to_report_with_preview(
         parts.append(matched_fuzzy.assign(match_type="FUZZY").assign(key_used=""))
     if not matched_notional.empty:
         parts.append(matched_notional.assign(match_type="NOTIONAL").rename(columns={"key": "key_used"}))
-    matched_all = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=["exchange_idx", "unity_idx", "match_type", "key_used", "score"])
+    matched_all = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(
+        columns=["exchange_idx", "unity_idx", "match_type", "key_used", "score"]
+    )
 
     ex_status = exchange_n.copy()
     ex_status["status"] = "НЕТ_В_UNITY"

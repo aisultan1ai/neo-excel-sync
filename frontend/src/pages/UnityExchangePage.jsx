@@ -183,7 +183,10 @@ const ResultTable = ({ rows }) => {
             {filtered.slice(0, 2000).map((row, i) => (
               <tr key={i}>
                 {headers.map((h) => (
-                  <td key={h} style={{ padding: "8px 12px", borderBottom: "1px solid #f1f5f9", fontSize: 12, fontWeight: 400 }}>
+                  <td
+                    key={h}
+                    style={{ padding: "8px 12px", borderBottom: "1px solid #f1f5f9", fontSize: 12, fontWeight: 400 }}
+                  >
                     {String(row?.[h] ?? "")}
                   </td>
                 ))}
@@ -216,20 +219,28 @@ const UnityExchangePage = () => {
 
   const [params, setParams] = useState({
     unity_utc_offset_hours: null,
+
     okx_utc_offset_hours: null,
+
+    bybit_utc_offset_hours: 0,
+
     qty_decimals: 8,
     price_decimals: 8,
+
     enable_fuzzy: true,
     time_window_seconds: 180,
     qty_rel_tol: 1e-6,
     qty_abs_tol: 0.0,
     price_rel_tol: 1e-6,
     price_abs_tol: 0.0,
+
     enable_notional_fallback: true,
     notional_decimals: 6,
     notional_use_minute_bucket: true,
+
     enable_volume_recon: true,
     volume_group_by_side: true,
+
     binance_delimiter: ";",
     export_debug_sheets: false,
   });
@@ -296,14 +307,26 @@ const UnityExchangePage = () => {
     }
   };
 
-  const accept = exchangeType === "BINANCE" ? ".csv,.txt,.xlsx,.xls" : ".xlsx,.xls";
+  const accept =
+    exchangeType === "BINANCE"
+      ? ".csv,.txt,.xlsx,.xls"
+      : exchangeType === "BYBIT"
+      ? ".csv,.xlsx,.xls"
+      : ".xlsx,.xls";
+
+  const exchangeTitle =
+    exchangeType === "BINANCE"
+      ? "Binance (.csv/.xlsx)"
+      : exchangeType === "BYBIT"
+      ? "Bybit (.xlsx/.csv)"
+      : "OKX (.xlsx)";
 
   return (
     <div style={{ width: "100%", height: "calc(100vh - 40px)", display: "flex", flexDirection: "column", gap: 14 }}>
       <h1 style={{ margin: 0, fontSize: 24, color: "#1e293b", fontWeight: 500 }}>Unity ↔ Биржа</h1>
 
       <div style={{ display: "flex", gap: 10 }}>
-        {["BINANCE", "OKX"].map((t) => (
+        {["BINANCE", "OKX", "BYBIT"].map((t) => (
           <button
             key={t}
             onClick={() => {
@@ -330,13 +353,7 @@ const UnityExchangePage = () => {
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
           <FileCard title="Unity (.xlsx)" color="#3b82f6" file={unityFile} setFile={setUnityFile} accept=".xlsx,.xls" />
           <div style={{ width: 1, background: "#e2e8f0", margin: "10px 0" }} />
-          <FileCard
-            title={exchangeType === "BINANCE" ? "Binance (.csv/.xlsx)" : "OKX (.xlsx)"}
-            color="#8b5cf6"
-            file={exchangeFile}
-            setFile={setExchangeFile}
-            accept={accept}
-          />
+          <FileCard title={exchangeTitle} color="#8b5cf6" file={exchangeFile} setFile={setExchangeFile} accept={accept} />
         </div>
 
         <div style={{ marginTop: 16, borderTop: "1px solid #f1f5f9", paddingTop: 14 }}>
@@ -369,6 +386,19 @@ const UnityExchangePage = () => {
               />
             )}
 
+            {exchangeType === "BYBIT" && (
+              <Input
+                label="Bybit UTC offset"
+                value={params.bybit_utc_offset_hours ?? 0}
+                onChange={(v) =>
+                  setParams((p) => ({
+                    ...p,
+                    bybit_utc_offset_hours: v === "" ? 0 : Number(v),
+                  }))
+                }
+              />
+            )}
+
             {exchangeType === "BINANCE" && (
               <Input
                 label="Binance delimiter"
@@ -379,15 +409,34 @@ const UnityExchangePage = () => {
 
             <Input label="Qty decimals" value={params.qty_decimals} onChange={(v) => setParams((p) => ({ ...p, qty_decimals: Number(v) }))} />
             <Input label="Price decimals" value={params.price_decimals} onChange={(v) => setParams((p) => ({ ...p, price_decimals: Number(v) }))} />
-            <Input label="Notional decimals" value={params.notional_decimals} onChange={(v) => setParams((p) => ({ ...p, notional_decimals: Number(v) }))} />
+            <Input
+              label="Notional decimals"
+              value={params.notional_decimals}
+              onChange={(v) => setParams((p) => ({ ...p, notional_decimals: Number(v) }))}
+            />
 
             <Check label="Fuzzy" checked={params.enable_fuzzy} onChange={(v) => setParams((p) => ({ ...p, enable_fuzzy: v }))} />
+            <Input
+              label="Time window (sec)"
+              value={params.time_window_seconds}
+              onChange={(v) => setParams((p) => ({ ...p, time_window_seconds: Number(v) }))}
+            />
 
-            <Input label="Time window (sec)" value={params.time_window_seconds} onChange={(v) => setParams((p) => ({ ...p, time_window_seconds: Number(v) }))} />
-
-            <Check label="Notional fallback" checked={params.enable_notional_fallback} onChange={(v) => setParams((p) => ({ ...p, enable_notional_fallback: v }))} />
-            <Check label="Use minute bucket" checked={params.notional_use_minute_bucket} onChange={(v) => setParams((p) => ({ ...p, notional_use_minute_bucket: v }))} />
-            <Check label="Export debug sheets" checked={params.export_debug_sheets} onChange={(v) => setParams((p) => ({ ...p, export_debug_sheets: v }))} />
+            <Check
+              label="Notional fallback"
+              checked={params.enable_notional_fallback}
+              onChange={(v) => setParams((p) => ({ ...p, enable_notional_fallback: v }))}
+            />
+            <Check
+              label="Use minute bucket"
+              checked={params.notional_use_minute_bucket}
+              onChange={(v) => setParams((p) => ({ ...p, notional_use_minute_bucket: v }))}
+            />
+            <Check
+              label="Export debug sheets"
+              checked={params.export_debug_sheets}
+              onChange={(v) => setParams((p) => ({ ...p, export_debug_sheets: v }))}
+            />
           </div>
         </div>
 
