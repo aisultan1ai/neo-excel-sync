@@ -544,16 +544,21 @@ def _process_comparison_sync(
 
 
 def _process_unity_exchange_sync(
-    unity_path: str, exchange_path: str, exchange_type: str, params_dict: dict
+    unity_path: str,
+    exchange_path: str,
+    exchange_type: str,
+    params_dict: dict,
+    preview_limit: int,
 ):
     params = ReconcileParams(**(params_dict or {}))
 
-    res = reconcile_to_report(
+    res, preview = reconcile_to_report_with_preview(
         unity_xlsx_path=Path(unity_path),
         exchange_path=Path(exchange_path),
         report_dir=UNITY_EXCHANGE_REPORT_DIR,
         exchange_type=exchange_type,
         params=params,
+        preview_limit=preview_limit,
     )
 
     return {
@@ -561,6 +566,7 @@ def _process_unity_exchange_sync(
         "report_filename": os.path.basename(str(res.report_path)),
         "exchange_name": res.summary.exchange_name,
         "summary": res.summary.__dict__,
+        "preview": preview,   # ✅
     }
 
 
@@ -1753,7 +1759,7 @@ async def run_unity_exchange(
             "exchange_name": result["exchange_name"],
             "report_filename": result["report_filename"],
             "summary": result["summary"],
-            "preview": result.get("preview"),
+            "preview": result["preview"],
         }
 
     except HTTPException:

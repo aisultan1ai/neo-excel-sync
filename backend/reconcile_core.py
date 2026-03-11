@@ -26,53 +26,50 @@ class ReconcileParams:
     # Unity transact time often contains "(UTC+5)"
     unity_utc_offset_hours: Optional[int] = 5  # None => auto-detect from text
 
-    # OKX export often shows "Time Zone:UTC+5" in metadata; if None => autodetect
-    okx_utc_offset_hours: Optional[int] = None
-    okx_filter_trade_actions: bool = True  # keep only Buy/Sell
+    # BINANCE (usually UTC in exports)
+    binance_delimiter: Optional[str] = ";"  # None => auto
 
-    # OKX futures/swap exports often have Amount in "cont" (contracts).
-    # We need to convert contracts -> base qty (e.g., BTC-USDT-SWAP: 1 cont = 0.01 BTC).
-    okx_contract_value_overrides: Dict[str, float] = field(default_factory=dict)  # e.g. {"BTCUSDT": 0.01}
-    okx_contract_value_autodetect: bool = True  # infer from totals vs Unity
-    okx_contract_value_snap: bool = True  # snap to common values (1, 0.1, 0.01, ...)
+    # OKX
+    okx_utc_offset_hours: Optional[int] = None  # None => auto-detect from file metadata (if possible)
+    okx_filter_trade_actions: bool = True  # keep only Buy/Sell
+    okx_contract_value_overrides: Dict[str, float] = field(default_factory=dict)  # {"BTCUSDT": 0.01}
+    okx_contract_value_autodetect: bool = True
+    okx_contract_value_snap: bool = True
     okx_contract_value_candidates: Tuple[float, ...] = (1.0, 0.1, 0.01, 0.001, 0.0001)
 
-    # BYBIT time offset (usually UTC+0 in exports)
-    bybit_utc_offset_hours: Optional[int] = 0
-    bybit_filter_trade_actions: bool = True  # keep only Buy/Sell after mapping
+    # BYBIT
+    bybit_utc_offset_hours: Optional[int] = 0  # Bybit usually UTC+0 in exports
+    bybit_filter_trade_actions: bool = True
 
+    # rounding
     qty_decimals: int = 8
     price_decimals: int = 8
+    notional_decimals: int = 6
 
+    # matching
     enable_fuzzy: bool = True
     time_window_seconds: int = 180  # +- 3 min
+    ignore_time_in_fuzzy: bool = False   # ✅ fuzzy без окна времени
+    match_duplicates_by_time: bool = True  # ✅ strict/notional дубликаты: сортировать по времени или по исходному порядку
 
     qty_rel_tol: float = 1e-6
     qty_abs_tol: float = 0.0
-
     price_rel_tol: float = 1e-6
     price_abs_tol: float = 0.0
 
-    # Notional fallback (qty*price) for remaining rows
     enable_notional_fallback: bool = True
-    notional_decimals: int = 6
     notional_use_minute_bucket: bool = True  # include minute_utc in key to reduce false matches
 
-    # Volume reconciliation (by instrument)
+    # volume reconciliation
     enable_volume_recon: bool = True
-    volume_group_by_side: bool = True  # additional sheet by symbol+side
-
-    # tolerances for volume compare
+    volume_group_by_side: bool = True
     volume_qty_rel_tol: float = 1e-6
     volume_qty_abs_tol: float = 0.0
     volume_notional_rel_tol: float = 1e-6
     volume_notional_abs_tol: float = 0.0
 
-    # Binance delimiter: ';' usually
-    binance_delimiter: Optional[str] = ";"  # None => auto
-
-    # Export
-    export_debug_sheets: bool = False  # True => add TopDiffs + RAW sheets
+    # export
+    export_debug_sheets: bool = False
     export_mode: str = "compact"  # "compact" | "full"
 
 
@@ -89,7 +86,6 @@ class ReconcileSummary:
     missing_in_unity: int
     extra_in_unity: int
 
-    # volume stats (symbol-level)
     volume_symbols_exchange: int
     volume_symbols_unity: int
     volume_symbols_ok: int
@@ -146,23 +142,16 @@ def _pick_col_optional(df: pd.DataFrame, candidates: List[str]) -> Optional[str]
 
 
 def _to_numeric_series(s: pd.Series) -> pd.Series:
-    """
-    Robust numeric parser:
-    - supports decimal comma
-    - strips spaces and NBSP
-    - handles thousands separators
-    """
     if s.dtype != object:
         return pd.to_numeric(s, errors="coerce")
 
     t = s.astype(str).str.replace("\u00a0", "", regex=False).str.replace(" ", "", regex=False)
 
-    # if both "," and "." exist => treat "," as thousands separator
     has_dot = t.str.contains(r"\.", regex=True)
     has_comma = t.str.contains(",", regex=False)
     both = has_dot & has_comma
 
-    t = t.where(~both, t.str.replace(",", "", regex=False))   # remove thousands ","
+    t = t.where(~both, t.str.replace(",", "", regex=False))   # thousands "," remove
     t = t.where(both, t.str.replace(",", ".", regex=False))   # decimal comma -> dot
 
     return pd.to_numeric(t, errors="coerce")
@@ -202,7 +191,7 @@ def _detect_unity_offset_hours_from_text(s: Any, default_hours: int = 5) -> int:
 
 def _extract_symbol_from_unity(inst: Any) -> str:
     """
-    Unity Instrument example:
+    Unity Instrument examples:
       "[FU]XRPUSDT.Dec2099 :: BINA" -> XRPUSDT
       "[CFD]BTCUSDT.TOD :: OKXE"    -> BTCUSDT
       "[FU]BTCUSDT.Dec2099 :: BYBE" -> BTCUSDT
@@ -210,22 +199,16 @@ def _extract_symbol_from_unity(inst: Any) -> str:
     if inst is None or (isinstance(inst, float) and np.isnan(inst)):
         return ""
     s = str(inst).upper().strip()
-
     m = re.search(r"\](?P<sym>[A-Z0-9]+)\.", s)
     if m:
         return m.group("sym")
     m = re.search(r"\](?P<sym>[A-Z0-9]+)", s)
     if m:
         return m.group("sym")
-    return s
+    return re.sub(r"[^A-Z0-9]", "", s)
 
 
 def _extract_symbol_from_okx(sym: Any) -> str:
-    """
-    OKX symbol examples:
-      BTC-USDT-SWAP -> BTCUSDT
-      ETH-USDT      -> ETHUSDT
-    """
     if sym is None or (isinstance(sym, float) and np.isnan(sym)):
         return ""
     s = str(sym).upper().strip().replace(" ", "")
@@ -278,11 +261,6 @@ def _read_delimited_text(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
 
 
 def _read_binance_file(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
-    """
-    Binance может быть:
-      - CSV/TXT (с разными разделителями)
-      - XLSX/XLS
-    """
     suf = path.suffix.lower()
     if suf in {".xlsx", ".xls"}:
         df = pd.read_excel(path)
@@ -292,9 +270,6 @@ def _read_binance_file(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
 
 
 def _read_bybit_file(path: Path, delimiter: Optional[str] = None) -> pd.DataFrame:
-    """
-    Bybit обычно XLSX, но может быть CSV.
-    """
     suf = path.suffix.lower()
     if suf in {".xlsx", ".xls"}:
         df = pd.read_excel(path)
@@ -304,11 +279,6 @@ def _read_bybit_file(path: Path, delimiter: Optional[str] = None) -> pd.DataFram
 
 
 def _detect_okx_header_row(path: Path, max_rows: int = 25) -> int:
-    """
-    OKX Excel иногда имеет метаданные в первых строках.
-    Ищем строку, где встречаются ключевые колонки (Time + Symbol/Instrument + Action/Side).
-    Возвращаем индекс строки (0-based) для header=...
-    """
     try:
         raw = pd.read_excel(path, header=None, nrows=max_rows)
     except Exception:
@@ -329,11 +299,6 @@ def _detect_okx_header_row(path: Path, max_rows: int = 25) -> int:
 
 
 def _read_okx_xlsx(path: Path) -> Tuple[pd.DataFrame, Optional[int]]:
-    """
-    OKX excel often:
-      Row0: UID... / Account Type... / Time Zone:UTC+5
-      Далее: строка с заголовками может быть не строго на 1
-    """
     tz_offset = None
     try:
         head = pd.read_excel(path, header=None, nrows=5)
@@ -360,14 +325,10 @@ def _read_okx_xlsx(path: Path) -> Tuple[pd.DataFrame, Optional[int]]:
 # -----------------------------
 
 def _prepare_okx_to_standard(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Приводит OKX Excel к стандарту:
-      Symbol, Side, Quantity, Price, Insert Time, Trade ID?, Order ID?, Fee?, Commission Asset?, Trading Unit?
-    """
     out = df.copy()
     out.columns = [str(c).replace("\ufeff", "").strip() for c in out.columns]
 
-    col_time = _pick_col(out, ["Time", "Trade Time", "Fill Time", "Timestamp"], "Insert Time(Time)")
+    col_time = _pick_col(out, ["Time", "Trade Time", "Fill Time", "Timestamp"], "Insert Time")
     col_symbol = _pick_col(out, ["Symbol", "Instrument", "Inst", "Trading Pair", "Currency Pair"], "Symbol")
     col_side = _pick_col(out, ["Action", "Side", "Direction"], "Side")
     col_qty = _pick_col(out, ["Amount", "Quantity", "Size", "Filled Amount", "Qty"], "Quantity")
@@ -401,10 +362,6 @@ def _prepare_okx_to_standard(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Приводит Binance CSV/XLSX к стандарту:
-      Symbol, Side, Quantity, Price, Insert Time, Fee?, Commission Asset?
-    """
     out = df.copy()
     out.columns = [str(c).replace("\ufeff", "").strip() for c in out.columns]
 
@@ -414,7 +371,7 @@ def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     col_price = _pick_col(out, ["Price", "Avg Price", "Filled Price"], "Price")
 
     col_qty = None
-    for cand in ["Quantity", "Qty", "Executed", "Amount"]:
+    for cand in ["Quantity", "Qty", "Executed", "Amount", "Filled Amount"]:
         try:
             col_qty = _pick_col(out, [cand], "Quantity")
             break
@@ -434,6 +391,7 @@ def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     std["Side"] = out[col_side]
     std["Quantity"] = out[col_qty]
     std["Price"] = out[col_price]
+
     if col_trade_id:
         std["Trade ID"] = out[col_trade_id]
     if col_order_id:
@@ -447,13 +405,6 @@ def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _map_bybit_side(v: Any) -> str:
-    """
-    Bybit Direction:
-      - "Buy"/"Sell"
-      - "Long"/"Short" (futures)
-      - possible: "Close Long"/"Close Short"
-    Convert to BUY/SELL.
-    """
     if v is None or (isinstance(v, float) and np.isnan(v)):
         return ""
     s = str(v).strip().upper()
@@ -463,19 +414,16 @@ def _map_bybit_side(v: Any) -> str:
     if s in {"SELL", "S"}:
         return "SELL"
 
-    # Futures style:
     if s == "LONG":
         return "BUY"
     if s == "SHORT":
         return "SELL"
 
-    # Close variants (be tolerant)
     if "CLOSE" in s and "LONG" in s:
         return "SELL"
     if "CLOSE" in s and "SHORT" in s:
         return "BUY"
 
-    # Fallback: try keywords
     if "BUY" in s:
         return "BUY"
     if "SELL" in s:
@@ -488,12 +436,6 @@ def _map_bybit_side(v: Any) -> str:
 
 
 def _prepare_bybit_to_standard(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Приводит Bybit (XLSX/CSV) к стандарту:
-      Symbol, Side, Quantity, Price, Insert Time, Trade ID?, Order ID?, Fee?, Commission Asset?
-    Поддерживает реальные заголовки Bybit вроде:
-      Market, Direction, Filled Quantity, Filled Price, Trading Fee, feeCoin, Trasaction ID, Order No., Transaction Time(UTC+0)
-    """
     out = df.copy()
     out.columns = [str(c).replace("\ufeff", "").strip() for c in out.columns]
 
@@ -509,11 +451,8 @@ def _prepare_bybit_to_standard(df: pd.DataFrame) -> pd.DataFrame:
         ],
         "Insert Time",
     )
-
     col_symbol = _pick_col(out, ["Market", "Symbol", "Pair", "Instrument"], "Symbol")
     col_side = _pick_col(out, ["Direction", "Side", "Action"], "Side")
-
-    # Prefer Filled Quantity / Filled Price
     col_qty = _pick_col(out, ["Filled Quantity", "Qty", "Quantity", "Executed", "Amount", "Size"], "Quantity")
     col_price = _pick_col(out, ["Filled Price", "Price", "Avg Price", "Executed Price"], "Price")
 
@@ -567,7 +506,6 @@ def _normalize_unity(df: pd.DataFrame, params: ReconcileParams) -> Tuple[pd.Data
         sample = out["Transact time"].dropna().astype(str).head(20).tolist()
         offset = _detect_unity_offset_hours_from_text(sample[0], default_hours=5) if sample else 5
 
-    # vectorized datetime parse
     tt = out["Transact time"].astype(str).str.replace(r"\s*\(UTC[^\)]*\)\s*", "", regex=True).str.strip()
     out["trade_dt_local"] = pd.to_datetime(tt, dayfirst=True, errors="coerce")
     out["trade_dt_utc"] = out["trade_dt_local"] - pd.Timedelta(hours=int(offset))
@@ -608,16 +546,11 @@ def _normalize_exchange_common(
     params: ReconcileParams,
     *,
     time_offset_hours: int = 0,
-    symbol_mapper: Callable[[Any], str] = lambda x: str(x).upper().strip() if x is not None else "",
+    symbol_mapper: Callable[[Any], str],
     action_filter: Optional[set[str]] = None,
     contract_value_map: Optional[Dict[str, float]] = None,
     trading_unit_col: Optional[str] = None,
 ) -> pd.DataFrame:
-    """
-    Standard exchange schema required columns:
-      Symbol, Side, Quantity, Price, Insert Time
-    Insert Time is treated as LOCAL time with time_offset_hours.
-    """
     need_cols = ["Symbol", "Side", "Quantity", "Price", "Insert Time"]
     for c in need_cols:
         if c not in df.columns:
@@ -640,7 +573,6 @@ def _normalize_exchange_common(
     out["symbol"] = out["Symbol"].astype(str).str.strip().str.upper()
     out["side"] = out["Side"].astype(str).str.strip().str.upper()
 
-    # contracts -> base qty conversion (OKX cont)
     mult = pd.Series(1.0, index=out.index)
     if contract_value_map:
         mult = out["symbol"].map(lambda s: float(contract_value_map.get(str(s), 1.0))).astype(float)
@@ -654,7 +586,6 @@ def _normalize_exchange_common(
 
     out["price"] = price
 
-    # datetime parse
     out["trade_dt_local"] = pd.to_datetime(out["Insert Time"], dayfirst=True, errors="coerce")
     out["trade_dt_utc"] = out["trade_dt_local"] - pd.Timedelta(hours=int(time_offset_hours))
     out["minute_utc"] = out["trade_dt_utc"].dt.floor("min")
@@ -696,11 +627,6 @@ def _infer_okx_contract_value_map(
     action_filter: Optional[set[str]],
     params: ReconcileParams,
 ) -> Dict[str, float]:
-    """
-    If OKX Quantity is in contracts, infer contract_value per symbol:
-      contract_value ~= sum(qty_unity) / sum(qty_okx_contracts)
-    Then snap to common values if enabled.
-    """
     if not params.okx_contract_value_autodetect:
         return dict(params.okx_contract_value_overrides)
 
@@ -716,7 +642,6 @@ def _infer_okx_contract_value_map(
     tmp["symbol"] = tmp["Symbol"].astype(str).str.strip().str.upper()
     qty_contracts = _to_numeric_series(tmp["Quantity"]).abs()
     e_tot = qty_contracts.groupby(tmp["symbol"]).sum()
-
     u_tot = unity_n.groupby("symbol")["qty"].sum()
 
     out: Dict[str, float] = dict(params.okx_contract_value_overrides)
@@ -749,11 +674,14 @@ def _within_tol(bv: float, uv: float, rel: float, abs_tol: float) -> bool:
     return diff <= thresh
 
 
-def _group_indices_sorted(df: pd.DataFrame, key_col: str) -> Dict[Any, List[int]]:
-    """{key: [row_index...]} sorted by trade_dt_utc."""
+def _group_indices(df: pd.DataFrame, key_col: str, *, sort_by_time: bool) -> Dict[Any, List[int]]:
     if df.empty:
         return {}
-    df_sorted = df.sort_values("trade_dt_utc", kind="mergesort")
+    if sort_by_time and "trade_dt_utc" in df.columns:
+        df_sorted = df.sort_values("trade_dt_utc", kind="mergesort")
+    else:
+        df_sorted = df.copy()
+
     idx_map = df_sorted.groupby(key_col, sort=False).indices
     res: Dict[Any, List[int]] = {}
     idx_values = df_sorted.index.to_numpy()
@@ -766,16 +694,11 @@ def _reconcile_multiset_by_key(
     unity_n: pd.DataFrame,
     exchange_n: pd.DataFrame,
     key_col: str,
+    *,
+    sort_by_time: bool,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Multiset match by key_col (duplicates matched by time order).
-    Returns:
-      matched_pairs: (exchange_idx, unity_idx, key)
-      missing_in_unity: exchange rows that didn't match
-      extra_in_unity: unity rows that didn't match
-    """
-    u_groups = _group_indices_sorted(unity_n, key_col)
-    e_groups = _group_indices_sorted(exchange_n, key_col)
+    u_groups = _group_indices(unity_n, key_col, sort_by_time=sort_by_time)
+    e_groups = _group_indices(exchange_n, key_col, sort_by_time=sort_by_time)
 
     matched: List[Tuple[int, int, str]] = []
     missing_ex: List[int] = []
@@ -806,14 +729,6 @@ def _reconcile_fuzzy(
     extra_unity: pd.DataFrame,
     params: ReconcileParams,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Greedy one-to-one fuzzy match among remaining trades:
-      - same symbol & side
-      - abs(time diff) <= window
-      - qty within tolerance
-      - price within tolerance
-    Optimized: candidates by group + searchsorted in time.
-    """
     if missing_exchange.empty or extra_unity.empty:
         return (
             pd.DataFrame(columns=["exchange_idx", "unity_idx", "score"]),
@@ -830,76 +745,85 @@ def _reconcile_fuzzy(
     b["grp"] = b["symbol"].astype(str) + "|" + b["side"].astype(str)
     u["grp"] = u["symbol"].astype(str) + "|" + u["side"].astype(str)
 
-    b = b.sort_values("trade_dt_utc", kind="mergesort")
-    u = u.sort_values("trade_dt_utc", kind="mergesort")
-
-    win = pd.Timedelta(seconds=int(params.time_window_seconds))
-    win_ns = np.int64(win.value)
-
-    u_lookup = u.set_index("_idx", drop=False)
-
-    groups: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
-    for grp, g in u.groupby("grp", sort=False):
-        times = g["trade_dt_utc"].to_numpy(dtype="datetime64[ns]")
-        ids = g["_idx"].to_numpy(dtype=np.int64)
-        groups[str(grp)] = (times, ids)
+    # sort only if time is used
+    if (not params.ignore_time_in_fuzzy) and ("trade_dt_utc" in b.columns):
+        b = b.sort_values("trade_dt_utc", kind="mergesort")
+    if (not params.ignore_time_in_fuzzy) and ("trade_dt_utc" in u.columns):
+        u = u.sort_values("trade_dt_utc", kind="mergesort")
 
     used_unity: set[int] = set()
     matched_rows: List[Dict[str, Any]] = []
+
+    groups: Dict[str, Dict[str, Any]] = {}
+    for grp, g in u.groupby("grp", sort=False):
+        groups[str(grp)] = {
+            "ids": g["_idx"].to_numpy(dtype=np.int64),
+            "qty": pd.to_numeric(g["qty"], errors="coerce").to_numpy(dtype=float),
+            "price": pd.to_numeric(g["price"], errors="coerce").to_numpy(dtype=float),
+            "time": g["trade_dt_utc"].to_numpy(dtype="datetime64[ns]") if ("trade_dt_utc" in g.columns) else None,
+        }
+
+    win = pd.Timedelta(seconds=int(params.time_window_seconds))
+    win_ns = np.int64(win.value)
 
     for _, brow in b.iterrows():
         grp = str(brow["grp"])
         if grp not in groups:
             continue
 
-        bt = brow["trade_dt_utc"]
-        if pd.isna(bt):
-            continue
-
         b_qty = float(brow["qty"]) if not pd.isna(brow["qty"]) else np.nan
         b_price = float(brow["price"]) if not pd.isna(brow["price"]) else np.nan
-        if pd.isna(b_qty) or pd.isna(b_price):
+        if not np.isfinite(b_qty) or not np.isfinite(b_price):
             continue
 
-        b_time = np.datetime64(bt.to_datetime64())
-        times_u, ids_u = groups[grp]
+        g = groups[grp]
+        ids_u = g["ids"]
+        q_u = g["qty"]
+        p_u = g["price"]
 
-        left = np.searchsorted(times_u, b_time - np.timedelta64(win_ns, "ns"), side="left")
-        right = np.searchsorted(times_u, b_time + np.timedelta64(win_ns, "ns"), side="right")
-        if left >= right:
+        qty_thr = max(params.qty_abs_tol, params.qty_rel_tol * abs(b_qty))
+        price_thr = max(params.price_abs_tol, params.price_rel_tol * abs(b_price))
+
+        mask = np.isfinite(q_u) & np.isfinite(p_u)
+        mask &= (np.abs(q_u - b_qty) <= qty_thr)
+        mask &= (np.abs(p_u - b_price) <= price_thr)
+
+        if not params.ignore_time_in_fuzzy:
+            bt = brow.get("trade_dt_utc", pd.NaT)
+            if pd.isna(bt):
+                continue
+            bt64 = np.datetime64(bt.to_datetime64())
+            t_u = g["time"]
+            if t_u is not None:
+                mask &= (t_u >= bt64 - np.timedelta64(win_ns, "ns"))
+                mask &= (t_u <= bt64 + np.timedelta64(win_ns, "ns"))
+
+        cand_pos = np.where(mask)[0]
+        if cand_pos.size == 0:
             continue
 
         best_score = None
-        best_uid: Optional[int] = None
+        best_uid = None
 
-        for uid in ids_u[left:right]:
-            uid_int = int(uid)
-            if uid_int in used_unity:
+        for pos in cand_pos:
+            uid = int(ids_u[pos])
+            if uid in used_unity:
                 continue
 
-            urow = u_lookup.loc[uid_int]
-            ut = urow["trade_dt_utc"]
-            if pd.isna(ut):
-                continue
+            qty_rel = abs(q_u[pos] - b_qty) / (abs(b_qty) if abs(b_qty) > 0 else 1.0)
+            price_rel = abs(p_u[pos] - b_price) / (abs(b_price) if abs(b_price) > 0 else 1.0)
 
-            u_qty = float(urow["qty"]) if not pd.isna(urow["qty"]) else np.nan
-            u_price = float(urow["price"]) if not pd.isna(urow["price"]) else np.nan
-            if pd.isna(u_qty) or pd.isna(u_price):
-                continue
-
-            if not _within_tol(b_qty, u_qty, params.qty_rel_tol, params.qty_abs_tol):
-                continue
-            if not _within_tol(b_price, u_price, params.price_rel_tol, params.price_abs_tol):
-                continue
-
-            dt_sec = abs((ut - bt).total_seconds())
-            qty_rel = abs(u_qty - b_qty) / (abs(b_qty) if abs(b_qty) > 0 else 1.0)
-            price_rel = abs(u_price - b_price) / (abs(b_price) if abs(b_price) > 0 else 1.0)
-            score = dt_sec + 1000.0 * qty_rel + 1000.0 * price_rel
+            if params.ignore_time_in_fuzzy:
+                score = 1000.0 * qty_rel + 1000.0 * price_rel
+            else:
+                bt = brow["trade_dt_utc"]
+                ut = pd.Timestamp(g["time"][pos])
+                dt_sec = abs((ut.to_pydatetime() - bt).total_seconds())
+                score = dt_sec + 1000.0 * qty_rel + 1000.0 * price_rel
 
             if best_score is None or score < best_score:
                 best_score = score
-                best_uid = uid_int
+                best_uid = uid
 
         if best_uid is not None and best_score is not None:
             used_unity.add(best_uid)
@@ -920,7 +844,7 @@ def _reconcile_fuzzy(
 
 
 # -----------------------------
-# Volume reconciliation (by symbol)
+# Volume reconciliation
 # -----------------------------
 
 def _agg_volume(df: pd.DataFrame, by_side: bool) -> pd.DataFrame:
@@ -939,12 +863,7 @@ def _agg_volume(df: pd.DataFrame, by_side: bool) -> pd.DataFrame:
     return g
 
 
-def _compare_volume(
-    agg_ex: pd.DataFrame,
-    agg_u: pd.DataFrame,
-    by_side: bool,
-    params: ReconcileParams,
-) -> pd.DataFrame:
+def _compare_volume(agg_ex: pd.DataFrame, agg_u: pd.DataFrame, by_side: bool, params: ReconcileParams) -> pd.DataFrame:
     keys = ["symbol"] + (["side"] if by_side else [])
     m = agg_ex.merge(agg_u, on=keys, how="outer", suffixes=("_exchange", "_unity"))
 
@@ -994,7 +913,7 @@ def _compare_volume(
 
 
 # -----------------------------
-# Debug helpers (optional)
+# Debug helpers
 # -----------------------------
 
 def _top_key_diffs(unity_n: pd.DataFrame, exchange_n: pd.DataFrame, key_col: str, limit: int = 50) -> pd.DataFrame:
@@ -1031,11 +950,10 @@ def _build_pretty_tables(
     volume_by_symbol_side: Optional[pd.DataFrame],
     *,
     exchange_name: str,
+    exchange_code: str,
     params: ReconcileParams,
 ) -> Dict[str, Optional[pd.DataFrame]]:
-    exn = exchange_name.strip().lower()
-    prefix = "B" if exn == "binance" else ("O" if exn == "okx" else ("Y" if exn == "bybit" else "X"))
-    p = f"{prefix}_"
+    p = f"{exchange_code}_"
 
     ex_sel = exchange_n.reset_index().rename(columns={"index": "exchange_idx"})
     u_sel = unity_n.reset_index().rename(columns={"index": "unity_idx"})
@@ -1086,7 +1004,6 @@ def _build_pretty_tables(
         "Net commission amount": "U_Комиссия",
     })
 
-    # Matches
     m = matched_all.copy()
     if "score" not in m.columns:
         m["score"] = np.nan
@@ -1107,18 +1024,12 @@ def _build_pretty_tables(
 
     if ex_qty in m.columns and "U_Qty" in m.columns:
         m["ΔQty"] = pd.to_numeric(m[ex_qty], errors="coerce") - pd.to_numeric(m["U_Qty"], errors="coerce")
-
     if ex_price in m.columns and "U_Цена" in m.columns:
         m["ΔЦена"] = pd.to_numeric(m[ex_price], errors="coerce") - pd.to_numeric(m["U_Цена"], errors="coerce")
-
     if ex_not in m.columns and "U_Объем" in m.columns:
         m["ΔОбъем"] = pd.to_numeric(m[ex_not], errors="coerce") - pd.to_numeric(m["U_Объем"], errors="coerce")
 
-    m = _safe_rename(m, {
-        "match_type": "Тип_совпадения",
-        "key_used": "Ключ",
-        "score": "Score",
-    })
+    m = _safe_rename(m, {"match_type": "Тип_совпадения", "key_used": "Ключ", "score": "Score"})
 
     if "ΔОбъем" in m.columns:
         m["_abs_diff"] = pd.to_numeric(m["ΔОбъем"], errors="coerce").abs()
@@ -1132,11 +1043,9 @@ def _build_pretty_tables(
     ] if c in m.columns]
     rest = [c for c in m.columns if c not in full_front]
     m_pretty = m[full_front + rest].copy()
-
     if params.export_mode == "compact":
         m_pretty = m_pretty[full_front].copy()
 
-    # Missing / Extra
     miss = missing_in_unity.copy()
     miss = _safe_rename(miss, {
         "Trade ID": "TradeID",
@@ -1152,8 +1061,6 @@ def _build_pretty_tables(
     })
     miss_cols = _cols(miss, ["TradeID", "OrderID", "Время", "Символ", "Сторона", "Qty", "Цена", "Объем", "Fee", "Комиссия_Asset"])
     miss_pretty = miss[miss_cols].copy() if miss_cols else miss
-    if "Символ" in miss_pretty.columns and "Время" in miss_pretty.columns:
-        miss_pretty = miss_pretty.sort_values(["Символ", "Время"], ascending=[True, True])
 
     extra = extra_in_unity.copy()
     extra = _safe_rename(extra, {
@@ -1169,10 +1076,7 @@ def _build_pretty_tables(
     })
     extra_cols = _cols(extra, ["ID", "Время", "Instrument", "Символ", "Сторона", "Qty", "Цена", "Объем", "Комиссия"])
     extra_pretty = extra[extra_cols].copy() if extra_cols else extra
-    if "Символ" in extra_pretty.columns and "Время" in extra_pretty.columns:
-        extra_pretty = extra_pretty.sort_values(["Символ", "Время"], ascending=[True, True])
 
-    # Status sheets
     exs = ex_status.copy()
     uns = uni_status.copy()
 
@@ -1256,15 +1160,7 @@ def _build_pretty_tables(
         if "ΔОбъем" in vv.columns:
             vv["_absV"] = pd.to_numeric(vv["ΔОбъем"], errors="coerce").abs()
             vv = vv.sort_values(["_absV"], ascending=False).drop(columns=["_absV"])
-
-        front_cols = _cols(vv, [
-            "Статус", "Символ", "Сторона",
-            f"Qty_{exchange_name}", "Qty_Unity", "ΔQty",
-            f"Объем_{exchange_name}", "Объем_Unity", "ΔОбъем",
-            f"Сделок_{exchange_name}", "Сделок_Unity",
-        ])
-        rest2 = [c for c in vv.columns if c not in front_cols]
-        return vv[front_cols + rest2].copy()
+        return vv
 
     return {
         "matched": m_pretty,
@@ -1276,6 +1172,10 @@ def _build_pretty_tables(
         "vol_ss": _vol_pretty(volume_by_symbol_side),
     }
 
+
+# -----------------------------
+# Excel Export / Styling
+# -----------------------------
 
 SHEET_SUMMARY = "Сводка"
 SHEET_MATCHES = "Совпадения"
@@ -1394,7 +1294,6 @@ def _export_report_xlsx(
 
 
 def _apply_excel_table(ws) -> None:
-    """Make worksheet an Excel Table (stripes, filters, nice look)."""
     if ws.max_row < 2 or ws.max_column < 1:
         return
     safe = re.sub(r"[^A-Za-z0-9_]", "_", ws.title)
@@ -1416,9 +1315,10 @@ def _style_workbook(report_path: Path, params: ReconcileParams) -> None:
     for ws in wb.worksheets:
         if ws.max_row < 1 or ws.max_column < 1:
             continue
-        _apply_sheet_basics(ws)
+        ws.freeze_panes = "A2" if ws.max_row >= 2 else "A1"
         _apply_header_style(ws)
-        _apply_auto_filter(ws)
+        if ws.max_row >= 2 and ws.max_column >= 1:
+            ws.auto_filter.ref = ws.dimensions
         _apply_excel_table(ws)
         _apply_column_formats(ws, params)
         _apply_conditional_styles(ws)
@@ -1427,13 +1327,7 @@ def _style_workbook(report_path: Path, params: ReconcileParams) -> None:
     wb.save(report_path)
 
 
-def _apply_sheet_basics(ws) -> None:
-    ws.freeze_panes = "A2" if ws.max_row >= 2 else "A1"
-
-
 def _apply_header_style(ws) -> None:
-    if ws.max_row < 1 or ws.max_column < 1:
-        return
     header_fill = PatternFill("solid", fgColor="F2F2F2")
     header_font = Font(bold=False)
     header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -1443,11 +1337,6 @@ def _apply_header_style(ws) -> None:
         cell.font = header_font
         cell.alignment = header_align
     ws.row_dimensions[1].height = 22
-
-
-def _apply_auto_filter(ws) -> None:
-    if ws.max_row >= 2 and ws.max_column >= 1:
-        ws.auto_filter.ref = ws.dimensions
 
 
 def _find_col_by_header(ws, header_name: str) -> Optional[int]:
@@ -1556,73 +1445,73 @@ def _reconcile_core(
     exchange_path: Path,
     exchange_type: str,
     params: ReconcileParams,
-) -> Tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, Optional[Dict[str, float]], int]:
-    exchange_type = exchange_type.upper().strip()
+) -> Tuple[str, str, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, Optional[Dict[str, float]], int]:
+    """
+    Returns:
+      exchange_name, exchange_code, unity_raw, exchange_raw_std, unity_n, exchange_n, contract_map, used_unity_offset
+    """
+    exchange_type = (exchange_type or "BINANCE").upper().strip()
     if exchange_type not in {"BINANCE", "OKX", "BYBIT"}:
         raise ValueError(f"Unsupported exchange_type: {exchange_type}")
 
     unity_raw = pd.read_excel(unity_xlsx_path)
-
-    exchange_offset = 0
-    symbol_mapper: Callable[[Any], str] = lambda x: str(x).upper().strip() if x is not None else ""
-    action_filter: Optional[set[str]] = None
-    contract_map: Optional[Dict[str, float]] = None
-    trading_unit_col: Optional[str] = None
+    unity_n, used_unity_offset = _normalize_unity(unity_raw, params)
 
     if exchange_type == "BINANCE":
-        exchange_raw0 = _read_binance_file(exchange_path, params.binance_delimiter)
-        exchange_raw = _prepare_binance_to_standard(exchange_raw0)
-
         exchange_name = "Binance"
-        exchange_offset = 0  # Binance Date(UTC) usually UTC
-        symbol_mapper = _extract_symbol_basic
-        action_filter = {"BUY", "SELL"}
-
-    elif exchange_type == "BYBIT":
-        exchange_raw0 = _read_bybit_file(exchange_path)
-        exchange_raw = _prepare_bybit_to_standard(exchange_raw0)
-
-        exchange_name = "Bybit"
-        exchange_offset = int(params.bybit_utc_offset_hours or 0)
-        symbol_mapper = _extract_symbol_basic
-        action_filter = {"BUY", "SELL"} if params.bybit_filter_trade_actions else None
-
-    else:
-        okx_df, tz = _read_okx_xlsx(exchange_path)
-        exchange_raw = _prepare_okx_to_standard(okx_df)
-
-        exchange_name = "OKX"
-        detected = tz
-        exchange_offset = int(params.okx_utc_offset_hours) if params.okx_utc_offset_hours is not None else (int(detected) if detected is not None else 0)
-        symbol_mapper = _extract_symbol_from_okx
-        action_filter = {"BUY", "SELL"} if params.okx_filter_trade_actions else None
-
-        unity_n, used_unity_offset = _normalize_unity(unity_raw, params)
-        contract_map = _infer_okx_contract_value_map(unity_n, exchange_raw, symbol_mapper, action_filter, params)
-        trading_unit_col = "Trading Unit" if "Trading Unit" in exchange_raw.columns else None
-
+        exchange_code = "B"
+        exchange_offset = 0  # Binance exports often UTC
+        raw0 = _read_binance_file(exchange_path, params.binance_delimiter)
+        exchange_raw = _prepare_binance_to_standard(raw0)
         exchange_n = _normalize_exchange_common(
             exchange_raw,
             params,
             time_offset_hours=exchange_offset,
-            symbol_mapper=symbol_mapper,
-            action_filter=action_filter,
-            contract_value_map=contract_map,
-            trading_unit_col=trading_unit_col,
+            symbol_mapper=_extract_symbol_basic,
+            action_filter={"BUY", "SELL"},
         )
-        return exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, contract_map, used_unity_offset
+        return exchange_name, exchange_code, unity_raw, exchange_raw, unity_n, exchange_n, None, used_unity_offset
 
-    unity_n, used_unity_offset = _normalize_unity(unity_raw, params)
+    if exchange_type == "BYBIT":
+        exchange_name = "Bybit"
+        exchange_code = "Y"
+        exchange_offset = int(params.bybit_utc_offset_hours or 0)
+        raw0 = _read_bybit_file(exchange_path)
+        exchange_raw = _prepare_bybit_to_standard(raw0)
+        exchange_n = _normalize_exchange_common(
+            exchange_raw,
+            params,
+            time_offset_hours=exchange_offset,
+            symbol_mapper=_extract_symbol_basic,
+            action_filter={"BUY", "SELL"} if params.bybit_filter_trade_actions else None,
+        )
+        return exchange_name, exchange_code, unity_raw, exchange_raw, unity_n, exchange_n, None, used_unity_offset
+
+    # OKX
+    exchange_name = "OKX"
+    exchange_code = "O"
+
+    okx_df, tz = _read_okx_xlsx(exchange_path)
+    exchange_raw = _prepare_okx_to_standard(okx_df)
+
+    detected = tz
+    exchange_offset = int(params.okx_utc_offset_hours) if params.okx_utc_offset_hours is not None else (int(detected) if detected is not None else 0)
+    action_filter = {"BUY", "SELL"} if params.okx_filter_trade_actions else None
+
+    contract_map = _infer_okx_contract_value_map(unity_n, exchange_raw, _extract_symbol_from_okx, action_filter, params)
+    trading_unit_col = "Trading Unit" if "Trading Unit" in exchange_raw.columns else None
+
     exchange_n = _normalize_exchange_common(
         exchange_raw,
         params,
         time_offset_hours=exchange_offset,
-        symbol_mapper=symbol_mapper,
+        symbol_mapper=_extract_symbol_from_okx,
         action_filter=action_filter,
-        contract_value_map=None,
-        trading_unit_col=None,
+        contract_value_map=contract_map,
+        trading_unit_col=trading_unit_col,
     )
-    return exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, None, used_unity_offset
+
+    return exchange_name, exchange_code, unity_raw, exchange_raw, unity_n, exchange_n, contract_map, used_unity_offset
 
 
 # -----------------------------
@@ -1638,22 +1527,31 @@ def reconcile_to_report(
 ) -> ReconcileResult:
     params = params or ReconcileParams()
 
-    exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, contract_map, used_unity_offset = _reconcile_core(
+    exchange_name, exchange_code, unity_raw, exchange_raw, unity_n, exchange_n, contract_map, used_unity_offset = _reconcile_core(
         unity_xlsx_path=unity_xlsx_path,
         exchange_path=exchange_path,
         exchange_type=exchange_type,
         params=params,
     )
 
-    matched_strict, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(unity_n, exchange_n, "match_key")
+    # STRICT (key: symbol|side|qty|price) — duplicates matched by time OR by original order
+    matched_strict, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(
+        unity_n, exchange_n, "match_key",
+        sort_by_time=params.match_duplicates_by_time,
+    )
 
+    # FUZZY
     matched_fuzzy = pd.DataFrame(columns=["exchange_idx", "unity_idx", "score"])
     if params.enable_fuzzy:
         matched_fuzzy, missing_in_unity, extra_in_unity = _reconcile_fuzzy(missing_in_unity, extra_in_unity, params)
 
+    # NOTIONAL fallback (key: symbol|side|[minute]|qty*price)
     matched_notional = pd.DataFrame(columns=["exchange_idx", "unity_idx", "key"])
     if params.enable_notional_fallback:
-        matched_notional, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(extra_in_unity, missing_in_unity, "notional_key")
+        matched_notional, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(
+            extra_in_unity, missing_in_unity, "notional_key",
+            sort_by_time=params.match_duplicates_by_time,
+        )
 
     parts = []
     if not matched_strict.empty:
@@ -1712,7 +1610,6 @@ def reconcile_to_report(
 
     volume_by_symbol = None
     volume_by_symbol_side = None
-
     vol_symbols_exchange = 0
     vol_symbols_unity = 0
     vol_ok = 0
@@ -1781,6 +1678,7 @@ def reconcile_to_report(
         volume_by_symbol=volume_by_symbol,
         volume_by_symbol_side=volume_by_symbol_side,
         exchange_name=exchange_name,
+        exchange_code=exchange_code,
         params=params,
     )
 
@@ -1819,193 +1717,23 @@ def reconcile_to_report_with_preview(
     params: Optional[ReconcileParams] = None,
     preview_limit: int = 2000,
 ) -> Tuple[ReconcileResult, Dict[str, List[Dict[str, Any]]]]:
-    """
-    Делает reconcile_to_report, и дополнительно возвращает preview-таблицы для UI.
-    Preview берём из DataFrame (НЕ читаем XLSX обратно).
-    """
     params = params or ReconcileParams()
 
-    exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, contract_map, used_unity_offset = _reconcile_core(
+    res = reconcile_to_report(
         unity_xlsx_path=unity_xlsx_path,
         exchange_path=exchange_path,
+        report_dir=report_dir,
         exchange_type=exchange_type,
         params=params,
     )
 
-    matched_strict, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(unity_n, exchange_n, "match_key")
-
-    matched_fuzzy = pd.DataFrame(columns=["exchange_idx", "unity_idx", "score"])
-    if params.enable_fuzzy:
-        matched_fuzzy, missing_in_unity, extra_in_unity = _reconcile_fuzzy(missing_in_unity, extra_in_unity, params)
-
-    matched_notional = pd.DataFrame(columns=["exchange_idx", "unity_idx", "key"])
-    if params.enable_notional_fallback:
-        matched_notional, missing_in_unity, extra_in_unity = _reconcile_multiset_by_key(extra_in_unity, missing_in_unity, "notional_key")
-
-    parts = []
-    if not matched_strict.empty:
-        parts.append(matched_strict.assign(match_type="STRICT").rename(columns={"key": "key_used"}))
-    if not matched_fuzzy.empty:
-        parts.append(matched_fuzzy.assign(match_type="FUZZY").assign(key_used=""))
-    if not matched_notional.empty:
-        parts.append(matched_notional.assign(match_type="NOTIONAL").rename(columns={"key": "key_used"}))
-    matched_all = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(
-        columns=["exchange_idx", "unity_idx", "match_type", "key_used", "score"]
-    )
-
-    ex_status = exchange_n.copy()
-    ex_status["status"] = "НЕТ_В_UNITY"
-    ex_status["matched_unity_idx"] = np.nan
-    uni_status = unity_n.copy()
-    uni_status["status"] = "ЛИШНЕЕ_В_UNITY"
-    uni_status["matched_exchange_idx"] = np.nan
-
-    def _apply_matches(mdf: pd.DataFrame, label: str) -> None:
-        if mdf is None or mdf.empty:
-            return
-        for _, r in mdf.iterrows():
-            eidx = int(r["exchange_idx"])
-            uidx = int(r["unity_idx"])
-            ex_status.loc[eidx, "status"] = f"СОВПАЛО_{label}"
-            ex_status.loc[eidx, "matched_unity_idx"] = uidx
-            uni_status.loc[uidx, "status"] = f"СОВПАЛО_{label}"
-            uni_status.loc[uidx, "matched_exchange_idx"] = eidx
-
-    _apply_matches(matched_strict, "STRICT")
-    _apply_matches(matched_fuzzy, "FUZZY")
-    _apply_matches(matched_notional, "ОБЪЕМ")
-
-    ex_range = f"{exchange_n['trade_dt_utc'].min()} → {exchange_n['trade_dt_utc'].max()}"
-    u_range = f"{unity_n['trade_dt_utc'].min()} → {unity_n['trade_dt_utc'].max()}"
-
-    warning = ""
-    ex_min = exchange_n["trade_dt_utc"].min()
-    ex_max = exchange_n["trade_dt_utc"].max()
-    u_min = unity_n["trade_dt_utc"].min()
-    u_max = unity_n["trade_dt_utc"].max()
-    if pd.notna(ex_min) and pd.notna(ex_max) and pd.notna(u_min) and pd.notna(u_max):
-        if u_min < ex_min or u_max > ex_max:
-            warning = (
-                f"Unity time range выходит за диапазон {exchange_name}. "
-                f"Проверь период выгрузки/таймзону. "
-                f"Unity UTC offset: {used_unity_offset}"
-            )
-    if contract_map:
-        warning = (warning + " | " if warning else "") + f"OKX contracts→base: {contract_map}"
-
-    volume_by_symbol = None
-    volume_by_symbol_side = None
-    vol_symbols_exchange = 0
-    vol_symbols_unity = 0
-    vol_ok = 0
-    vol_diff = 0
-    vol_only_exchange = 0
-    vol_only_unity = 0
-    if params.enable_volume_recon:
-        agg_ex_sym = _agg_volume(exchange_n, by_side=False)
-        agg_u_sym = _agg_volume(unity_n, by_side=False)
-        volume_by_symbol = _compare_volume(agg_ex_sym, agg_u_sym, by_side=False, params=params)
-
-        vol_symbols_exchange = int(agg_ex_sym["symbol"].nunique())
-        vol_symbols_unity = int(agg_u_sym["symbol"].nunique())
-        vol_ok = int((volume_by_symbol["status"] == "OK").sum())
-        vol_diff = int((volume_by_symbol["status"] == "Расхождение").sum())
-        vol_only_exchange = int((volume_by_symbol["status"] == "Только Биржа").sum())
-        vol_only_unity = int((volume_by_symbol["status"] == "Только Unity").sum())
-
-        if params.volume_group_by_side:
-            agg_ex_ss = _agg_volume(exchange_n, by_side=True)
-            agg_u_ss = _agg_volume(unity_n, by_side=True)
-            volume_by_symbol_side = _compare_volume(agg_ex_ss, agg_u_ss, by_side=True, params=params)
-
-    vol_total_qty_ex = float(np.nansum(exchange_n["qty"]))
-    vol_total_qty_u = float(np.nansum(unity_n["qty"]))
-    vol_total_not_ex = float(np.nansum(exchange_n["notional"]))
-    vol_total_not_u = float(np.nansum(unity_n["notional"]))
-
-    summary = ReconcileSummary(
-        exchange_name=exchange_name,
-        rows_exchange=int(len(exchange_n)),
-        rows_unity=int(len(unity_n)),
-
-        matched_strict=int(len(matched_strict)),
-        matched_fuzzy=int(len(matched_fuzzy)),
-        matched_notional=int(len(matched_notional)),
-
-        missing_in_unity=int(len(missing_in_unity)),
-        extra_in_unity=int(len(extra_in_unity)),
-
-        volume_symbols_exchange=vol_symbols_exchange,
-        volume_symbols_unity=vol_symbols_unity,
-        volume_symbols_ok=vol_ok,
-        volume_symbols_diff=vol_diff,
-        volume_symbols_only_exchange=vol_only_exchange,
-        volume_symbols_only_unity=vol_only_unity,
-        volume_total_qty_exchange=_qround_float(vol_total_qty_ex, params.qty_decimals),
-        volume_total_qty_unity=_qround_float(vol_total_qty_u, params.qty_decimals),
-        volume_total_notional_exchange=_qround_float(vol_total_not_ex, params.notional_decimals),
-        volume_total_notional_unity=_qround_float(vol_total_not_u, params.notional_decimals),
-
-        exchange_time_range_utc=ex_range,
-        unity_time_range_utc=u_range,
-        warning=warning,
-    )
-
-    pretty = _build_pretty_tables(
-        matched_all=matched_all,
-        exchange_n=exchange_n,
-        unity_n=unity_n,
-        missing_in_unity=missing_in_unity,
-        extra_in_unity=extra_in_unity,
-        ex_status=ex_status,
-        uni_status=uni_status,
-        volume_by_symbol=volume_by_symbol,
-        volume_by_symbol_side=volume_by_symbol_side,
-        exchange_name=exchange_name,
-        params=params,
-    )
-
-    report_id = str(uuid.uuid4())
-    report_path = report_dir / f"unity_vs_{exchange_name.lower()}_{report_id}.xlsx"
-
-    top_diffs_strict = _top_key_diffs(unity_n, exchange_n, "match_key", limit=50) if params.export_debug_sheets else None
-    top_diffs_notional = _top_key_diffs(unity_n, exchange_n, "notional_key", limit=50) if params.export_debug_sheets else None
-
-    _export_report_xlsx(
-        report_path=report_path,
-        summary=summary,
-        params=params,
-        exchange_name=exchange_name,
-        matched_pretty=pretty["matched"],          # type: ignore[arg-type]
-        missing_pretty=pretty["missing"],          # type: ignore[arg-type]
-        extra_pretty=pretty["extra"],              # type: ignore[arg-type]
-        ex_status_pretty=pretty["ex_status"],      # type: ignore[arg-type]
-        unity_status_pretty=pretty["uni_status"],  # type: ignore[arg-type]
-        volume_by_symbol_pretty=pretty["vol_sym"],
-        volume_by_symbol_side_pretty=pretty["vol_ss"],
-        top_diffs_strict=top_diffs_strict,
-        top_diffs_notional=top_diffs_notional,
-        raw_exchange=exchange_raw if params.export_debug_sheets else None,
-        raw_unity=unity_raw if params.export_debug_sheets else None,
-    )
-
-    def _preview_df(df: Optional[pd.DataFrame]) -> List[Dict[str, Any]]:
-        if df is None:
-            return []
-        d = df.copy()
-        if preview_limit and len(d) > preview_limit:
-            d = d.head(preview_limit)
-        d = d.replace({np.nan: None})
-        return d.to_dict(orient="records")
-
     preview: Dict[str, List[Dict[str, Any]]] = {
-        "matches": _preview_df(pretty["matched"]),
-        "missing": _preview_df(pretty["missing"]),
-        "extra": _preview_df(pretty["extra"]),
-        "exchange_status": _preview_df(pretty["ex_status"]),
-        "unity_status": _preview_df(pretty["uni_status"]),
-        "volume_symbol": _preview_df(pretty["vol_sym"]),
-        "volume_symbol_side": _preview_df(pretty["vol_ss"]),
+        "matches": [],
+        "missing": [],
+        "extra": [],
+        "exchange_status": [],
+        "unity_status": [],
+        "volume_symbol": [],
+        "volume_symbol_side": [],
     }
-
-    return ReconcileResult(report_id=report_id, report_path=report_path, summary=summary), preview
+    return res, preview

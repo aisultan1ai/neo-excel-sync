@@ -153,7 +153,7 @@ const ResultTable = ({ rows }) => {
           style={{ height: 36, borderRadius: 8, border: "1px solid #e2e8f0", padding: "0 10px", width: 320, fontWeight: 400 }}
         />
         <div style={{ marginLeft: "auto", fontSize: 12, color: "#64748b" }}>
-          Показано: {Math.min(filtered.length, 2000)} / {filtered.length}
+          Показано: {Math.min(filtered.length, 2000)} / {rows.length}
         </div>
       </div>
 
@@ -236,13 +236,16 @@ const UnityExchangePage = () => {
 
     enable_notional_fallback: true,
     notional_decimals: 6,
-    notional_use_minute_bucket: true,
+    notional_use_minute_bucket: false,
 
     enable_volume_recon: true,
     volume_group_by_side: true,
 
     binance_delimiter: ";",
     export_debug_sheets: false,
+
+      ignore_time_in_fuzzy: true,
+  match_duplicates_by_time: false,
   });
 
   const tabs = useMemo(
@@ -270,9 +273,7 @@ const UnityExchangePage = () => {
       fd.append("params_json", JSON.stringify(params));
       fd.append("preview_limit", "2000");
 
-      const { data } = await api.post("/unity-exchange/run", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const { data } = await api.post("/unity-exchange/run", fd);
 
       setResult(data);
       setActiveTab("matches");
