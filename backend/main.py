@@ -548,7 +548,7 @@ def _process_unity_exchange_sync(
     exchange_path: str,
     exchange_type: str,
     params_dict: dict,
-    preview_limit: int,
+    preview_limit: int = Form(2000),
 ):
     params = ReconcileParams(**(params_dict or {}))
 
@@ -1738,6 +1738,7 @@ async def run_unity_exchange(
             ex_path,
             exchange_type,
             params_dict,
+            int(preview_limit),
         )
 
         run_id = uuid.uuid4().hex
