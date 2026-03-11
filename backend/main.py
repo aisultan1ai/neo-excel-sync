@@ -1713,8 +1713,8 @@ async def run_unity_exchange(
     ex_path = None
     try:
         exchange_type = (exchange_type or "BINANCE").strip().upper()
-        if exchange_type not in ("BINANCE", "OKX"):
-            raise HTTPException(400, "exchange_type must be BINANCE or OKX")
+        if exchange_type not in ("BINANCE", "OKX", "BYBIT"):
+            raise HTTPException(400, "exchange_type must be BINANCE, OKX or BYBIT")
 
         unity_path = save_upload_file(unity_file)
         ex_path = save_upload_file(exchange_file)
@@ -1753,8 +1753,11 @@ async def run_unity_exchange(
             "exchange_name": result["exchange_name"],
             "report_filename": result["report_filename"],
             "summary": result["summary"],
+            "preview": result.get("preview"),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         log.error(f"unity-exchange run error: {e}", exc_info=True)
         raise HTTPException(500, detail=str(e))
