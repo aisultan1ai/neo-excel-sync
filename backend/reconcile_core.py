@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -10,34 +11,27 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from openpyxl import load_workbook  # type: ignore[import-untyped]
-from openpyxl.formatting.rule import FormulaRule  # type: ignore[import-untyped]
-from openpyxl.styles import Alignment, Font, PatternFill  # type: ignore[import-untyped]
-from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
-from openpyxl.worksheet.table import Table, TableStyleInfo  # type: ignore[import-untyped]
+from openpyxl import load_workbook
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
-
-# -----------------------------
 # DTO / Config
-# -----------------------------
 
 @dataclass(frozen=True)
 class ReconcileParams:
-    # Unity transact time often contains "(UTC+5)"
-    unity_utc_offset_hours: Optional[int] = 5  # None => auto-detect from text
+    unity_utc_offset_hours: Optional[int] = 5
 
-    # OKX export often shows "Time Zone:UTC+5" in metadata; if None => autodetect
     okx_utc_offset_hours: Optional[int] = None
     okx_filter_trade_actions: bool = True  # keep only Buy/Sell
 
-    # OKX futures/swap exports often have Amount in "cont" (contracts).
     # We need to convert contracts -> base qty (e.g., BTC-USDT-SWAP: 1 cont = 0.01 BTC).
-    okx_contract_value_overrides: Dict[str, float] = field(default_factory=dict)  # e.g. {"BTCUSDT": 0.01}
-    okx_contract_value_autodetect: bool = True  # infer from totals vs Unity
-    okx_contract_value_snap: bool = True  # snap to common values (1, 0.1, 0.01, ...)
+    okx_contract_value_overrides: Dict[str, float] = field(default_factory=dict)
+    okx_contract_value_autodetect: bool = True
+    okx_contract_value_snap: bool = True
     okx_contract_value_candidates: Tuple[float, ...] = (1.0, 0.1, 0.01, 0.001, 0.0001)
 
-    # BYBIT time offset (usually UTC+0 in exports)
     bybit_utc_offset_hours: Optional[int] = 0
     bybit_filter_trade_actions: bool = True  # keep only Buy/Sell after mapping
 
@@ -45,7 +39,7 @@ class ReconcileParams:
     price_decimals: int = 8
 
     enable_fuzzy: bool = True
-    time_window_seconds: int = 180  # +- 3 min
+    time_window_seconds: int = 180
 
     qty_rel_tol: float = 1e-6
     qty_abs_tol: float = 0.0
@@ -53,27 +47,22 @@ class ReconcileParams:
     price_rel_tol: float = 1e-6
     price_abs_tol: float = 0.0
 
-    # Notional fallback (qty*price) for remaining rows
     enable_notional_fallback: bool = True
     notional_decimals: int = 6
-    notional_use_minute_bucket: bool = True  # include minute_utc in key to reduce false matches
+    notional_use_minute_bucket: bool = True
 
-    # Volume reconciliation (by instrument)
     enable_volume_recon: bool = True
-    volume_group_by_side: bool = True  # additional sheet by symbol+side
+    volume_group_by_side: bool = True
 
-    # tolerances for volume compare
     volume_qty_rel_tol: float = 1e-6
     volume_qty_abs_tol: float = 0.0
     volume_notional_rel_tol: float = 1e-6
     volume_notional_abs_tol: float = 0.0
 
-    # Binance delimiter: ';' usually
-    binance_delimiter: Optional[str] = ";"  # None => auto
+    binance_delimiter: Optional[str] = ";"
 
-    # Export
-    export_debug_sheets: bool = False  # True => add TopDiffs + RAW sheets
-    export_mode: str = "compact"  # "compact" | "full"
+    export_debug_sheets: bool = False
+    export_mode: str = "compact"
 
 
 @dataclass(frozen=True)
@@ -89,7 +78,6 @@ class ReconcileSummary:
     missing_in_unity: int
     extra_in_unity: int
 
-    # volume stats (symbol-level)
     volume_symbols_exchange: int
     volume_symbols_unity: int
     volume_symbols_ok: int
@@ -112,10 +100,6 @@ class ReconcileResult:
     report_path: Path
     summary: ReconcileSummary
 
-
-# -----------------------------
-# Helpers (text/columns/num)
-# -----------------------------
 
 def _norm_col(s: Any) -> str:
     s2 = str(s).replace("\ufeff", "").strip()
@@ -157,13 +141,12 @@ def _to_numeric_series(s: pd.Series) -> pd.Series:
 
     t = s.astype(str).str.replace("\u00a0", "", regex=False).str.replace(" ", "", regex=False)
 
-    # if both "," and "." exist => treat "," as thousands separator
     has_dot = t.str.contains(r"\.", regex=True)
     has_comma = t.str.contains(",", regex=False)
     both = has_dot & has_comma
 
-    t = t.where(~both, t.str.replace(",", "", regex=False))   # remove thousands ","
-    t = t.where(both, t.str.replace(",", ".", regex=False))   # decimal comma -> dot
+    t = t.where(~both, t.str.replace(",", "", regex=False))
+    t = t.where(both, t.str.replace(",", ".", regex=False))
 
     return pd.to_numeric(t, errors="coerce")
 
@@ -257,11 +240,6 @@ def _snap_value(x: float, candidates: Tuple[float, ...], rel_tol: float = 0.05) 
         return float(best)
     return float(x)
 
-
-# -----------------------------
-# Readers
-# -----------------------------
-
 def _read_delimited_text(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
     if delimiter:
         df = pd.read_csv(path, sep=delimiter, engine="python")
@@ -278,11 +256,6 @@ def _read_delimited_text(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
 
 
 def _read_binance_file(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
-    """
-    Binance может быть:
-      - CSV/TXT (с разными разделителями)
-      - XLSX/XLS
-    """
     suf = path.suffix.lower()
     if suf in {".xlsx", ".xls"}:
         df = pd.read_excel(path)
@@ -292,9 +265,6 @@ def _read_binance_file(path: Path, delimiter: Optional[str]) -> pd.DataFrame:
 
 
 def _read_bybit_file(path: Path, delimiter: Optional[str] = None) -> pd.DataFrame:
-    """
-    Bybit обычно XLSX, но может быть CSV.
-    """
     suf = path.suffix.lower()
     if suf in {".xlsx", ".xls"}:
         df = pd.read_excel(path)
@@ -304,11 +274,6 @@ def _read_bybit_file(path: Path, delimiter: Optional[str] = None) -> pd.DataFram
 
 
 def _detect_okx_header_row(path: Path, max_rows: int = 25) -> int:
-    """
-    OKX Excel иногда имеет метаданные в первых строках.
-    Ищем строку, где встречаются ключевые колонки (Time + Symbol/Instrument + Action/Side).
-    Возвращаем индекс строки (0-based) для header=...
-    """
     try:
         raw = pd.read_excel(path, header=None, nrows=max_rows)
     except Exception:
@@ -329,11 +294,6 @@ def _detect_okx_header_row(path: Path, max_rows: int = 25) -> int:
 
 
 def _read_okx_xlsx(path: Path) -> Tuple[pd.DataFrame, Optional[int]]:
-    """
-    OKX excel often:
-      Row0: UID... / Account Type... / Time Zone:UTC+5
-      Далее: строка с заголовками может быть не строго на 1
-    """
     tz_offset = None
     try:
         head = pd.read_excel(path, header=None, nrows=5)
@@ -354,10 +314,6 @@ def _read_okx_xlsx(path: Path) -> Tuple[pd.DataFrame, Optional[int]]:
     df.columns = [str(c).replace("\ufeff", "").strip() for c in df.columns]
     return df, tz_offset
 
-
-# -----------------------------
-# Exchange standardizers
-# -----------------------------
 
 def _prepare_okx_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -488,12 +444,6 @@ def _map_bybit_side(v: Any) -> str:
 
 
 def _prepare_bybit_to_standard(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Приводит Bybit (XLSX/CSV) к стандарту:
-      Symbol, Side, Quantity, Price, Insert Time, Trade ID?, Order ID?, Fee?, Commission Asset?
-    Поддерживает реальные заголовки Bybit вроде:
-      Market, Direction, Filled Quantity, Filled Price, Trading Fee, feeCoin, Trasaction ID, Order No., Transaction Time(UTC+0)
-    """
     out = df.copy()
     out.columns = [str(c).replace("\ufeff", "").strip() for c in out.columns]
 
@@ -513,7 +463,6 @@ def _prepare_bybit_to_standard(df: pd.DataFrame) -> pd.DataFrame:
     col_symbol = _pick_col(out, ["Market", "Symbol", "Pair", "Instrument"], "Symbol")
     col_side = _pick_col(out, ["Direction", "Side", "Action"], "Side")
 
-    # Prefer Filled Quantity / Filled Price
     col_qty = _pick_col(out, ["Filled Quantity", "Qty", "Quantity", "Executed", "Amount", "Size"], "Quantity")
     col_price = _pick_col(out, ["Filled Price", "Price", "Avg Price", "Executed Price"], "Price")
 
@@ -540,11 +489,6 @@ def _prepare_bybit_to_standard(df: pd.DataFrame) -> pd.DataFrame:
 
     return std
 
-
-# -----------------------------
-# Normalization
-# -----------------------------
-
 def _normalize_unity(df: pd.DataFrame, params: ReconcileParams) -> Tuple[pd.DataFrame, int]:
     need_cols = ["Instrument", "Side", "Transact time", "Price"]
     for c in need_cols:
@@ -567,7 +511,6 @@ def _normalize_unity(df: pd.DataFrame, params: ReconcileParams) -> Tuple[pd.Data
         sample = out["Transact time"].dropna().astype(str).head(20).tolist()
         offset = _detect_unity_offset_hours_from_text(sample[0], default_hours=5) if sample else 5
 
-    # vectorized datetime parse
     tt = out["Transact time"].astype(str).str.replace(r"\s*\(UTC[^\)]*\)\s*", "", regex=True).str.strip()
     out["trade_dt_local"] = pd.to_datetime(tt, dayfirst=True, errors="coerce")
     out["trade_dt_utc"] = out["trade_dt_local"] - pd.Timedelta(hours=int(offset))
@@ -613,11 +556,6 @@ def _normalize_exchange_common(
     contract_value_map: Optional[Dict[str, float]] = None,
     trading_unit_col: Optional[str] = None,
 ) -> pd.DataFrame:
-    """
-    Standard exchange schema required columns:
-      Symbol, Side, Quantity, Price, Insert Time
-    Insert Time is treated as LOCAL time with time_offset_hours.
-    """
     need_cols = ["Symbol", "Side", "Quantity", "Price", "Insert Time"]
     for c in need_cols:
         if c not in df.columns:
@@ -640,7 +578,6 @@ def _normalize_exchange_common(
     out["symbol"] = out["Symbol"].astype(str).str.strip().str.upper()
     out["side"] = out["Side"].astype(str).str.strip().str.upper()
 
-    # contracts -> base qty conversion (OKX cont)
     mult = pd.Series(1.0, index=out.index)
     if contract_value_map:
         mult = out["symbol"].map(lambda s: float(contract_value_map.get(str(s), 1.0))).astype(float)
@@ -654,7 +591,6 @@ def _normalize_exchange_common(
 
     out["price"] = price
 
-    # datetime parse
     out["trade_dt_local"] = pd.to_datetime(out["Insert Time"], dayfirst=True, errors="coerce")
     out["trade_dt_utc"] = out["trade_dt_local"] - pd.Timedelta(hours=int(time_offset_hours))
     out["minute_utc"] = out["trade_dt_utc"].dt.floor("min")
@@ -688,7 +624,6 @@ def _normalize_exchange_common(
 
     return out
 
-
 def _infer_okx_contract_value_map(
     unity_n: pd.DataFrame,
     okx_std: pd.DataFrame,
@@ -696,11 +631,7 @@ def _infer_okx_contract_value_map(
     action_filter: Optional[set[str]],
     params: ReconcileParams,
 ) -> Dict[str, float]:
-    """
-    If OKX Quantity is in contracts, infer contract_value per symbol:
-      contract_value ~= sum(qty_unity) / sum(qty_okx_contracts)
-    Then snap to common values if enabled.
-    """
+
     if not params.okx_contract_value_autodetect:
         return dict(params.okx_contract_value_overrides)
 
@@ -736,10 +667,7 @@ def _infer_okx_contract_value_map(
 
     return out
 
-
-# -----------------------------
 # Matching
-# -----------------------------
 
 def _within_tol(bv: float, uv: float, rel: float, abs_tol: float) -> bool:
     if pd.isna(bv) or pd.isna(uv):
@@ -750,7 +678,6 @@ def _within_tol(bv: float, uv: float, rel: float, abs_tol: float) -> bool:
 
 
 def _group_indices_sorted(df: pd.DataFrame, key_col: str) -> Dict[Any, List[int]]:
-    """{key: [row_index...]} sorted by trade_dt_utc."""
     if df.empty:
         return {}
     df_sorted = df.sort_values("trade_dt_utc", kind="mergesort")
@@ -767,13 +694,7 @@ def _reconcile_multiset_by_key(
     exchange_n: pd.DataFrame,
     key_col: str,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Multiset match by key_col (duplicates matched by time order).
-    Returns:
-      matched_pairs: (exchange_idx, unity_idx, key)
-      missing_in_unity: exchange rows that didn't match
-      extra_in_unity: unity rows that didn't match
-    """
+
     u_groups = _group_indices_sorted(unity_n, key_col)
     e_groups = _group_indices_sorted(exchange_n, key_col)
 
@@ -806,14 +727,7 @@ def _reconcile_fuzzy(
     extra_unity: pd.DataFrame,
     params: ReconcileParams,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Greedy one-to-one fuzzy match among remaining trades:
-      - same symbol & side
-      - abs(time diff) <= window
-      - qty within tolerance
-      - price within tolerance
-    Optimized: candidates by group + searchsorted in time.
-    """
+
     if missing_exchange.empty or extra_unity.empty:
         return (
             pd.DataFrame(columns=["exchange_idx", "unity_idx", "score"]),
@@ -918,10 +832,7 @@ def _reconcile_fuzzy(
 
     return matched_fuzzy, missing_after, extra_after
 
-
-# -----------------------------
 # Volume reconciliation (by symbol)
-# -----------------------------
 
 def _agg_volume(df: pd.DataFrame, by_side: bool) -> pd.DataFrame:
     keys = ["symbol"] + (["side"] if by_side else [])
@@ -937,7 +848,6 @@ def _agg_volume(df: pd.DataFrame, by_side: bool) -> pd.DataFrame:
         .reset_index()
     )
     return g
-
 
 def _compare_volume(
     agg_ex: pd.DataFrame,
@@ -992,11 +902,6 @@ def _compare_volume(
     m = m.sort_values("_abs_not", ascending=False).drop(columns=["_abs_not"])
     return m
 
-
-# -----------------------------
-# Debug helpers (optional)
-# -----------------------------
-
 def _top_key_diffs(unity_n: pd.DataFrame, exchange_n: pd.DataFrame, key_col: str, limit: int = 50) -> pd.DataFrame:
     u_cnt = unity_n[key_col].value_counts()
     e_cnt = exchange_n[key_col].value_counts()
@@ -1005,10 +910,6 @@ def _top_key_diffs(unity_n: pd.DataFrame, exchange_n: pd.DataFrame, key_col: str
     out.columns = [key_col, "unity_count_minus_exchange_count"]
     return out
 
-
-# -----------------------------
-# Pretty report helpers
-# -----------------------------
 
 def _cols(df: pd.DataFrame, ordered: List[str]) -> List[str]:
     return [c for c in ordered if c in df.columns]
@@ -1086,7 +987,6 @@ def _build_pretty_tables(
         "Net commission amount": "U_Комиссия",
     })
 
-    # Matches
     m = matched_all.copy()
     if "score" not in m.columns:
         m["score"] = np.nan
@@ -1285,15 +1185,49 @@ SHEET_UNITY_STATUS = "Статус Unity"
 SHEET_VOL_SYMBOL = "Объем Инстр"
 SHEET_VOL_SYMBOL_SIDE = "Объем Инстр+Side"
 
+def _make_unique_headers(cols: List[Any]) -> List[str]:
+    """
+    Excel Table requires UNIQUE, non-empty column headers.
+    """
+    seen: Dict[str, int] = {}
+    out: List[str] = []
+    for c in cols:
+        base = str(c).strip() if c is not None else ""
+        if not base:
+            base = "col"
+        if base in seen:
+            seen[base] += 1
+            base = f"{base}_{seen[base]}"
+        else:
+            seen[base] = 1
+        out.append(base)
+    return out
 
 def _clean_df_for_excel(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
+    out.columns = _make_unique_headers(list(out.columns))
+
     out = out.replace([np.inf, -np.inf], np.nan)
     for c in out.columns:
         if out[c].dtype == object:
             out[c] = out[c].replace({"nan": "", "NaN": "", "NaT": "", "None": ""})
     return out
 
+def _make_table_name(ws_title: str, idx: int) -> str:
+    """
+    Делает Excel-safe и УНИКАЛЬНОЕ имя таблицы.
+    Важно: кириллица в ws.title превращается в '_' → поэтому добавляем hash.
+    """
+    base = re.sub(r"[^A-Za-z0-9_]", "_", ws_title).strip("_")
+    if not base:
+        base = "Sheet"
+    base = base[:25]
+
+    h = hashlib.md5(ws_title.encode("utf-8")).hexdigest()[:6]
+    name = f"T_{base}_{idx}_{h}"
+
+    # Excel limit ~255 chars for table name
+    return name[:255]
 
 def _export_report_xlsx(
     report_path: Path,
@@ -1393,13 +1327,28 @@ def _export_report_xlsx(
     _style_workbook(report_path, params)
 
 
-def _apply_excel_table(ws) -> None:
-    """Make worksheet an Excel Table (stripes, filters, nice look)."""
+def _apply_excel_table(ws, used_names: Set[str], idx: int) -> None:
+    """Make worksheet an Excel Table safely (no corruption)."""
     if ws.max_row < 2 or ws.max_column < 1:
         return
-    safe = re.sub(r"[^A-Za-z0-9_]", "_", ws.title)
-    name = ("T_" + safe)[:250]
-    tab = Table(displayName=name, ref=ws.dimensions)
+
+    # Проверим заголовки: не пустые и уникальные
+    headers = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
+    headers_norm = [str(h).strip() if h is not None else "" for h in headers]
+    if any(h == "" for h in headers_norm):
+        return
+    if len(set(headers_norm)) != len(headers_norm):
+        return
+
+    name = _make_table_name(ws.title, idx)
+    # гарантируем уникальность по workbook
+    j = 0
+    while name in used_names:
+        j += 1
+        name = (name[:240] + f"_{j}")[:255]
+    used_names.add(name)
+
+    tab = Table(displayName=name, ref=ws.calculate_dimension())
     tab.tableStyleInfo = TableStyleInfo(
         name="TableStyleMedium2",
         showFirstColumn=False,
@@ -1409,23 +1358,26 @@ def _apply_excel_table(ws) -> None:
     )
     ws.add_table(tab)
 
-
 def _style_workbook(report_path: Path, params: ReconcileParams) -> None:
     wb = load_workbook(report_path)
 
-    for ws in wb.worksheets:
+    used_table_names: Set[str] = set()
+
+    for i, ws in enumerate(wb.worksheets, start=1):
         if ws.max_row < 1 or ws.max_column < 1:
             continue
+
         _apply_sheet_basics(ws)
         _apply_header_style(ws)
         _apply_auto_filter(ws)
-        _apply_excel_table(ws)
+
+        _apply_excel_table(ws, used_table_names, i)
+
         _apply_column_formats(ws, params)
         _apply_conditional_styles(ws)
         _autosize_columns(ws)
 
     wb.save(report_path)
-
 
 def _apply_sheet_basics(ws) -> None:
     ws.freeze_panes = "A2" if ws.max_row >= 2 else "A1"
@@ -1546,11 +1498,6 @@ def _autosize_columns(ws, sample_rows: int = 2000) -> None:
                 best = len(s)
         ws.column_dimensions[letter].width = min(max(best + 2, 10), 60)
 
-
-# -----------------------------
-# Core reconcile (internal)
-# -----------------------------
-
 def _reconcile_core(
     unity_xlsx_path: Path,
     exchange_path: Path,
@@ -1574,7 +1521,7 @@ def _reconcile_core(
         exchange_raw = _prepare_binance_to_standard(exchange_raw0)
 
         exchange_name = "Binance"
-        exchange_offset = 0  # Binance Date(UTC) usually UTC
+        exchange_offset = 0
         symbol_mapper = _extract_symbol_basic
         action_filter = {"BUY", "SELL"}
 
@@ -1624,10 +1571,7 @@ def _reconcile_core(
     )
     return exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, None, used_unity_offset
 
-
-# -----------------------------
 # Public API
-# -----------------------------
 
 def reconcile_to_report(
     unity_xlsx_path: Path,
@@ -1795,11 +1739,11 @@ def reconcile_to_report(
         summary=summary,
         params=params,
         exchange_name=exchange_name,
-        matched_pretty=pretty["matched"],          # type: ignore[arg-type]
-        missing_pretty=pretty["missing"],          # type: ignore[arg-type]
-        extra_pretty=pretty["extra"],              # type: ignore[arg-type]
-        ex_status_pretty=pretty["ex_status"],      # type: ignore[arg-type]
-        unity_status_pretty=pretty["uni_status"],  # type: ignore[arg-type]
+        matched_pretty=pretty["matched"],
+        missing_pretty=pretty["missing"],
+        extra_pretty=pretty["extra"],
+        ex_status_pretty=pretty["ex_status"],
+        unity_status_pretty=pretty["uni_status"],
         volume_by_symbol_pretty=pretty["vol_sym"],
         volume_by_symbol_side_pretty=pretty["vol_ss"],
         top_diffs_strict=top_diffs_strict,
@@ -1819,10 +1763,7 @@ def reconcile_to_report_with_preview(
     params: Optional[ReconcileParams] = None,
     preview_limit: int = 2000,
 ) -> Tuple[ReconcileResult, Dict[str, List[Dict[str, Any]]]]:
-    """
-    Делает reconcile_to_report, и дополнительно возвращает preview-таблицы для UI.
-    Preview берём из DataFrame (НЕ читаем XLSX обратно).
-    """
+
     params = params or ReconcileParams()
 
     exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, contract_map, used_unity_offset = _reconcile_core(
@@ -1976,11 +1917,11 @@ def reconcile_to_report_with_preview(
         summary=summary,
         params=params,
         exchange_name=exchange_name,
-        matched_pretty=pretty["matched"],          # type: ignore[arg-type]
-        missing_pretty=pretty["missing"],          # type: ignore[arg-type]
-        extra_pretty=pretty["extra"],              # type: ignore[arg-type]
-        ex_status_pretty=pretty["ex_status"],      # type: ignore[arg-type]
-        unity_status_pretty=pretty["uni_status"],  # type: ignore[arg-type]
+        matched_pretty=pretty["matched"],
+        missing_pretty=pretty["missing"],
+        extra_pretty=pretty["extra"],
+        ex_status_pretty=pretty["ex_status"],
+        unity_status_pretty=pretty["uni_status"],
         volume_by_symbol_pretty=pretty["vol_sym"],
         volume_by_symbol_side_pretty=pretty["vol_ss"],
         top_diffs_strict=top_diffs_strict,
