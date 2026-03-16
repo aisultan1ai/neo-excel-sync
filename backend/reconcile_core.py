@@ -403,13 +403,7 @@ def _prepare_binance_to_standard(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _map_bybit_side(v: Any) -> str:
-    """
-    Bybit Direction:
-      - "Buy"/"Sell"
-      - "Long"/"Short" (futures)
-      - possible: "Close Long"/"Close Short"
-    Convert to BUY/SELL.
-    """
+
     if v is None or (isinstance(v, float) and np.isnan(v)):
         return ""
     s = str(v).strip().upper()
@@ -419,19 +413,16 @@ def _map_bybit_side(v: Any) -> str:
     if s in {"SELL", "S"}:
         return "SELL"
 
-    # Futures style:
     if s == "LONG":
         return "BUY"
     if s == "SHORT":
         return "SELL"
 
-    # Close variants (be tolerant)
     if "CLOSE" in s and "LONG" in s:
         return "SELL"
     if "CLOSE" in s and "SHORT" in s:
         return "BUY"
 
-    # Fallback: try keywords
     if "BUY" in s:
         return "BUY"
     if "SELL" in s:
@@ -1560,6 +1551,36 @@ def _reconcile_core(
         return exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, contract_map, used_unity_offset
 
     unity_n, used_unity_offset = _normalize_unity(unity_raw, params)
+
+    if exchange_type == "BYBIT":
+        unity_n["qty"] = unity_n["qty"] * 100
+
+        # пересчитать все зависимые поля
+        unity_n["qty_r"] = unity_n["qty"].map(lambda x: _qround_str(x, params.qty_decimals))
+        unity_n["notional"] = unity_n["qty"] * unity_n["price"]
+        unity_n["notional_r"] = unity_n["notional"].map(lambda x: _qround_str(x, params.notional_decimals))
+
+        unity_n["match_key"] = (
+            unity_n["symbol"].astype(str) + "|" +
+            unity_n["side"].astype(str) + "|" +
+            unity_n["qty_r"].astype(str) + "|" +
+            unity_n["price_r"].astype(str)
+        )
+
+        if params.notional_use_minute_bucket:
+            unity_n["notional_key"] = (
+                unity_n["symbol"].astype(str) + "|" +
+                unity_n["side"].astype(str) + "|" +
+                unity_n["minute_utc"].astype(str) + "|" +
+                unity_n["notional_r"].astype(str)
+            )
+        else:
+            unity_n["notional_key"] = (
+                unity_n["symbol"].astype(str) + "|" +
+                unity_n["side"].astype(str) + "|" +
+                unity_n["notional_r"].astype(str)
+            )
+
     exchange_n = _normalize_exchange_common(
         exchange_raw,
         params,
@@ -1570,7 +1591,6 @@ def _reconcile_core(
         trading_unit_col=None,
     )
     return exchange_name, unity_raw, exchange_raw, unity_n, exchange_n, None, used_unity_offset
-
 # Public API
 
 def reconcile_to_report(
