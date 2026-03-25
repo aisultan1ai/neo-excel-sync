@@ -311,11 +311,9 @@ const DashboardPage = () => {
     [stats]
   );
 
-  // ===== UX / Layout constants =====
   const LIST_HEIGHT = 340;
   const HEADER_HEIGHT = 64;
 
-  // ===== Reusable styles =====
   const sectionHeader = {
     padding: "16px 20px",
     borderBottom: "1px solid #e2e8f0",
