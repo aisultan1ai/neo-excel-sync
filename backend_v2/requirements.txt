@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+psycopg2-binary
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
+pydantic
+bcrypt==4.0.1
+pandas
+openpyxl
+xlrd>=2.0.1
