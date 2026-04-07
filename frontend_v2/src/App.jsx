@@ -1,71 +1,51 @@
-import React, { useState } from "react";
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
 
-const API_BASE = "http://localhost:8001";
+import ProtectedRoute from "./components/routing/ProtectedRoute";
+import AppLayout from "./components/layout/AppLayout";
+
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
+import ComparePage from "./pages/ComparePage";
+import SplitsPage from "./pages/SplitsPage";
+import SettingsPage from "./pages/SettingsPage";
+import ProfilePage from "./pages/ProfilePage";
+import DepartmentsPage from "./pages/DepartmentsPage";
+import InstrumentsPage from "./pages/InstrumentsPage";
+import UnityExchangePage from "./pages/UnityExchangePage";
+import CryptoPage from "./pages/CryptoPage";
+import ProblemsPage from "./pages/ProblemsPage";
+
+import "react-toastify/dist/ReactToastify.css";
 
 export default function App() {
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
-  const [result, setResult] = useState("");
-
-  const checkHealth = async () => {
-    const res = await fetch(`${API_BASE}/api/v2/health`);
-    const data = await res.json();
-    setResult(JSON.stringify(data, null, 2));
-  };
-
-  const login = async () => {
-    const form = new URLSearchParams();
-    form.append("username", username);
-    form.append("password", password);
-
-    const res = await fetch(`${API_BASE}/api/v2/auth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: form,
-    });
-
-    const data = await res.json();
-    setResult(JSON.stringify(data, null, 2));
-  };
-
   return (
-    <div style={{ fontFamily: "Arial", padding: 24 }}>
-      <h1>NeoExcelSync V2</h1>
-      <p>Test environment</p>
+    <BrowserRouter>
+      <>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
 
-      <div style={{ marginBottom: 20 }}>
-        <button onClick={checkHealth}>Check health</button>
-      </div>
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/compare" element={<ComparePage />} />
+              <Route path="/splits" element={<SplitsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/departments" element={<DepartmentsPage />} />
+              <Route path="/instruments" element={<InstrumentsPage />} />
+              <Route path="/unity-exchange" element={<UnityExchangePage />} />
+              <Route path="/crypto" element={<CryptoPage />} />
+              <Route path="/problems" element={<ProblemsPage />} />
 
-      <div style={{ marginBottom: 20 }}>
-        <input
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="username"
-          style={{ display: "block", marginBottom: 10, padding: 8 }}
-        />
-        <input
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="password"
-          type="password"
-          style={{ display: "block", marginBottom: 10, padding: 8 }}
-        />
-        <button onClick={login}>Login</button>
-      </div>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Route>
+        </Routes>
 
-      <pre
-        style={{
-          background: "#f4f4f4",
-          padding: 16,
-          borderRadius: 8,
-          overflow: "auto",
-        }}
-      >
-        {result}
-      </pre>
-    </div>
+        <ToastContainer position="bottom-right" theme="light" />
+      </>
+    </BrowserRouter>
   );
 }

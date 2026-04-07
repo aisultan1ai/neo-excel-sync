@@ -1,3 +1,6 @@
+import os
+from fastapi.middleware.cors import CORSMiddleware
+
 from fastapi import FastAPI
 
 from app.core.config import settings
@@ -24,6 +27,18 @@ from app.api.routers.users import router as users_router
 from app.api.routers.compare_instruments import router as compare_instruments_router
 app = FastAPI(title=settings.APP_NAME)
 
+cors_origins = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:4173,http://127.0.0.1:4173,http://172.16.181.20:4173,http://localhost:8080",
+).split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in cors_origins if o.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 def on_startup():
