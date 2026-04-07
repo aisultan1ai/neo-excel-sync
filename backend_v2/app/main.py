@@ -15,7 +15,13 @@ from app.api.routers.clients import router as clients_router
 from app.api.routers.settings import router as settings_router
 from app.api.routers.splits import router as splits_router
 from app.api.routers.compare import router as compare_router
-
+from app.api.routers.unity_exchange import router as unity_exchange_router
+from app.api.routers.podft import router as podft_router
+from app.api.routers.crypto import router as crypto_router
+from app.api.routers.dashboard import router as dashboard_router
+from app.api.routers.problems import router as problems_router
+from app.api.routers.users import router as users_router
+from app.api.routers.compare_instruments import router as compare_instruments_router
 app = FastAPI(title=settings.APP_NAME)
 
 
@@ -41,3 +47,10 @@ app.include_router(clients_router)
 app.include_router(settings_router)
 app.include_router(splits_router)
 app.include_router(compare_router)
+app.include_router(unity_exchange_router)
+app.include_router(podft_router)
+app.include_router(crypto_router)
+app.include_router(dashboard_router)
+app.include_router(problems_router)
+app.include_router(users_router)
+app.include_router(compare_instruments_router)

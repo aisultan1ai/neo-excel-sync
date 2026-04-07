@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import require_admin
 from app.core.security import get_password_hash
-from app.repositories.users import list_users, create_user
+from app.repositories.users import list_users, create_user, delete_user
 from app.schemas.users import UserCreate
 
 router = APIRouter(prefix="/api/v2/admin/users", tags=["admin-users"])
@@ -25,3 +25,15 @@ def admin_create_user(payload: UserCreate, admin_user=Depends(require_admin)):
         return {"status": "success", "user": row}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{user_id}")
+def admin_delete_user(user_id: int, admin_user=Depends(require_admin)):
+    if admin_user["id"] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+
+    ok = delete_user(user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"status": "success"}

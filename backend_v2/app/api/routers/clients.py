@@ -3,6 +3,7 @@ import os
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
+
 from app.api.deps import get_current_user_record
 from app.repositories.clients import (
     search_clients,
@@ -18,6 +19,7 @@ from app.utils.files import (
     save_client_file,
     list_folder_files,
 )
+from app.repositories.clients import reset_all_clients_statuses
 
 router = APIRouter(prefix="/api/v2/clients", tags=["clients"])
 
@@ -202,3 +204,10 @@ def delete_client_file(
 
     os.remove(path)
     return {"status": "success"}
+
+@router.post("/reset-status")
+def reset_all_clients_status(current_user=Depends(get_current_user_record)):
+    ok = reset_all_clients_statuses()
+    if not ok:
+        raise HTTPException(status_code=500, detail="DB Error")
+    return {"status": "success", "message": "Statuses reset"}

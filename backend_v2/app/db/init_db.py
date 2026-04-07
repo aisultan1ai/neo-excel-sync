@@ -86,6 +86,50 @@ def init_database():
             )
 
             cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS podft_snapshots (
+                    id SERIAL PRIMARY KEY,
+                    snapshot_date DATE NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by TEXT
+                )
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS podft_snapshot_trades (
+                    id SERIAL PRIMARY KEY,
+                    snapshot_id INTEGER NOT NULL REFERENCES podft_snapshots(id) ON DELETE CASCADE,
+                    row_hash TEXT NOT NULL,
+                    account TEXT,
+                    instrument TEXT,
+                    side TEXT,
+                    trading_dt TEXT,
+                    deal_dt TEXT,
+                    value_date DATE NOT NULL,
+                    qty NUMERIC,
+                    amount_tg NUMERIC,
+                    raw JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(snapshot_id, row_hash)
+                )
+                """
+            )
+
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_podft_snapshots_date ON podft_snapshots(snapshot_date)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_snapshot ON podft_snapshot_trades(snapshot_id)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_value_date ON podft_snapshot_trades(value_date)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_podft_snapshot_trades_created_at ON podft_snapshot_trades(created_at DESC)"
+            )
+            cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_clients_name ON clients(name)"
             )
             cur.execute(
@@ -102,6 +146,56 @@ def init_database():
             )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_attachments_task_id ON task_attachments(task_id)"
+            )
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS crypto_accounts (
+                    id SERIAL PRIMARY KEY,
+                    provider TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    asset TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_crypto_accounts_created_at ON crypto_accounts(created_at DESC)"
+            )
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS crypto_transfers (
+                    id SERIAL PRIMARY KEY,
+                    date DATE NOT NULL,
+                    type TEXT NOT NULL CHECK (type IN ('transfer','deposit','withdraw')),
+                    from_account_id INTEGER REFERENCES crypto_accounts(id) ON DELETE SET NULL,
+                    to_account_id   INTEGER REFERENCES crypto_accounts(id) ON DELETE SET NULL,
+                    amount NUMERIC NOT NULL,
+                    asset TEXT NOT NULL,
+                    comment TEXT,
+                    label TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_crypto_transfers_date ON crypto_transfers(date DESC)"
+            )
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS crypto_schemes (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    nodes JSONB NOT NULL,
+                    edges JSONB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_crypto_schemes_created_at ON crypto_schemes(created_at DESC)"
             )
 
             cur.execute("SELECT COUNT(*) FROM departments")

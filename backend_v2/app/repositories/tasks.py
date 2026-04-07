@@ -141,3 +141,72 @@ def update_task_status(task_id: int, status: str):
         raise
     finally:
         conn.close()
+
+
+def update_task_content(task_id: int, title: str, description: str):
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                UPDATE tasks
+                SET title = %s,
+                    description = %s
+                WHERE id = %s
+                RETURNING *
+                """,
+                (title, description, task_id),
+            )
+            row = cur.fetchone()
+        conn.commit()
+        return row
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def delete_task(task_id: int) -> bool:
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM comments WHERE task_id = %s", (task_id,))
+            cur.execute("DELETE FROM task_attachments WHERE task_id = %s", (task_id,))
+            cur.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
+            deleted = cur.rowcount > 0
+        conn.commit()
+        return deleted
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def accept_task(task_id: int, accepter_user_id: int):
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                UPDATE tasks
+                SET accepted_by_user_id = %s,
+                    accepted_at = NOW(),
+                    status = CASE WHEN status = 'Open' THEN 'In Progress' ELSE status END
+                WHERE id = %s
+                  AND accepted_by_user_id IS NULL
+                  AND to_user_id IS NULL
+                  AND status <> 'Done'
+                RETURNING *
+                """,
+                (accepter_user_id, task_id),
+            )
+            row = cur.fetchone()
+        conn.commit()
+        return row
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()

@@ -7,5 +7,6 @@ passlib[bcrypt]
 pydantic
 bcrypt==4.0.1
 pandas
+numpy
 openpyxl
 xlrd>=2.0.1

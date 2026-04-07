@@ -115,3 +115,17 @@ def delete_client(client_id: int):
         raise
     finally:
         conn.close()
+
+
+def reset_all_clients_statuses() -> bool:
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE clients SET status = 'gray'")
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
