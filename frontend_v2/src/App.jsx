@@ -16,6 +16,7 @@ import InstrumentsPage from "./pages/InstrumentsPage";
 import UnityExchangePage from "./pages/UnityExchangePage";
 import CryptoPage from "./pages/CryptoPage";
 import ProblemsPage from "./pages/ProblemsPage";
+import ReportsPage from "./pages/ReportsPage.jsx";
 
 import "react-toastify/dist/ReactToastify.css";
 
@@ -30,6 +31,7 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/compare" element={<ComparePage />} />
+              <Route path="/reports" element={<ReportsPage/>} />
               <Route path="/splits" element={<SplitsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/profile" element={<ProfilePage />} />

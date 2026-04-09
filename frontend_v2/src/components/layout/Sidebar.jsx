@@ -10,12 +10,14 @@ import {
   Binary,
   Wallet,
   AlertTriangle,
+  FileSpreadsheet,
 } from "lucide-react";
 
 const items = [
   { to: "/", label: "Главная", icon: LayoutDashboard },
   { to: "/compare", label: "Сверка", icon: FileDiff },
   { to: "/splits", label: "Сплиты", icon: Layers },
+  { to: "/reports", label: "Отчеты", icon: FileSpreadsheet },
   { to: "/departments", label: "Департаменты", icon: Users },
   { to: "/instruments", label: "Инструменты", icon: Binary },
   { to: "/unity-exchange", label: "Unity ↔ Биржа", icon: FileDiff },
