@@ -42,7 +42,7 @@ services:
       INIT_ADMIN_PASSWORD: admin123
       INIT_ADMIN_DEPARTMENT: Architecture Lab
       INIT_ADMIN_IS_ADMIN: true
-      CORS_ORIGINS: "http://localhost:4173,http://127.0.0.1:4173,http://172.16.181.20:4173"
+      CORS_ORIGINS: "http://localhost:8080,http://127.0.0.1:8080,http://localhost:4173,http://127.0.0.1:4173,http://172.16.181.20:8080,http://172.16.181.20:4173"
     volumes:
       - ./backend_v2/storage:/app/storage
     ports:
