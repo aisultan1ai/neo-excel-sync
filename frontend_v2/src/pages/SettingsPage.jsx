@@ -136,6 +136,7 @@ export default function SettingsPage() {
 
   return (
     <div className="page settings-page">
+      <div className="settings-centered-wrap">
       <div className="settings-header">
         <div>
           <h1>Настройки</h1>
@@ -436,6 +437,7 @@ export default function SettingsPage() {
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

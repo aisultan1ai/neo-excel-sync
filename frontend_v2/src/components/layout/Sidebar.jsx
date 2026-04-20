@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -11,6 +11,8 @@ import {
   Wallet,
   AlertTriangle,
   FileSpreadsheet,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 const groups = [
@@ -47,23 +49,34 @@ function isActive(pathname, to) {
   return pathname === to || pathname.startsWith(to + "/");
 }
 
-export default function Sidebar() {
+export default function Sidebar({ collapsed, onToggle }) {
   const location = useLocation();
 
   return (
-    <aside className="sidebar sidebar--new">
+    <aside className={`sidebar sidebar--new${collapsed ? " sidebar--collapsed" : ""}`}>
       <div className="sidebar__brand">
         <div className="sidebar__brand-mark">N</div>
-        <div>
-          <div className="sidebar__logo">NeoExcelSync</div>
-          <div className="sidebar__version">V2 Workspace</div>
-        </div>
+        {!collapsed && (
+          <div className="sidebar__brand-text">
+            <div className="sidebar__logo">NeoExcelSync</div>
+            <div className="sidebar__version">V2 Workspace</div>
+          </div>
+        )}
+        <button
+          className="sidebar__toggle"
+          onClick={onToggle}
+          title={collapsed ? "Развернуть меню" : "Свернуть меню"}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
       </div>
 
       <div className="sidebar__groups">
         {groups.map((group) => (
           <div key={group.title} className="sidebar__group">
-            <div className="sidebar__group-title">{group.title}</div>
+            {!collapsed && (
+              <div className="sidebar__group-title">{group.title}</div>
+            )}
 
             <nav className="sidebar__nav">
               {group.items.map((item) => {
@@ -74,12 +87,13 @@ export default function Sidebar() {
                   <Link
                     key={item.to}
                     to={item.to}
-                    className={`sidebar__link ${active ? "active" : ""}`}
+                    className={`sidebar__link${active ? " active" : ""}`}
+                    title={collapsed ? item.label : undefined}
                   >
                     <span className="sidebar__link-icon">
                       <Icon size={18} />
                     </span>
-                    <span>{item.label}</span>
+                    {!collapsed && <span>{item.label}</span>}
                   </Link>
                 );
               })}

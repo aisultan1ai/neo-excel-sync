@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -30,6 +30,8 @@ const pageMeta = {
 
 export default function AppLayout() {
   const location = useLocation();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   const meta = pageMeta[location.pathname] || {
     title: "NeoExcelSync",
     icon: LayoutDashboard,
@@ -38,8 +40,11 @@ export default function AppLayout() {
   const Icon = meta.icon;
 
   return (
-    <div className="app-shell app-shell--new">
-      <Sidebar />
+    <div className={`app-shell app-shell--new${sidebarCollapsed ? " sidebar-is-collapsed" : ""}`}>
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((v) => !v)}
+      />
 
       <div className="app-shell__right">
         <header className="app-topbar">

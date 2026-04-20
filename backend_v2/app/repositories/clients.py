@@ -70,28 +70,72 @@ def create_client(name: str, email: str, account_number: str, folder_path: str):
         conn.close()
 
 
+def create_client_with_folder(
+    name: str, email: str, account_number: str, folder_path: str
+):
+    """
+    Создаёт клиента и сразу записывает folder_path в одной транзакции.
+    Используется вместо create_client + отдельного UPDATE.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                INSERT INTO clients (name, email, account_number, folder_path, status)
+                VALUES (%s, %s, %s, %s, 'gray')
+                RETURNING id, name, email, account_number, status, folder_path, created_at
+                """,
+                (name, email, account_number, folder_path),
+            )
+            row = cur.fetchone()
+        conn.commit()
+        return row
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def update_client(
     client_id: int,
     name: str,
     email: str,
     account_number: str,
     status: str,
+    folder_path: str | None = None,
 ):
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                """
-                UPDATE clients
-                SET name = %s,
-                    email = %s,
-                    account_number = %s,
-                    status = %s
-                WHERE id = %s
-                RETURNING id, name, email, account_number, status, folder_path, created_at
-                """,
-                (name, email, account_number, status, client_id),
-            )
+            if folder_path is not None:
+                cur.execute(
+                    """
+                    UPDATE clients
+                    SET name = %s,
+                        email = %s,
+                        account_number = %s,
+                        status = %s,
+                        folder_path = %s
+                    WHERE id = %s
+                    RETURNING id, name, email, account_number, status, folder_path, created_at
+                    """,
+                    (name, email, account_number, status, folder_path, client_id),
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE clients
+                    SET name = %s,
+                        email = %s,
+                        account_number = %s,
+                        status = %s
+                    WHERE id = %s
+                    RETURNING id, name, email, account_number, status, folder_path, created_at
+                    """,
+                    (name, email, account_number, status, client_id),
+                )
             row = cur.fetchone()
         conn.commit()
         return row

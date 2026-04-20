@@ -1,3 +1,51 @@
+/* ─── Design tokens ─────────────────────────────────────────────────────── */
+:root {
+  /* Layout */
+  --sidebar-width: 290px;
+  --sidebar-collapsed-width: 64px;
+  --sidebar-transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Brand palette */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-light: #eff6ff;
+  --color-primary-border: #bfdbfe;
+
+  --color-danger: #dc2626;
+  --color-danger-light: #fee2e2;
+  --color-success: #059669;
+  --color-success-light: #ecfdf5;
+
+  /* Text */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-border-muted: #f1f5f9;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 20px;
+
+  /* Shadows */
+  --shadow-card: 0 14px 28px rgba(15, 23, 42, 0.05);
+  --shadow-topbar: 0 12px 28px rgba(15, 23, 42, 0.06);
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+}
+
+/* ─── Reset ──────────────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;
 }
@@ -4332,5 +4380,311 @@ a {
 
   .dashboard-hero {
     align-items: stretch;
+  }
+}
+
+/* ─── Collapsible sidebar ─────────────────────────────────────────────────── */
+
+.sidebar--new {
+  transition: var(--sidebar-transition);
+  flex-shrink: 0;
+}
+
+.sidebar--collapsed {
+  width: var(--sidebar-collapsed-width) !important;
+}
+
+.sidebar--collapsed .sidebar__brand {
+  justify-content: center;
+  padding-bottom: 14px;
+}
+
+.sidebar--collapsed .sidebar__link {
+  justify-content: center;
+  padding: 11px 0;
+}
+
+.sidebar--collapsed .sidebar__link-icon {
+  margin: 0;
+}
+
+.sidebar__brand-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar__toggle {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #94a3b8;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+
+.sidebar--collapsed .sidebar__toggle {
+  margin-left: 0;
+  margin-top: 8px;
+}
+
+.sidebar__toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.sidebar--collapsed .sidebar__group-title {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar__group {
+  margin-bottom: 8px;
+}
+
+/* ─── PageHeader ──────────────────────────────────────────────────────────── */
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-md);
+}
+
+.page-header__left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.page-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.page-header__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.page-header__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary-border);
+}
+
+.page-header__subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.page-header__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 700px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-header__actions {
+    justify-content: flex-start;
+  }
+}
+
+/* ─── Centered page layout (Profile & Settings) ──────────────────────────── */
+
+.page-centered {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+/* Profile page */
+.profile-page {
+  max-width: 100%;
+}
+
+.profile-page .profile-header {
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.profile-page .profile-grid {
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.profile-page .admin-panel-card {
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Settings page */
+.settings-page {
+  max-width: 100%;
+}
+
+.settings-page .settings-header,
+.settings-page .settings-tabs,
+.settings-page .settings-card {
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}
+
+.settings-page .settings-header {
+  margin-bottom: 0;
+}
+
+
+/* ─── Profile — centered hero layout ─────────────────────────────────────── */
+
+.profile-hero {
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: 28px 32px;
+  box-shadow: var(--shadow-card);
+}
+
+.profile-avatar-lg {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--color-primary-light);
+  border: 3px solid var(--color-primary-border);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-hero-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-hero-name {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.profile-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.profile-grid-centered {
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+}
+
+.profile-stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.profile-admin-centered {
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ─── Settings — centered wrap ────────────────────────────────────────────── */
+
+.settings-centered-wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.settings-centered-wrap .settings-header,
+.settings-centered-wrap .settings-tabs,
+.settings-centered-wrap .settings-card {
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+
+@media (max-width: 700px) {
+  .profile-hero {
+    flex-direction: column;
+    text-align: center;
+    padding: 24px;
+    gap: var(--spacing-md);
+  }
+
+  .profile-hero-name {
+    justify-content: center;
+  }
+
+  .profile-hero-meta {
+    justify-content: center;
+  }
+
+  .profile-grid-centered {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-logout-btn {
+    width: 100%;
+    justify-content: center;
   }
 }

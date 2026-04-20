@@ -3,14 +3,14 @@ import os
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
-
 from app.api.deps import get_current_user_record
 from app.repositories.clients import (
     search_clients,
     get_client_by_id,
-    create_client,
+    create_client_with_folder,
     update_client,
     delete_client,
+    reset_all_clients_statuses,
 )
 from app.schemas.clients import ClientCreate, ClientUpdate
 from app.utils.files import (
@@ -19,10 +19,12 @@ from app.utils.files import (
     save_client_file,
     list_folder_files,
 )
-from app.repositories.clients import reset_all_clients_statuses
 
 router = APIRouter(prefix="/api/v2/clients", tags=["clients"])
 
+
+# ── Статические маршруты ВЫШЕ /{client_id}, иначе FastAPI
+#    совпадает строку 'reset-status' с параметром client_id ──────────────────
 
 @router.get("")
 def get_clients(
@@ -32,18 +34,12 @@ def get_clients(
     return search_clients(search)
 
 
-@router.get("/{client_id}")
-def get_client_details(
-    client_id: int,
-    current_user=Depends(get_current_user_record),
-):
-    row = get_client_by_id(client_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    data = dict(row)
-    data["files"] = list_folder_files(row["folder_path"])
-    return data
+@router.post("/reset-status")
+def reset_all_clients_status(current_user=Depends(get_current_user_record)):
+    ok = reset_all_clients_statuses()
+    if not ok:
+        raise HTTPException(status_code=500, detail="DB Error")
+    return {"status": "success", "message": "Statuses reset"}
 
 
 @router.post("")
@@ -58,36 +54,45 @@ def create_new_client(
     if not name:
         raise HTTPException(status_code=400, detail="name is required")
 
-    temp_folder = "__pending__"
-    row = create_client(name, email, account_number, temp_folder)
-
-    folder_name = make_client_folder_name(name, row["id"])
-    folder_path = ensure_client_folder(folder_name)
-
-    updated = update_client(
-        client_id=row["id"],
+    # Создаём запись с placeholder, получаем id
+    placeholder_row = create_client_with_folder(
         name=name,
         email=email,
         account_number=account_number,
-        status=row["status"],
+        folder_path="__pending__",
+    )
+    client_id = placeholder_row["id"]
+
+    folder_name = make_client_folder_name(name, client_id)
+    folder_path = ensure_client_folder(folder_name)
+
+    # Обновляем через репозиторий — без inline import в теле функции
+    final_row = update_client(
+        client_id=client_id,
+        name=name,
+        email=email,
+        account_number=account_number,
+        status=placeholder_row["status"],
+        folder_path=folder_path,
     )
 
-    # отдельно обновим folder_path напрямую
-    from app.db.connection import get_db_connection
-
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE clients SET folder_path = %s WHERE id = %s",
-                (folder_path, row["id"]),
-            )
-        conn.commit()
-    finally:
-        conn.close()
-
-    final_row = get_client_by_id(row["id"])
     return {"status": "success", "client": final_row}
+
+
+# ── Параметрические маршруты /{client_id} ───────────────────────────────────
+
+@router.get("/{client_id}")
+def get_client_details(
+    client_id: int,
+    current_user=Depends(get_current_user_record),
+):
+    row = get_client_by_id(client_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    data = dict(row)
+    data["files"] = list_folder_files(row["folder_path"])
+    return data
 
 
 @router.put("/{client_id}")
@@ -204,10 +209,3 @@ def delete_client_file(
 
     os.remove(path)
     return {"status": "success"}
-
-@router.post("/reset-status")
-def reset_all_clients_status(current_user=Depends(get_current_user_record)):
-    ok = reset_all_clients_statuses()
-    if not ok:
-        raise HTTPException(status_code=500, detail="DB Error")
-    return {"status": "success", "message": "Statuses reset"}
