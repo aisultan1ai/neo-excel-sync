@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  db_v2:
+    image: postgres:15-alpine
+    container_name: neo_db_v2
+    restart: always
+    environment:
+      POSTGRES_USER: neo_v2
+      POSTGRES_PASSWORD: neo_v2_pass
+      POSTGRES_DB: neo_v2
+    volumes:
+      - postgres_v2_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend_v2:
+    build: ./backend_v2
+    container_name: neo_backend_v2
+    restart: always
+    depends_on:
+      db_v2:
+        condition: service_healthy
+    environment:
+      APP_NAME: NeoExcelSync API V2
+      APP_ENV: development
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      DB_HOST: db_v2
+      DB_PORT: 5432
+      POSTGRES_DB: neo_v2
+      POSTGRES_USER: neo_v2
+      POSTGRES_PASSWORD: neo_v2_pass
+      SECRET_KEY: dev-secret-key-change-me
+      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      INIT_ADMIN_USERNAME: admin
+      INIT_ADMIN_PASSWORD: admin123
+      INIT_ADMIN_DEPARTMENT: Architecture Lab
+      INIT_ADMIN_IS_ADMIN: true
+      CORS_ORIGINS: "http://localhost:8080,http://127.0.0.1:8080,http://localhost:4173,http://127.0.0.1:4173,http://172.16.181.20:8080,http://172.16.181.20:4173"
+    volumes:
+      - ./backend_v2/storage:/app/storage
+    ports:
+      - "8001:8000"
+
+  frontend_v2:
+    build: ./frontend_v2
+    container_name: neo_frontend_v2
+    restart: always
+    depends_on:
+      - backend_v2
+    ports:
+      - "8080:4173"
+
+volumes:
+  postgres_v2_data:

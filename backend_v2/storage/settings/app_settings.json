@@ -1,0 +1,27 @@
+{
+  "podft_sum_col": "Сумма тг",
+  "podft_threshold": "7000000",
+  "podft_filter_enabled": true,
+  "podft_filter_col": "Рынок ЦБ",
+  "podft_filter_values": "",
+  "bo_enabled": true,
+  "bo_unity_instrument_col": "Instrument",
+  "bo_ais_sum_col": "Сумма тг",
+  "bo_threshold": "45000000",
+  "bo_prefixes": "[BO],[OP]",
+  "default_id_names": [
+    "Execution ID",
+    "ID сделки на бирже"
+  ],
+  "default_acc_name_unity": "Account",
+  "default_acc_name_ais": "",
+  "overlap_accounts": [],
+  "split_check_enabled": false,
+  "split_list_path": "/app/storage/splits/Апрель 1.xlsx",
+  "split_list_isin_col": "",
+  "daily_file_security_col": "",
+  "split_daily_qty_col": "",
+  "crypto_enabled": false,
+  "crypto_keywords": "",
+  "crypto_col": ""
+}
