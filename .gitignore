@@ -41,3 +41,6 @@ temp_uploads/
 *.csv
 
 .env
+
+# Бэкапы БД
+backups/*.sql.gz

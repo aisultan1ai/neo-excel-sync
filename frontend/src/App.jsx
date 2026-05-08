@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import axios from "axios";
 import {
   BrowserRouter as Router,
   Routes,
@@ -20,6 +21,8 @@ import {
   LayoutDashboard,
   Binary,
   Wallet,
+  TrendingUp,
+  ClipboardList,
 } from "lucide-react";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -36,6 +39,8 @@ import ProfilePage from "./pages/ProfilePage";
 import InstrumentsPage from "./pages/InstrumentsPage";
 import AccountsPage from "./pages/AccountsPage";
 import UnityExchangePage from "./pages/UnityExchangePage";
+import FundingFeePage from "./pages/FundingFeePage";
+import BackLogPage from "./pages/BackLogPage";
 
 const getToken = () => localStorage.getItem("token");
 
@@ -70,7 +75,7 @@ const ProtectedRoute = ({ token }) => {
 };
 
 
-const AppLayout = () => {
+const AppLayout = ({ isAdmin }) => {
   return (
     <div className="app-container">
       <aside className="sidebar">
@@ -85,8 +90,10 @@ const AppLayout = () => {
           <NavButton to="/reports" icon={FileSpreadsheet} label="Отчеты" />
           <NavButton to="/departments" icon={Users} label="Департаменты" />
           <NavButton to="/instruments" icon={Binary} label="Инструменты" />
-            <NavButton to="/unity-exchange" icon={FileDiff} label="Unity ↔ Биржа" />
+          <NavButton to="/unity-exchange" icon={FileDiff} label="Unity ↔ Биржа" />
           <NavButton to="/crypto" icon={Wallet} label="Крипто-счета" />
+          <NavButton to="/funding-fee" icon={TrendingUp} label="Funding Fee" />
+          {isAdmin && <NavButton to="/backlog" icon={ClipboardList} label="BackLog" />}
 
           <div className="spacer" style={{ flex: 1 }} />
 
@@ -132,18 +139,24 @@ const LoginRoute = ({ token, onLogin }) => {
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
-
-  const [token, setToken] = useState(() => getToken());
+  const [token, setToken]         = useState(() => getToken());
+  const [isAdmin, setIsAdmin]     = useState(false);
 
   useEffect(() => {
     setIsLoading(false);
-
     const onStorage = (e) => {
       if (e.key === "token") setToken(e.newValue);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  useEffect(() => {
+    if (!token) { setIsAdmin(false); return; }
+    axios.get("/api/profile", { headers: { Authorization: `Bearer ${token}` } })
+      .then(({ data }) => setIsAdmin(data?.is_admin === true))
+      .catch(() => setIsAdmin(false));
+  }, [token]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -164,17 +177,19 @@ function App() {
 
         {/* protected */}
         <Route element={<ProtectedRoute token={token} />}>
-          <Route element={<AppLayout  />}>
+          <Route element={<AppLayout isAdmin={isAdmin} />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/sverka" element={<SverkaPage />} />
             <Route path="/splits" element={<SplitsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/departments" element={<DepartmentsPage />} />
             <Route path="/instruments" element={<InstrumentsPage />} />
-              <Route path="/unity-exchange" element={<UnityExchangePage />} />
+            <Route path="/unity-exchange" element={<UnityExchangePage />} />
             <Route path="/crypto" element={<AccountsPage />} />
+            <Route path="/funding-fee" element={<FundingFeePage />} />
             <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
             <Route path="/settings" element={<SettingsPage />} />
+            {isAdmin && <Route path="/backlog" element={<BackLogPage />} />}
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
