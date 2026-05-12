@@ -1,12 +1,13 @@
 import bcrypt
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
 from core.database import get_db_connection
 from core.deps import get_current_user
+from core.limiter import limiter
 from core.security import verify_password, create_access_token
 from db.users import get_user_by_username, get_user_stats, update_user_password
 from db.users import get_dashboard_stats
@@ -21,7 +22,8 @@ class PasswordChange(BaseModel):
 
 
 @router.post("/api/token")
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+@limiter.limit("10/minute")
+async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     user = get_user_by_username(form_data.username)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")

@@ -5,7 +5,7 @@ if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY is not set")
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8
 
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",

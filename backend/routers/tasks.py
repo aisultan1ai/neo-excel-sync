@@ -16,8 +16,12 @@ from db.tasks import (
     add_task_attachment, get_task_attachments, get_attachment_by_id, delete_task_attachment,
     accept_task,
 )
-from db.users import get_user_by_username
-from db.problems import get_problems, create_problem, update_problem, delete_problem
+from db.users import get_user_by_username, get_user_by_id
+from db.problems import get_problems, get_problem_by_id, create_problem, update_problem, delete_problem
+from db.podft import (
+    create_podft_snapshot, add_podft_snapshot_trades,
+    get_latest_podft_snapshot_for_date, get_podft_snapshot_count, get_podft_trades_by_snapshot,
+)
 
 router = APIRouter()
 
@@ -148,12 +152,17 @@ async def accept_task_endpoint(task_id: int, current_user: str = Depends(get_cur
     return {"status": "success", "task": fresh or updated}
 
 
+_VALID_STATUSES = {"Pending", "In Progress", "Done", "Rejected"}
+
+
 @router.put("/api/tasks/{task_id}/status")
 async def change_task_status(
     task_id: int,
     status_data: TaskStatusUpdate,
     current_user: str = Depends(get_current_user),
 ):
+    if status_data.status not in _VALID_STATUSES:
+        raise HTTPException(400, f"status must be one of: {', '.join(sorted(_VALID_STATUSES))}")
     if update_task_status(task_id, status_data.status):
         return {"status": "success"}
     raise HTTPException(500, "Error updating status")
@@ -168,7 +177,7 @@ async def update_task_endpoint(
     if not db_task:
         raise HTTPException(404, "Task not found")
     ensure_task_owner_or_admin(db_task, user)
-    if not update_task(task_id, task.title, task.description):
+    if not update_task_content(task_id, task.title, task.description):
         raise HTTPException(500, "Failed to update task")
     return {"status": "success", "message": "Task updated"}
 

@@ -64,7 +64,7 @@ async def ff_save_unity_config(
         token_enc = ""
     else:
         try:
-            token_enc = funding_service.encrypt_value(req.auth_token)
+            token_enc = encrypt_value(req.auth_token)
         except Exception as e:
             raise HTTPException(500, f"Encryption error: {e}")
     cashout_manager.save_unity_config(req.base_url, token_enc, user[0])

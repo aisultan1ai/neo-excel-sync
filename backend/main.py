@@ -6,8 +6,11 @@ import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from core.config import CORS_ORIGINS
+from core.limiter import limiter
 from db.migrations import init_all
 from db import users as users_db
 from excel_reconcile_single import register_excel_reconcile
@@ -37,6 +40,8 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 app = FastAPI(title="NeoExcelSync API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 register_excel_reconcile(app)
 
@@ -44,8 +49,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in CORS_ORIGINS if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 app.include_router(auth.router)

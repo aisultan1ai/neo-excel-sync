@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+slowapi
 psycopg2-binary
 python-multipart
 requests
