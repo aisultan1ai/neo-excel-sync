@@ -151,9 +151,9 @@ export default function SettingsTab({ accounts, tz = 0, onTzChange }) {
                   return (
                     <tr key={acc.id}>
                       <td style={{ fontWeight: 600, fontSize: 13 }}>{acc.name}</td>
-                      <td style={{ textAlign: "right", fontSize: 13, color: m ? T.ink : T.faint }}>{m?.unity_account_id || "—"}</td>
-                      <td style={{ textAlign: "right", fontSize: 13, color: m ? T.ink : T.faint }}>{m?.unity_real_account_id || "—"}</td>
-                      <td style={{ textAlign: "right", fontSize: 13, color: m ? T.ink : T.faint }}>{m?.unity_asset_id || "—"}</td>
+                      <td style={{ textAlign: "right", fontSize: 13, color: m ? T.ink : T.faint }}>{m?.unity_account_id || "-"}</td>
+                      <td style={{ textAlign: "right", fontSize: 13, color: m ? T.ink : T.faint }}>{m?.unity_real_account_id || "-"}</td>
+                      <td style={{ textAlign: "right", fontSize: 13, color: m ? T.ink : T.faint }}>{m?.unity_asset_id || "-"}</td>
                       <td>
                         <button className="btn" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => loadMap(acc.id)}>Настроить</button>
                       </td>
@@ -167,7 +167,7 @@ export default function SettingsTab({ accounts, tz = 0, onTzChange }) {
       </div>
 
       {editMap && (
-        <Modal title={`Маппинг — ${accounts.find((a) => a.id === editMap.ff_account_id)?.name}`} onClose={() => setEditMap(null)} width={400}>
+        <Modal title={`Маппинг - ${accounts.find((a) => a.id === editMap.ff_account_id)?.name}`} onClose={() => setEditMap(null)} width={400}>
           <div style={{ padding: "20px 24px 24px" }}>
             {[["unity_account_id","accountId"],["unity_real_account_id","realAccountId"],["unity_asset_id","assetId"]].map(([name, label]) => (
               <div key={name} className="input-group" style={{ marginBottom: 14 }}>

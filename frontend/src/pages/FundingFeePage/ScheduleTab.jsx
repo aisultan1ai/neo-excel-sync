@@ -48,7 +48,7 @@ export default function ScheduleTab({ accounts }) {
     <div className="card">
       <SectionTitle>Автоматический Cash In / Out по расписанию</SectionTitle>
       <p style={{ ...T.small, marginBottom: 16 }}>
-        Проверка ежедневно в 09:00 UTC. За <strong>месяц</strong> — берётся итог прошлого месяца, за <strong>неделю</strong> — прошедшие 7 дней.
+        Проверка ежедневно в 09:00 UTC. За <strong>месяц</strong> - берётся итог прошлого месяца, за <strong>неделю</strong> - прошедшие 7 дней.
         Положительный итог → Cash In, отрицательный → Cash Out.
       </p>
 
@@ -64,10 +64,10 @@ export default function ScheduleTab({ accounts }) {
                 return (
                   <tr key={acc.id}>
                     <td style={{ fontWeight: 600, fontSize: 13 }}>{acc.name}</td>
-                    <td style={{ fontSize: 13 }}>{s ? (s.frequency === "monthly" ? "Ежемесячно" : "Еженедельно") : "—"}</td>
-                    <td style={{ fontSize: 13 }}>{s ? dayLabel(s.frequency, s.day_of_period) : "—"}</td>
+                    <td style={{ fontSize: 13 }}>{s ? (s.frequency === "monthly" ? "Ежемесячно" : "Еженедельно") : "-"}</td>
+                    <td style={{ fontSize: 13 }}>{s ? dayLabel(s.frequency, s.day_of_period) : "-"}</td>
                     <td>{s ? <Pill color={s.enabled ? "#dcfce7" : "#f1f5f9"} text={s.enabled ? "#15803d" : T.faint}>{s.enabled ? "Активно" : "Отключено"}</Pill> : <span style={T.small}>не настроено</span>}</td>
-                    <td style={T.small}>{s ? fmtDate(s.last_run_date) : "—"}</td>
+                    <td style={T.small}>{s ? fmtDate(s.last_run_date) : "-"}</td>
                     <td>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button className="btn" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => startEdit(acc)}>{s ? "Изменить" : "Настроить"}</button>
@@ -83,7 +83,7 @@ export default function ScheduleTab({ accounts }) {
       )}
 
       {editRow && (
-        <Modal title={`Расписание — ${accounts.find((a) => a.id === editRow.ff_account_id)?.name}`} onClose={() => setEditRow(null)} width={400}>
+        <Modal title={`Расписание - ${accounts.find((a) => a.id === editRow.ff_account_id)?.name}`} onClose={() => setEditRow(null)} width={400}>
           <div style={{ padding: "20px 24px 24px" }}>
             <div className="input-group" style={{ marginBottom: 14 }}>
               <label className="input-label">Частота</label>

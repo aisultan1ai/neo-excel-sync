@@ -21,7 +21,7 @@ export default function ConfirmCashModal({ payload, account, mapping, onConfirm,
             ["Unity realAccountId", mapping?.unity_real_account_id],
             ["assetId",            mapping?.unity_asset_id],
             ["Netting Date",       payload.netting_date],
-            payload.start_date && ["Период", `${fmtDate(payload.start_date)} — ${fmtDate(payload.end_date)}`],
+            payload.start_date && ["Период", `${fmtDate(payload.start_date)} - ${fmtDate(payload.end_date)}`],
             payload.comment && ["Комментарий", payload.comment],
             payload.internal_comment && ["Внутренний", payload.internal_comment],
           ].filter(Boolean).map(([k, v]) => (

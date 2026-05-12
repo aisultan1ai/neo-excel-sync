@@ -5,10 +5,10 @@ export const fmt = (n, d = 2) =>
 
 export const fmt8 = (n) => fmt(n, 8);
 
-export const fmtDate = (v) => (!v ? "—" : String(v).slice(0, 10));
+export const fmtDate = (v) => (!v ? "-" : String(v).slice(0, 10));
 
 export const fmtDT = (v, tzOffset = 0) => {
-  if (!v) return "—";
+  if (!v) return "-";
   const s = String(v).replace(" ", "T");
   const norm = /[Zz]|[+\-]\d{2}:?\d{2}$/.test(s) ? s : s + "Z";
   const d = new Date(norm);

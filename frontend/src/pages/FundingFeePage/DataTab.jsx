@@ -154,7 +154,7 @@ export default function DataTab({ accounts, selAccountId, onSelect, onAccountsRe
             <select className="text-input" value={selAccountId}
               onChange={(e) => { onSelect(e.target.value); setSummary(null); setRecords([]); }}
               style={{ appearance: "none", paddingRight: 32 }}>
-              <option value="">— выберите аккаунт —</option>
+              <option value="">- выберите аккаунт -</option>
               {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
             <ChevronDown size={15} style={S.chev} />

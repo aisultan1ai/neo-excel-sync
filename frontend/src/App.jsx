@@ -75,7 +75,7 @@ const ProtectedRoute = ({ token }) => {
 };
 
 
-const AppLayout = ({ isAdmin }) => {
+const AppLayout = ({ isAdmin, userDept }) => {
   return (
     <div className="app-container">
       <aside className="sidebar">
@@ -141,6 +141,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [token, setToken]         = useState(() => getToken());
   const [isAdmin, setIsAdmin]     = useState(false);
+  const [userDept, setUserDept]   = useState("");
 
   useEffect(() => {
     setIsLoading(false);
@@ -152,10 +153,13 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!token) { setIsAdmin(false); return; }
+    if (!token) { setIsAdmin(false); setUserDept(""); return; }
     axios.get("/api/profile", { headers: { Authorization: `Bearer ${token}` } })
-      .then(({ data }) => setIsAdmin(data?.is_admin === true))
-      .catch(() => setIsAdmin(false));
+      .then(({ data }) => {
+        setIsAdmin(data?.is_admin === true);
+        setUserDept(data?.department || "");
+      })
+      .catch(() => { setIsAdmin(false); setUserDept(""); });
   }, [token]);
 
   const handleLogout = () => {
@@ -177,7 +181,7 @@ function App() {
 
         {/* protected */}
         <Route element={<ProtectedRoute token={token} />}>
-          <Route element={<AppLayout isAdmin={isAdmin} />}>
+          <Route element={<AppLayout isAdmin={isAdmin} userDept={userDept} />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/sverka" element={<SverkaPage />} />
             <Route path="/splits" element={<SplitsPage />} />

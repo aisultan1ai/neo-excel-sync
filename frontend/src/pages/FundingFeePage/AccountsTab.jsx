@@ -57,7 +57,7 @@ export default function AccountsTab({ accounts, selAccountId, onSelect, onDelete
                       <td style={T.small}>{fmtDate(acc.created_at)}</td>
                       <td style={{ textAlign: "right", ...T.body }}>{(acc.total_records || 0).toLocaleString()}</td>
                       <td style={{ textAlign: "right", fontWeight: 600, color: pos ? T.green : T.red }}>
-                        {acc.total_records > 0 ? `${pos ? "+" : ""}${fmt(acc.total_income || 0)}` : "—"}
+                        {acc.total_records > 0 ? `${pos ? "+" : ""}${fmt(acc.total_income || 0)}` : "-"}
                       </td>
                       <td style={T.small}>{fmtDate(acc.first_record_date)}</td>
                       <td style={T.small}>{fmtDate(acc.last_record_date)}</td>

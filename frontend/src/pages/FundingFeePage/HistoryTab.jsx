@@ -117,7 +117,7 @@ function ManualCashCard({ accounts, onSent }) {
             <div style={{ position: "relative", marginTop: 6 }}>
               <select className="text-input" name="ff_account_id" value={form.ff_account_id} onChange={handle}
                 style={{ appearance: "none", paddingRight: 32 }}>
-                <option value="">— выберите аккаунт —</option>
+                <option value="">- выберите аккаунт -</option>
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
               <ChevronDown size={15} style={S.chev} />
@@ -143,7 +143,7 @@ function ManualCashCard({ accounts, onSent }) {
         {calcDone && (
           <div style={{ background: isIn ? "#f0fdf4" : isOut ? "#fef2f2" : T.bg, border: `1px solid ${isIn ? "#bbf7d0" : isOut ? "#fecaca" : T.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 16 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ ...T.small, marginBottom: 4 }}>{selAcc?.name} · {form.start_date} — {form.end_date}</div>
+              <div style={{ ...T.small, marginBottom: 4 }}>{selAcc?.name} · {form.start_date} - {form.end_date}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 22, fontWeight: 700, color: isIn ? T.green : isOut ? T.red : T.muted }}>
                   {fmt8(amt)} USDT
@@ -271,7 +271,7 @@ export default function HistoryTab({ accounts, tz = 0 }) {
                     <td style={{ fontWeight: 600, fontSize: 13 }}>{r.account_name || r.ff_account_id}</td>
                     <td><TxPill t={r.transaction_type} /></td>
                     <td style={{ fontSize: 12, color: T.muted }}>
-                      {r.start_date && r.end_date ? `${fmtDate(r.start_date)} — ${fmtDate(r.end_date)}` : "—"}
+                      {r.start_date && r.end_date ? `${fmtDate(r.start_date)} - ${fmtDate(r.end_date)}` : "-"}
                     </td>
                     <td style={{ textAlign: "right", fontWeight: 600, fontSize: 13, color: parseFloat(r.amount) >= 0 ? T.green : T.red }}>
                       {fmt8(r.amount)}
@@ -279,10 +279,10 @@ export default function HistoryTab({ accounts, tz = 0 }) {
                     <td style={{ fontSize: 12, color: T.muted }}>{fmtDate(r.netting_date)}</td>
                     <td><StatusPill s={r.status} /></td>
                     <td style={{ fontSize: 11, fontFamily: "monospace", color: "#475569" }}>
-                      {r.transaction_id || (r.status === "error" ? <span style={{ color: T.red, fontSize: 11 }}>{r.error_message?.slice(0, 50)}</span> : "—")}
+                      {r.transaction_id || (r.status === "error" ? <span style={{ color: T.red, fontSize: 11 }}>{r.error_message?.slice(0, 50)}</span> : "-")}
                     </td>
                     <td style={{ fontSize: 12, color: T.muted }}>{r.triggered_by}</td>
-                    <td style={{ fontSize: 12, color: T.muted }}>{r.comment || "—"}</td>
+                    <td style={{ fontSize: 12, color: T.muted }}>{r.comment || "-"}</td>
                   </tr>
                 ))}
               </tbody>

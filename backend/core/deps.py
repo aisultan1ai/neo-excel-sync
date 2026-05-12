@@ -48,6 +48,9 @@ def ff_get_user(current_user: str) -> tuple:
     user = get_user_by_username(current_user)
     if not user:
         raise HTTPException(404, "User not found")
+    is_admin = user[4] if len(user) > 4 else False
+    if not is_admin and user[3] != "Trading":
+        raise HTTPException(403, "Доступ разрешён только департаменту Trading")
     return user
 
 
