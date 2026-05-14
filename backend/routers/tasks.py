@@ -2,6 +2,7 @@ import os
 import shutil
 import time
 from datetime import date
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -24,6 +25,9 @@ from db.podft import (
 )
 
 router = APIRouter()
+
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_TASK_FILES_DIR = _BACKEND_DIR / "task_files"
 
 
 class TaskCreate(BaseModel):
@@ -109,7 +113,7 @@ async def create_new_task(
         raise HTTPException(400, "to_department is required (or specify to_user_id)")
 
     task_id = create_task(
-        task.title, task.description, user[0], to_department,
+        task.title, task.description, user.id, to_department,
         to_user_id=to_user_id, due_date=task.due_date, priority=pr,
     )
     if task_id:
@@ -127,24 +131,22 @@ async def accept_task_endpoint(task_id: int, current_user: str = Depends(get_cur
     if not db_task:
         raise HTTPException(404, "Task not found")
 
-    is_admin = user[4] if len(user) > 4 else False
-
     if db_task.get("to_user_id"):
         raise HTTPException(400, "This task is assigned to a specific user")
     if db_task.get("status") == "Done":
         raise HTTPException(400, "Cannot accept a completed task")
-    if (not is_admin) and (db_task.get("to_department") != user[3]):
+    if (not user.is_admin) and (db_task.get("to_department") != user.department):
         raise HTTPException(403, "Not allowed")
 
     if db_task.get("accepted_by_user_id"):
-        if db_task.get("accepted_by_user_id") == user[0]:
+        if db_task.get("accepted_by_user_id") == user.id:
             return {"status": "success", "task": db_task}
         raise HTTPException(409, f"Already accepted by {db_task.get('accepted_by_name')}")
 
-    updated = accept_task(task_id, user[0])
+    updated = accept_task(task_id, user.id)
     if not updated:
         fresh = get_task_by_id(task_id)
-        if fresh and fresh.get("accepted_by_user_id") == user[0]:
+        if fresh and fresh.get("accepted_by_user_id") == user.id:
             return {"status": "success", "task": fresh}
         raise HTTPException(409, "Already accepted")
 
@@ -199,7 +201,7 @@ async def read_my_tasks(current_user: str = Depends(get_current_user)):
     user = get_user_by_username(current_user)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return [dict(t) for t in get_user_tasks(user[0])]
+    return [dict(t) for t in get_user_tasks(user.id)]
 
 
 # ── Comments ───────────────────────────────────────────────────
@@ -214,7 +216,9 @@ async def create_new_comment(
     task_id: int, comment: CommentCreate, current_user: str = Depends(get_current_user)
 ):
     user = get_user_by_username(current_user)
-    if add_comment(task_id, user[0], comment.content):
+    if not user:
+        raise HTTPException(404, "User not found")
+    if add_comment(task_id, user.id, comment.content):
         return {"status": "success"}
     raise HTTPException(500, "Error adding comment")
 
@@ -225,14 +229,13 @@ async def create_new_comment(
 async def upload_task_attachment(
     task_id: int, file: UploadFile = File(...), current_user: str = Depends(get_current_user)
 ):
-    base_dir = os.path.join(os.getcwd(), "task_files")
-    os.makedirs(base_dir, exist_ok=True)
-    safe_name = os.path.basename(file.filename)
+    _TASK_FILES_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(file.filename).name
     unique_name = f"{task_id}_{int(time.time())}_{safe_name}"
-    file_path = os.path.join(base_dir, unique_name)
+    file_path = _TASK_FILES_DIR / unique_name
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    if add_task_attachment(task_id, safe_name, file_path):
+    if add_task_attachment(task_id, safe_name, str(file_path)):
         return {"status": "success", "filename": safe_name}
     raise HTTPException(500, "Error saving attachment")
 
@@ -293,7 +296,7 @@ async def api_create_problem(payload: ProblemCreate, current_user: str = Depends
     row = create_problem(
         title=title,
         description=(payload.description or "").strip(),
-        created_by_user_id=admin_user[0],
+        created_by_user_id=admin_user.id,
     )
     if not row:
         raise HTTPException(500, "DB error creating problem")

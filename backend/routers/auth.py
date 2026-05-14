@@ -27,9 +27,9 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
     user = get_user_by_username(form_data.username)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    if not verify_password(form_data.password, user[2]):
+    if not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect password")
-    access_token = create_access_token(data={"sub": user[1]})
+    access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -38,13 +38,12 @@ async def get_profile_info(current_user: str = Depends(get_current_user)):
     user = get_user_by_username(current_user)
     if not user:
         raise HTTPException(404, "User not found")
-    is_admin = user[4] if len(user) > 4 else False
-    stats = get_user_stats(user[0])
+    stats = get_user_stats(user.id)
     return {
-        "id": user[0],
+        "id": user.id,
         "username": current_user,
-        "department": user[3],
-        "is_admin": is_admin,
+        "department": user.department,
+        "is_admin": user.is_admin,
         "stats": stats,
     }
 
@@ -56,11 +55,11 @@ async def change_password(
     user = get_user_by_username(current_user)
     if not user:
         raise HTTPException(404, "User not found")
-    if not verify_password(data.old_password, user[2]):
+    if not verify_password(data.old_password, user.password_hash):
         raise HTTPException(400, "Old password incorrect")
     salt = bcrypt.gensalt()
     new_hash = bcrypt.hashpw(data.new_password.encode("utf-8"), salt).decode("utf-8")
-    if update_user_password(user[0], new_hash):
+    if update_user_password(user.id, new_hash):
         return {"status": "success"}
     raise HTTPException(500, "Error updating password")
 

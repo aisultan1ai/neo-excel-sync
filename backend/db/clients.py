@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 from typing import Optional
 
 from psycopg2.extras import RealDictCursor
@@ -7,6 +8,8 @@ from psycopg2.extras import RealDictCursor
 from core.database import get_db_connection
 
 log = logging.getLogger(__name__)
+
+_BASE_REPORTS_DIR = Path(__file__).resolve().parent.parent / "client_reports"
 
 
 def search_clients(search_term: str = ""):
@@ -46,12 +49,19 @@ def add_client(name: str, email: str, account: str, folder_path_override: Option
     if not name:
         return False, "Имя клиента обязательно."
 
-    final_folder_path = folder_path_override
-    if not final_folder_path:
-        base_dir = os.path.join(os.getcwd(), "client_reports")
-        os.makedirs(base_dir, exist_ok=True)
+    if folder_path_override:
+        try:
+            resolved = Path(folder_path_override).resolve()
+            allowed = _BASE_REPORTS_DIR.resolve()
+            if not str(resolved).startswith(str(allowed)):
+                return False, "Недопустимый путь для папки клиента"
+        except Exception:
+            return False, "Недопустимый путь для папки клиента"
+        final_folder_path = str(resolved)
+    else:
+        _BASE_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
         safe_name = "".join([c for c in name if c.isalnum() or c == " "]).rstrip()
-        final_folder_path = os.path.join(base_dir, safe_name)
+        final_folder_path = str(_BASE_REPORTS_DIR / safe_name)
 
     if not os.path.exists(final_folder_path):
         try:

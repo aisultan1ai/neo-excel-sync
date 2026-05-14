@@ -14,6 +14,7 @@ from core.limiter import limiter
 from db.migrations import init_all
 from db import users as users_db
 from excel_reconcile_single import register_excel_reconcile
+from utils.cache import cleanup_cache, cleanup_unity_exchange_cache
 from utils.scheduler import run_scheduled_cashouts
 
 from routers import (
@@ -74,6 +75,8 @@ _scheduler = BackgroundScheduler(timezone="UTC")
 def startup_event():
     init_all()
     _scheduler.add_job(run_scheduled_cashouts, "cron", hour=9, minute=0, id="cashout_daily")
+    _scheduler.add_job(cleanup_cache, "interval", minutes=15, id="cache_cleanup")
+    _scheduler.add_job(cleanup_unity_exchange_cache, "interval", minutes=15, id="unity_cache_cleanup")
     _scheduler.start()
     log.info("Database initialized.")
 

@@ -17,7 +17,7 @@ class UserCreate(BaseModel):
 
 
 @router.get("/api/users")
-async def get_users_basic(current_user: str = Depends(get_current_user)):
+async def list_users(current_user: str = Depends(get_current_user)):
     return get_users_basic()
 
 
@@ -40,7 +40,7 @@ async def admin_create_user(
 @router.delete("/api/admin/users/{user_id}")
 async def admin_delete_user(user_id: int, current_user: str = Depends(require_admin)):
     caller = get_user_by_username(current_user)
-    if caller and caller[0] == user_id:
+    if caller and caller.id == user_id:
         raise HTTPException(400, "Cannot delete yourself")
     if delete_user(user_id):
         return {"status": "success"}

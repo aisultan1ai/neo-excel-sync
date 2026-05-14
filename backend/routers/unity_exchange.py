@@ -9,10 +9,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 
-from utils.cache import CACHE_LOCK, LAST_UNITY_EXCHANGE_BY_USER, UNITY_EXCHANGE_CACHE, cleanup_unity_exchange_cache
+from core.constants import VALID_EXCHANGE_TYPES
 from core.deps import get_current_user
-from utils.files import cleanup_files, save_upload_file
 from reconcile_core import ReconcileParams, reconcile_to_report
+from utils.cache import CACHE_LOCK, LAST_UNITY_EXCHANGE_BY_USER, UNITY_EXCHANGE_CACHE, cleanup_unity_exchange_cache
+from utils.files import cleanup_files, save_upload_file
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -35,8 +36,8 @@ async def run_unity_exchange(
     ex_path = None
     try:
         exchange_type = (exchange_type or "BINANCE").strip().upper()
-        if exchange_type not in ("BINANCE", "OKX", "BYBIT"):
-            raise HTTPException(400, "exchange_type must be BINANCE, OKX or BYBIT")
+        if exchange_type not in VALID_EXCHANGE_TYPES:
+            raise HTTPException(400, f"exchange_type must be one of: {', '.join(VALID_EXCHANGE_TYPES)}")
 
         unity_path = save_upload_file(unity_file)
         ex_path = save_upload_file(exchange_file)
@@ -75,7 +76,7 @@ async def run_unity_exchange(
     except HTTPException:
         raise
     except Exception as e:
-        log.error(f"unity-exchange run error: {e}", exc_info=True)
+        log.error("unity-exchange run error: %s", e, exc_info=True)
         raise HTTPException(500, detail=str(e))
     finally:
         cleanup_files(unity_path, ex_path)

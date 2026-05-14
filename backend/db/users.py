@@ -1,4 +1,5 @@
 import logging
+from typing import NamedTuple, Optional
 
 from psycopg2.extras import RealDictCursor
 
@@ -7,7 +8,15 @@ from core.database import get_db_connection
 log = logging.getLogger(__name__)
 
 
-def get_user_by_username(username: str):
+class UserRow(NamedTuple):
+    id: int
+    username: str
+    password_hash: str
+    department: str
+    is_admin: bool
+
+
+def get_user_by_username(username: str) -> Optional[UserRow]:
     conn = get_db_connection()
     if not conn:
         return None
@@ -17,7 +26,8 @@ def get_user_by_username(username: str):
                 "SELECT id, username, password_hash, department, is_admin FROM users WHERE username = %s",
                 (username,),
             )
-            return cur.fetchone()
+            row = cur.fetchone()
+            return UserRow(*row) if row else None
     finally:
         conn.close()
 
