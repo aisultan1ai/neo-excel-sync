@@ -36,7 +36,7 @@ import SplitsPage from "./pages/SplitsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ReportsPage from "./pages/ReportsPage";
 import LoginPage from "./pages/LoginPage";
-import DepartmentsPage from "./pages/DepartmentsPage.jsx";
+import DepartmentsPage from "./pages/DepartmentsPage";
 import ProfilePage from "./pages/ProfilePage";
 import InstrumentsPage from "./pages/InstrumentsPage";
 import AccountsPage from "./pages/AccountsPage";
