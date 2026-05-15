@@ -1,5 +1,7 @@
 ﻿import React, { useEffect, useState } from "react";
 import axios from "axios";
+
+axios.defaults.withCredentials = true;
 import {
   BrowserRouter as Router,
   Routes,
@@ -42,7 +44,6 @@ import UnityExchangePage from "./pages/UnityExchangePage";
 import FundingFeePage from "./pages/FundingFeePage";
 import BackLogPage from "./pages/BackLogPage";
 
-const getToken = () => localStorage.getItem("token");
 
 // Подсветка
 const isActivePath = (pathname, to) => {
@@ -62,11 +63,10 @@ const NavButton = ({ to, icon: Icon, label }) => {
   );
 };
 
-const ProtectedRoute = ({ token }) => {
+const ProtectedRoute = ({ isAuthenticated }) => {
   const location = useLocation();
-  const authed = !!token;
 
-  if (!authed) {
+  if (!isAuthenticated) {
     const next = location.pathname + location.search + location.hash;
     return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
   }
@@ -111,13 +111,13 @@ const AppLayout = ({ isAdmin, userDept }) => {
   );
 };
 
-const LoginRoute = ({ token, onLogin }) => {
+const LoginRoute = ({ isAuthenticated, onLogin }) => {
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
   useEffect(() => {
-    if (token) navigate("/", { replace: true });
-  }, [token, navigate]);
+    if (isAuthenticated) navigate("/", { replace: true });
+  }, [isAuthenticated, navigate]);
 
   const handleLogin = () => {
     onLogin?.();
@@ -138,37 +138,39 @@ const LoginRoute = ({ token, onLogin }) => {
 };
 
 function App() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [token, setToken]         = useState(() => getToken());
-  const [isAdmin, setIsAdmin]     = useState(false);
-  const [userDept, setUserDept]   = useState("");
+  const [isLoading, setIsLoading]         = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin]             = useState(false);
+  const [userDept, setUserDept]           = useState("");
 
-  useEffect(() => {
-    setIsLoading(false);
-    const onStorage = (e) => {
-      if (e.key === "token") setToken(e.newValue);
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  useEffect(() => {
-    if (!token) { setIsAdmin(false); setUserDept(""); return; }
-    axios.get("/api/v1/profile", { headers: { Authorization: `Bearer ${token}` } })
+  const checkAuth = () =>
+    axios.get("/api/v1/profile", { withCredentials: true })
       .then(({ data }) => {
+        setIsAuthenticated(true);
         setIsAdmin(data?.is_admin === true);
         setUserDept(data?.department || "");
       })
-      .catch(() => { setIsAdmin(false); setUserDept(""); });
-  }, [token]);
+      .catch(() => {
+        setIsAuthenticated(false);
+        setIsAdmin(false);
+        setUserDept("");
+      });
+
+  useEffect(() => {
+    checkAuth().finally(() => setIsLoading(false));
+  }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    setToken(null);
+    axios.post("/api/v1/logout", {}, { withCredentials: true })
+      .finally(() => {
+        setIsAuthenticated(false);
+        setIsAdmin(false);
+        setUserDept("");
+      });
   };
 
   const handleLoginState = () => {
-    setToken(getToken());
+    checkAuth();
   };
 
   if (isLoading) return <div>Загрузка...</div>;
@@ -177,10 +179,10 @@ function App() {
     <Router>
       <Routes>
         {/* public */}
-        <Route path="/login" element={<LoginRoute token={token} onLogin={handleLoginState} />} />
+        <Route path="/login" element={<LoginRoute isAuthenticated={isAuthenticated} onLogin={handleLoginState} />} />
 
         {/* protected */}
-        <Route element={<ProtectedRoute token={token} />}>
+        <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
           <Route element={<AppLayout isAdmin={isAdmin} userDept={userDept} />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/sverka" element={<SverkaPage />} />

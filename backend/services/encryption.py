@@ -2,23 +2,29 @@ import os
 import threading
 from typing import Optional
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, MultiFernet
 
-_fernet: Optional[Fernet] = None
+_fernet: Optional[MultiFernet] = None
 _fernet_lock = threading.Lock()
 
 
-def _get_fernet() -> Fernet:
+def _get_fernet() -> MultiFernet:
     global _fernet
     if _fernet is not None:
         return _fernet
     with _fernet_lock:
         if _fernet is not None:
             return _fernet
-        key = os.getenv("FERNET_KEY", "")
-        if not key:
-            raise RuntimeError("FERNET_KEY not configured")
-        _fernet = Fernet(key.encode() if isinstance(key, str) else key)
+        # FERNET_KEYS: comma-separated list, first key used for encryption, all tried for decryption.
+        # Supports key rotation: prepend new key, keep old key(s) at the end.
+        keys_raw = os.getenv("FERNET_KEYS", "") or os.getenv("FERNET_KEY", "")
+        if not keys_raw:
+            raise RuntimeError("FERNET_KEY or FERNET_KEYS not configured")
+        keys = [k.strip() for k in keys_raw.split(",") if k.strip()]
+        if not keys:
+            raise RuntimeError("FERNET_KEY or FERNET_KEYS not configured")
+        fernets = [Fernet(k.encode() if isinstance(k, str) else k) for k in keys]
+        _fernet = MultiFernet(fernets)
     return _fernet
 
 

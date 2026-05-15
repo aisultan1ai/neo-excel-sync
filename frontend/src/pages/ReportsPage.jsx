@@ -106,15 +106,11 @@ const ReportsPage = () => {
   useEffect(() => {
     const checkPermission = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get("/api/v1/profile", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await axios.get("/api/v1/profile");
         setUserDept(res.data.department);
         setIsAdmin(res.data.is_admin);
-        // Загружаем клиентов только если есть права
         if (res.data.department === "Back Office" || res.data.is_admin) {
-          fetchClients("", token);
+          fetchClients("");
         }
       } catch (e) {
         console.error(e);
@@ -126,12 +122,9 @@ const ReportsPage = () => {
   }, []);
 
   // 2. ЗАГРУЗКА ДАННЫХ
-  const fetchClients = useCallback(async (searchTerm = "", tokenOverride = null) => {
+  const fetchClients = useCallback(async (searchTerm = "") => {
     try {
-      const token = tokenOverride || localStorage.getItem("token");
-      const res = await axios.get(`/api/v1/clients?search=${searchTerm}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(`/api/v1/clients?search=${searchTerm}`);
       setClients(res.data);
     } catch (e) {
       console.error(e);
@@ -154,10 +147,7 @@ const ReportsPage = () => {
 
   const fetchDetails = useCallback(async (id) => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`/api/v1/clients/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(`/api/v1/clients/${id}`);
       setClientDetails(res.data);
     } catch (e) {
       console.error(e);
@@ -195,8 +185,7 @@ const ReportsPage = () => {
     const formData = new FormData();
     Object.keys(newClient).forEach((k) => formData.append(k, newClient[k]));
     try {
-      const token = localStorage.getItem("token");
-      await axios.post("/api/v1/clients", formData, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post("/api/v1/clients", formData);
       setShowAddModal(false);
       setNewClient({ name: "", email: "", account: "", folder_path: "" });
       fetchClients(search);
@@ -222,10 +211,7 @@ const ReportsPage = () => {
     const formData = new FormData();
     Object.keys(editingClient).forEach((k) => formData.append(k, editingClient[k]));
     try {
-      const token = localStorage.getItem("token");
-      await axios.put(`/api/v1/clients/${selectedClient.id}`, formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.put(`/api/v1/clients/${selectedClient.id}`, formData);
       setShowEditModal(false);
       fetchDetails(selectedClient.id);
       fetchClients(search);
@@ -238,12 +224,7 @@ const ReportsPage = () => {
   const handleStatusChange = async (newStatusDisplay) => {
     const dbStatus = STATUS_DISPLAY_MAP[newStatusDisplay];
     try {
-      const token = localStorage.getItem("token");
-      await axios.put(
-        `/api/v1/clients/${selectedClient.id}/status`,
-        { status: dbStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.put(`/api/v1/clients/${selectedClient.id}/status`, { status: dbStatus });
       setClientDetails((prev) => ({ ...prev, status: dbStatus }));
       setClients((prev) =>
         prev.map((c) => (c.id === selectedClient.id ? { ...c, status: dbStatus } : c))
@@ -260,12 +241,7 @@ const ReportsPage = () => {
 
   const executeResetStatuses = async () => {
     try {
-      const token = localStorage.getItem("token");
-      await axios.post(
-        "/api/v1/clients/reset-status",
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.post("/api/v1/clients/reset-status", {});
       fetchClients(search);
       toast.success("Все статусы сброшены");
     } catch (e) {
@@ -279,10 +255,7 @@ const ReportsPage = () => {
   const handleDeleteClient = async () => {
     if (!confirm("Удалить клиента?")) return;
     try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`/api/v1/clients/${selectedClient.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.delete(`/api/v1/clients/${selectedClient.id}`);
       closeDrawer();
       fetchClients(search);
       toast.success("Удалено");
@@ -297,10 +270,7 @@ const ReportsPage = () => {
     const formData = new FormData();
     formData.append("file", file);
     try {
-      const token = localStorage.getItem("token");
-      await axios.post(`/api/v1/clients/${selectedClient.id}/upload`, formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.post(`/api/v1/clients/${selectedClient.id}/upload`, formData);
       fetchDetails(selectedClient.id);
       toast.success("Загружено");
     } catch (e) {
@@ -311,10 +281,7 @@ const ReportsPage = () => {
   const handleDeleteFile = async (filename) => {
     if (!confirm("Удалить файл?")) return;
     try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`/api/v1/clients/${selectedClient.id}/files/${filename}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.delete(`/api/v1/clients/${selectedClient.id}/files/${filename}`);
       fetchDetails(selectedClient.id);
       toast.success("Файл удален");
     } catch (e) {
@@ -324,10 +291,8 @@ const ReportsPage = () => {
 
   const handleDownloadFile = async (filename) => {
     try {
-      const token = localStorage.getItem("token");
       const res = await axios.get(`/api/v1/clients/${selectedClient.id}/files/${filename}`, {
         responseType: "blob",
-        headers: { Authorization: `Bearer ${token}` },
       });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");

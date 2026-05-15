@@ -2,7 +2,7 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.deps import get_current_user
 from db.crypto import (
@@ -31,7 +31,7 @@ class CryptoTransferCreate(BaseModel):
     type: str
     fromId: Optional[int] = None
     toId: Optional[int] = None
-    amount: float
+    amount: float = Field(..., gt=0)
     asset: str
     comment: Optional[str] = ""
     label: Optional[str] = ""

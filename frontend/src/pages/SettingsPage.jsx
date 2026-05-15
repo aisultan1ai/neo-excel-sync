@@ -27,10 +27,9 @@ const SettingsPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem("token");
         const [settingsRes, profileRes] = await Promise.all([
           axios.get("/api/v1/settings"),
-          axios.get("/api/v1/profile", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("/api/v1/profile"),
         ]);
 
         setSettings(settingsRes.data);

@@ -79,10 +79,7 @@ const DepartmentsPage = () => {
 
   const fetchMe = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get("/api/v1/profile", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get("/api/v1/profile");
       setMe(res.data); // { id, username, department, is_admin, ... }
     } catch (e) {
       setMe(null);
@@ -91,10 +88,7 @@ const DepartmentsPage = () => {
 
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get("/api/v1/users", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get("/api/v1/users");
       setUsers(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
       setUsers([]);
@@ -114,9 +108,8 @@ const DepartmentsPage = () => {
 
   const fetchTasks = async () => {
     try {
-      const token = localStorage.getItem("token");
       const url = activeDept === "My Tasks" ? "/api/v1/my-tasks" : `/api/v1/tasks/${activeDept}`;
-      const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(url);
       setTasks(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("request failed", err);
@@ -190,28 +183,21 @@ const DepartmentsPage = () => {
     }
 
     try {
-      const token = localStorage.getItem("token");
-      const taskRes = await axios.post(
-        "/api/v1/tasks",
-        {
-          title: newTaskTitle,
-          description: newTaskDesc,
-          to_department,
-          to_user_id,
-          due_date: newTaskDueDate || null,
-          priority: newTaskPriority || "normal",
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const taskRes = await axios.post("/api/v1/tasks", {
+        title: newTaskTitle,
+        description: newTaskDesc,
+        to_department,
+        to_user_id,
+        due_date: newTaskDueDate || null,
+        priority: newTaskPriority || "normal",
+      });
 
       const newTaskId = taskRes.data.id;
 
       if (newTaskFile && newTaskId) {
         const formData = new FormData();
         formData.append("file", newTaskFile);
-        await axios.post(`/api/v1/tasks/${newTaskId}/attachments`, formData, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await axios.post(`/api/v1/tasks/${newTaskId}/attachments`, formData);
       }
 
       toast.success("Задача создана!");
@@ -231,14 +217,9 @@ const DepartmentsPage = () => {
     setAttachments([]);
 
     try {
-      const token = localStorage.getItem("token");
       const [resComments, resFiles] = await Promise.all([
-        axios.get(`/api/v1/tasks/${task.id}/comments`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`/api/v1/tasks/${task.id}/attachments`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+        axios.get(`/api/v1/tasks/${task.id}/comments`),
+        axios.get(`/api/v1/tasks/${task.id}/attachments`),
       ]);
       setComments(Array.isArray(resComments.data) ? resComments.data : []);
       setAttachments(Array.isArray(resFiles.data) ? resFiles.data : []);
@@ -251,12 +232,7 @@ const DepartmentsPage = () => {
     if (!expandedTask) return;
 
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.post(
-        `/api/v1/tasks/${expandedTask.id}/accept`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.post(`/api/v1/tasks/${expandedTask.id}/accept`, {});
 
       const updated = res.data?.task || null;
       if (updated) {
@@ -283,14 +259,9 @@ const DepartmentsPage = () => {
     formData.append("file", file);
 
     try {
-      const token = localStorage.getItem("token");
-      await axios.post(`/api/v1/tasks/${expandedTask.id}/attachments`, formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.post(`/api/v1/tasks/${expandedTask.id}/attachments`, formData);
 
-      const res = await axios.get(`/api/v1/tasks/${expandedTask.id}/attachments`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(`/api/v1/tasks/${expandedTask.id}/attachments`);
       setAttachments(Array.isArray(res.data) ? res.data : []);
       toast.success("Файл загружен");
     } catch (e2) {
@@ -303,11 +274,7 @@ const DepartmentsPage = () => {
 
   const handleDownloadFile = async (file) => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`/api/v1/attachments/${file.id}`, {
-        responseType: "blob",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(`/api/v1/attachments/${file.id}`, { responseType: "blob" });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
       link.href = url;
@@ -330,10 +297,7 @@ const DepartmentsPage = () => {
     if (!fileToDeleteId) return;
 
     try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`/api/v1/attachments/${fileToDeleteId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.delete(`/api/v1/attachments/${fileToDeleteId}`);
       setAttachments((prev) => prev.filter((f) => f.id !== fileToDeleteId));
       toast.success("Файл удален");
     } catch (e) {
@@ -347,12 +311,7 @@ const DepartmentsPage = () => {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      const token = localStorage.getItem("token");
-      await axios.put(
-        `/api/v1/tasks/${expandedTask.id}/status`,
-        { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.put(`/api/v1/tasks/${expandedTask.id}/status`, { status: newStatus });
       const updatedTask = { ...expandedTask, status: newStatus };
       setExpandedTask(updatedTask);
       setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
@@ -366,10 +325,7 @@ const DepartmentsPage = () => {
 
   const executeDeleteTask = async () => {
     try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`/api/v1/tasks/${expandedTask.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.delete(`/api/v1/tasks/${expandedTask.id}`);
       setExpandedTask(null);
       fetchTasks();
       toast.info("Удалено");
@@ -383,12 +339,10 @@ const DepartmentsPage = () => {
 
   const handleSaveEdit = async () => {
     try {
-      const token = localStorage.getItem("token");
-      await axios.put(
-        `/api/v1/tasks/${expandedTask.id}`,
-        { title: editTitle, description: editDesc },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.put(`/api/v1/tasks/${expandedTask.id}`, {
+        title: editTitle,
+        description: editDesc,
+      });
 
       const updatedTask = { ...expandedTask, title: editTitle, description: editDesc };
       setExpandedTask(updatedTask);
@@ -405,16 +359,9 @@ const DepartmentsPage = () => {
     if (!newComment || !expandedTask) return;
 
     try {
-      const token = localStorage.getItem("token");
-      await axios.post(
-        `/api/v1/tasks/${expandedTask.id}/comments`,
-        { content: newComment },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.post(`/api/v1/tasks/${expandedTask.id}/comments`, { content: newComment });
       setNewComment("");
-      const res = await axios.get(`/api/v1/tasks/${expandedTask.id}/comments`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get(`/api/v1/tasks/${expandedTask.id}/comments`);
       setComments(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       toast.error("Ошибка");

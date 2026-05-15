@@ -396,9 +396,10 @@ def save_scheduled_cashout_error(
     end_date: Optional[str],
     comment: str,
     error_message: str,
+    run_date: str,
     triggered_by: str = "schedule",
 ) -> None:
-    """Atomically save a failed scheduled cashout record."""
+    """Atomically save a failed scheduled cashout record and mark the schedule as run."""
     conn = get_db_connection()
     if not conn:
         return
@@ -417,6 +418,10 @@ def save_scheduled_cashout_error(
                     None, "error", comment, None,
                     error_message, triggered_by, None, "cashout",
                 ),
+            )
+            cur.execute(
+                "UPDATE ff_cashout_schedules SET last_run_date = %s WHERE ff_account_id = %s",
+                (run_date, ff_account_id),
             )
         conn.commit()
     except Exception as e:

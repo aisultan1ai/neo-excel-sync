@@ -6,6 +6,8 @@ python-multipart
 requests
 python-jose[cryptography]
 passlib[bcrypt]
+bcrypt
+cryptography
 alembic
 sqlalchemy
 pydantic

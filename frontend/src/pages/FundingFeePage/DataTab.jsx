@@ -61,7 +61,7 @@ export default function DataTab({ accounts, selAccountId, onSelect, onAccountsRe
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     try {
-      const resp = await loadStream(payload, localStorage.getItem("token"), ctrl.signal);
+      const resp = await loadStream(payload, ctrl.signal);
       if (!resp.ok) throw new Error(await resp.text());
       const reader = resp.body.getReader();
       const dec = new TextDecoder();

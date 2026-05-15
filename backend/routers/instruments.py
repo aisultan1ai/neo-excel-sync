@@ -84,7 +84,13 @@ async def compare_instruments(
 
 
 @router.post("/api/v1/tools/generate-trade-report")
-async def generate_trade_report(file: UploadFile = File(...)):
+async def generate_trade_report(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user),
+):
+    allowed = (".xlsx", ".xls", ".csv")
+    if not file.filename or not file.filename.lower().endswith(allowed):
+        raise HTTPException(400, "Only .xlsx/.xls/.csv allowed")
     temp_path = save_upload_file(file)
     try:
         df = pd.read_excel(temp_path)

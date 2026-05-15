@@ -6,7 +6,8 @@ if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY is not set")
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() in ("1", "true", "yes")
 
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",

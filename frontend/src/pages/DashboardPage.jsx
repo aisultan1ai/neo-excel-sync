@@ -52,10 +52,6 @@ const DashboardPage = () => {
   const [podftUpdatedAt, setPodftUpdatedAt] = useState(null);
   const [podftFilter, setPodftFilter] = useState("");
 
-  const authHeaders = useCallback(() => {
-    const token = localStorage.getItem("token");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }, []);
 
   const getLocalYMD = useCallback((d = new Date()) => {
     const y = d.getFullYear();
@@ -101,7 +97,7 @@ const DashboardPage = () => {
   const fetchProblems = useCallback(async () => {
     try {
       setProblemsLoading(true);
-      const res = await axios.get("/api/v1/problems", { headers: authHeaders() });
+      const res = await axios.get("/api/v1/problems", {});
       setProblems(Array.isArray(res.data) ? res.data : []);
       setProblemsUpdatedAt(new Date());
     } catch (err) {
@@ -110,13 +106,12 @@ const DashboardPage = () => {
     } finally {
       setProblemsLoading(false);
     }
-  }, [authHeaders]);
+  }, []);
 
   const fetchPodftToday = useCallback(async () => {
     try {
       const day = getLocalYMD();
       const res = await axios.get(`/api/v1/podft/today?date=${encodeURIComponent(day)}`, {
-        headers: authHeaders(),
       });
       const parsed = parsePodftToday(res.data);
       setPodft(parsed);
@@ -124,7 +119,7 @@ const DashboardPage = () => {
       console.error("podft today request failed", err);
       setPodft({ count: 0, date: getLocalYMD() });
     }
-  }, [authHeaders, getLocalYMD, parsePodftToday]);
+  }, [getLocalYMD, parsePodftToday]);
 
   const fetchPodftTrades = useCallback(
     async (dateStr) => {
@@ -132,9 +127,7 @@ const DashboardPage = () => {
       try {
         setPodftLoading(true);
 
-        const res = await axios.get(`/api/v1/podft/trades?date=${encodeURIComponent(day)}`, {
-          headers: authHeaders(),
-        });
+        const res = await axios.get(`/api/v1/podft/trades?date=${encodeURIComponent(day)}`);
 
         const list = Array.isArray(res.data) ? res.data : res.data?.trades;
         setPodftTrades(Array.isArray(list) ? list : []);
@@ -147,7 +140,7 @@ const DashboardPage = () => {
         setPodftLoading(false);
       }
     },
-    [authHeaders, getLocalYMD, podft.date]
+    [getLocalYMD, podft.date]
   );
 
   const normalizedPodftTrades = useMemo(() => {
@@ -163,7 +156,7 @@ const DashboardPage = () => {
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const resProfile = await axios.get("/api/v1/profile", { headers: authHeaders() });
+      const resProfile = await axios.get("/api/v1/profile", {});
       setUsername(resProfile.data?.username || "User");
 
       const adminFlag =
@@ -171,7 +164,7 @@ const DashboardPage = () => {
         String(resProfile.data?.role || "").toLowerCase() === "admin";
       setIsAdmin(Boolean(adminFlag));
 
-      const res = await axios.get("/api/v1/dashboard", { headers: authHeaders() });
+      const res = await axios.get("/api/v1/dashboard", {});
       setStats(res.data);
 
       await Promise.all([fetchProblems(), fetchPodftToday()]);
@@ -180,7 +173,7 @@ const DashboardPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, fetchProblems, fetchPodftToday]);
+  }, [fetchProblems, fetchPodftToday]);
 
   useEffect(() => {
     fetchDashboard();
@@ -242,13 +235,13 @@ const DashboardPage = () => {
         await axios.post(
           "/api/v1/problems",
           { title, description },
-          { headers: authHeaders() }
+          {}
         );
       } else if (problemModalMode === "edit" && selectedProblem?.id != null) {
         await axios.put(
           `/api/v1/problems/${selectedProblem.id}`,
           { title, description },
-          { headers: authHeaders() }
+          {}
         );
       }
 
@@ -268,7 +261,7 @@ const DashboardPage = () => {
     if (!ok) return;
 
     try {
-      await axios.delete(`/api/v1/problems/${p.id}`, { headers: authHeaders() });
+      await axios.delete(`/api/v1/problems/${p.id}`, {});
       await fetchProblems();
       if (selectedProblem?.id === p.id) closeProblemModal();
     } catch (err) {

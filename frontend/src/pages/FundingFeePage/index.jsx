@@ -38,10 +38,7 @@ export default function FundingFeePage() {
   useEffect(() => {
     const checkPermission = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get("/api/v1/profile", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await axios.get("/api/v1/profile");
         setUserDept(res.data.department);
         setIsAdmin(res.data.is_admin);
         if (res.data.department === "Trading" || res.data.is_admin) {

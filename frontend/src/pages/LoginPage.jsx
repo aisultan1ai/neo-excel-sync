@@ -34,20 +34,6 @@ const LoginPage = ({ onLogin }) => {
     checkHealth();
   }, []);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const nextRaw = params.get("next");
-    const next = nextRaw ? decodeURIComponent(nextRaw) : "/";
-
-    const blockedPrefixes = ["/token", "/api", "/health", "/docs", "/openapi"];
-    const safeNext = blockedPrefixes.some((p) => next === p || next.startsWith(p + "/"))
-      ? "/"
-      : next;
-
-    navigate(safeNext, { replace: true });
-  }, [navigate, params]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -69,13 +55,11 @@ const LoginPage = ({ onLogin }) => {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
 
-      const token = res?.data?.access_token;
-      if (!token) {
-        setError("Не удалось получить токен (нет access_token в ответе).");
+      if (!res?.data?.access_token) {
+        setError("Ошибка входа. Попробуйте снова.");
         return;
       }
 
-      localStorage.setItem("token", token);
       onLogin?.();
 
       const nextRaw = params.get("next");
@@ -94,11 +78,7 @@ const LoginPage = ({ onLogin }) => {
       const detail = err?.response?.data?.detail;
 
       if (status === 401) {
-        setError(typeof detail === "string" ? detail : "Неверный логин или пароль");
-      } else if (status === 405) {
-        setError("Ошибка 405: неверный адрес запроса. Проверь, что фронт шлёт POST на /api/v1/token.");
-      } else if (status === 422) {
-        setError("Ошибка 422: backend не принял форму. Проверь формат x-www-form-urlencoded.");
+        setError("Неверный логин или пароль");
       } else if (status) {
         setError(typeof detail === "string" ? detail : `Ошибка сервера (${status})`);
       } else {

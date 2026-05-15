@@ -20,14 +20,16 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 _ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".csv", ".pdf", ".docx", ".doc", ".txt", ".png", ".jpg", ".jpeg"}
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 def _safe_file_path(folder_path: str, filename: str) -> Path:
-    """Returns resolved path and raises 400 if it escapes the folder."""
     folder = Path(folder_path).resolve()
     safe_name = Path(filename).name
     dest = (folder / safe_name).resolve()
-    if not str(dest).startswith(str(folder)):
+    try:
+        dest.relative_to(folder)
+    except ValueError:
         raise HTTPException(400, "Invalid filename")
     ext = dest.suffix.lower()
     if ext not in _ALLOWED_EXTENSIONS:
@@ -36,13 +38,19 @@ def _safe_file_path(folder_path: str, filename: str) -> Path:
 
 
 @router.get("/api/v1/clients")
-def search_clients_endpoint(search: str = ""):
+def search_clients_endpoint(
+    search: str = "",
+    current_user: str = Depends(get_current_user),
+):
     raw = db_search_clients(search)
     return [{"id": c[0], "name": c[1], "status": c[2]} for c in raw]
 
 
 @router.get("/api/v1/clients/{client_id}")
-def get_client_details_endpoint(client_id: int):
+def get_client_details_endpoint(
+    client_id: int,
+    current_user: str = Depends(get_current_user),
+):
     details = db_get_client_details(client_id)
     if not details:
         raise HTTPException(404, "Client not found")
@@ -50,8 +58,6 @@ def get_client_details_endpoint(client_id: int):
     files = []
     if folder and Path(folder).exists():
         try:
-            with Path(folder).open if False else None:
-                pass
             for entry in Path(folder).iterdir():
                 if entry.is_file():
                     files.append({"name": entry.name, "modified": entry.stat().st_mtime})
@@ -68,6 +74,7 @@ def add_new_client(
     email: str = Form(""),
     account: str = Form(""),
     folder_path: str = Form(""),
+    current_user: str = Depends(get_current_user),
 ):
     success, msg = add_client(name, email, account, folder_path_override=folder_path or None)
     if not success:
@@ -82,6 +89,7 @@ def update_client_details(
     email: str = Form(""),
     account: str = Form(""),
     folder_path: str = Form(""),
+    current_user: str = Depends(get_current_user),
 ):
     success, msg = update_client(client_id, name, email, account, folder_path)
     if not success:
@@ -90,13 +98,20 @@ def update_client_details(
 
 
 @router.put("/api/v1/clients/{client_id}/status")
-def update_status(client_id: int, status_data: dict):
+def update_status(
+    client_id: int,
+    status_data: dict,
+    current_user: str = Depends(get_current_user),
+):
     update_client_status(client_id, status_data.get("status"))
     return {"status": "success"}
 
 
 @router.delete("/api/v1/clients/{client_id}")
-def delete_client(client_id: int):
+def delete_client(
+    client_id: int,
+    current_user: str = Depends(get_current_user),
+):
     success, msg = db_delete_client(client_id)
     if not success:
         raise HTTPException(400, msg)
@@ -104,25 +119,35 @@ def delete_client(client_id: int):
 
 
 @router.post("/api/v1/clients/{client_id}/upload")
-def upload_file_to_client(client_id: int, file: UploadFile = File(...)):
+async def upload_file_to_client(
+    client_id: int,
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user),
+):
     details = db_get_client_details(client_id)
     if not details:
         raise HTTPException(404, "Client not found")
     folder = details.get("folder_path")
     if not folder:
         raise HTTPException(400, "Client has no folder configured")
+    content = await file.read()
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "File too large (max 50 MB)")
     Path(folder).mkdir(parents=True, exist_ok=True)
     dest = _safe_file_path(folder, file.filename)
     try:
-        with open(dest, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        dest.write_bytes(content)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
 @router.get("/api/v1/clients/{client_id}/files/{filename}")
-def download_client_file(client_id: int, filename: str):
+def download_client_file(
+    client_id: int,
+    filename: str,
+    current_user: str = Depends(get_current_user),
+):
     details = db_get_client_details(client_id)
     if not details:
         raise HTTPException(404, "Client not found")
@@ -136,7 +161,11 @@ def download_client_file(client_id: int, filename: str):
 
 
 @router.delete("/api/v1/clients/{client_id}/files/{filename}")
-def delete_client_file(client_id: int, filename: str):
+def delete_client_file(
+    client_id: int,
+    filename: str,
+    current_user: str = Depends(get_current_user),
+):
     details = db_get_client_details(client_id)
     if not details:
         raise HTTPException(404, "Client not found")

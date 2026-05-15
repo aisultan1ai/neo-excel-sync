@@ -4,8 +4,10 @@ from io import BytesIO
 from typing import Dict, Optional
 
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
+from fastapi import Depends, FastAPI, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import StreamingResponse
+
+from core.deps import get_current_user
 
 
 # ------------------------------
@@ -91,8 +93,20 @@ def to_excel_bytes_sheets(sheets: Dict[str, pd.DataFrame]) -> bytes:
     return output.getvalue()
 
 
+_ALLOWED_EXTS = (".xlsx", ".xls", ".csv")
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+
+def _validate_upload(upload_file: UploadFile) -> None:
+    name = (upload_file.filename or "").lower()
+    if not any(name.endswith(e) for e in _ALLOWED_EXTS):
+        raise HTTPException(400, f"Only .xlsx/.xls/.csv allowed: {upload_file.filename}")
+
+
 async def read_table(upload_file: UploadFile) -> pd.DataFrame:
     raw = await upload_file.read()
+    if len(raw) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "File too large (max 50 MB)")
     name = (upload_file.filename or "").lower()
     if name.endswith(".csv"):
         return pd.read_csv(BytesIO(raw))
@@ -227,6 +241,7 @@ def register_excel_reconcile(app: FastAPI) -> None:
         export: int = Query(0, ge=0, le=1),
         file1: UploadFile = File(...),
         file2: Optional[UploadFile] = File(None),
+        current_user: str = Depends(get_current_user),
         # twofiles
         col1: str = Form("Ценная бумага"),
         op1_col: str = Form("Тип операции ФИ"),
@@ -242,6 +257,9 @@ def register_excel_reconcile(app: FastAPI) -> None:
         chosen_amount: str = Form(""),
     ):
         try:
+            _validate_upload(file1)
+            if file2 is not None:
+                _validate_upload(file2)
             df1 = await read_table(file1)
 
             if mode == "twofiles":

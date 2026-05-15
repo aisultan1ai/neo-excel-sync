@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from core.deps import require_admin
+from core.deps import get_current_user, require_admin
 from db.departments import get_all_departments, add_department, delete_department, rename_department
 
 router = APIRouter()
@@ -12,7 +12,7 @@ class DeptCreate(BaseModel):
 
 
 @router.get("/api/v1/departments")
-def get_departments_list():
+def get_departments_list(current_user: str = Depends(get_current_user)):
     return get_all_departments()
 
 

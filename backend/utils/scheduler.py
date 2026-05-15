@@ -2,6 +2,7 @@ import logging
 from datetime import date, timedelta
 
 from core.constants import TransactionType, TriggeredBy
+from core.database import get_db_connection
 from db import funding as funding_db
 from db import cashout as cashout_db
 from db.cashout import save_scheduled_cashout_success, save_scheduled_cashout_error
@@ -10,8 +11,27 @@ from services import unity as unity_service
 
 log = logging.getLogger(__name__)
 
+_CASHOUT_LOCK_ID = 5_380_001  # unique advisory lock ID for the cashout scheduler
+
 
 def run_scheduled_cashouts():
+    lock_conn = get_db_connection()
+    if not lock_conn:
+        log.warning("Scheduler: cannot connect to DB for advisory lock")
+        return
+    try:
+        with lock_conn.cursor() as cur:
+            cur.execute("SELECT pg_try_advisory_lock(%s)", (_CASHOUT_LOCK_ID,))
+            acquired = cur.fetchone()[0]
+        if not acquired:
+            log.info("Scheduler: another worker holds cashout lock, skipping run")
+            return
+        _run_cashouts()
+    finally:
+        lock_conn.close()  # releases the advisory lock
+
+
+def _run_cashouts():
     today = date.today()
     schedules = cashout_db.get_cashout_schedules()
     if not schedules:
@@ -113,5 +133,6 @@ def run_scheduled_cashouts():
                 end_date=end_str,
                 comment=auto_comment,
                 error_message=str(e),
+                run_date=str(today),
                 triggered_by=TriggeredBy.SCHEDULE.value,
             )

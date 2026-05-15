@@ -92,5 +92,11 @@ def startup_event():
                 hashed = bcrypt.hashpw(init_pass.encode("utf-8"), salt).decode("utf-8")
                 users_db.create_new_user(init_user, hashed, init_dept, init_is_admin)
                 log.info("Bootstrap admin created.")
+            else:
+                log.info("Bootstrap admin skipped (users already exist).")
     except Exception:
-        log.exception("Bootstrap admin failed")
+        log.critical(
+            "Bootstrap admin creation FAILED — server is starting without a guaranteed admin account. "
+            "Check DB connectivity and INIT_ADMIN_* env vars.",
+            exc_info=True,
+        )

@@ -12,10 +12,11 @@ export const getSymbols = (id) => api.get(`/ff/accounts/${id}/symbols`);
 
 // ─── records ─────────────────────────────────────────────────────────────────
 
-export const loadStream = (payload, token, signal) =>
+export const loadStream = (payload, signal) =>
   fetch("/api/v1/ff/load-stream", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(payload),
     signal,
   });

@@ -250,6 +250,11 @@ async def download_attachment(attachment_id: int, current_user: str = Depends(ge
     file_data = get_attachment_by_id(attachment_id)
     if not file_data or not os.path.exists(file_data["file_path"]):
         raise HTTPException(404, "File not found")
+    task = get_task_by_id(file_data["task_id"])
+    if not task:
+        raise HTTPException(404, "Task not found")
+    user = get_user_by_username(current_user)
+    ensure_task_owner_or_admin(task, user)
     return FileResponse(file_data["file_path"], filename=file_data["filename"])
 
 

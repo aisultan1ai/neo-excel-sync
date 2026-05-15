@@ -53,8 +53,9 @@ def add_client(name: str, email: str, account: str, folder_path_override: Option
         try:
             resolved = Path(folder_path_override).resolve()
             allowed = _BASE_REPORTS_DIR.resolve()
-            if not str(resolved).startswith(str(allowed)):
-                return False, "Недопустимый путь для папки клиента"
+            resolved.relative_to(allowed)
+        except ValueError:
+            return False, "Недопустимый путь для папки клиента"
         except Exception:
             return False, "Недопустимый путь для папки клиента"
         final_folder_path = str(resolved)
@@ -128,9 +129,22 @@ def delete_client(client_id: int):
     if not conn:
         return False, "Ошибка БД"
     try:
+        folder_path = None
         with conn.cursor() as cur:
+            cur.execute("SELECT folder_path FROM clients WHERE id = %s", (client_id,))
+            row = cur.fetchone()
+            if row:
+                folder_path = row[0]
             cur.execute("DELETE FROM clients WHERE id = %s", (client_id,))
         conn.commit()
+        if folder_path:
+            folder = Path(folder_path)
+            if folder.exists() and folder.is_dir():
+                try:
+                    import shutil
+                    shutil.rmtree(folder)
+                except Exception as e:
+                    log.warning("Could not delete client folder %s: %s", folder_path, e)
         return True, "Клиент удален."
     except Exception as e:
         conn.rollback()

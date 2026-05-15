@@ -302,6 +302,7 @@ def init_cashout_tables():
             safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_co_hist_account ON ff_cashout_history(ff_account_id)")
             safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_co_hist_created ON ff_cashout_history(created_at)")
             safe_ddl(cur, "ALTER TABLE ff_unity_config ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE")
+            safe_ddl(cur, "CREATE UNIQUE INDEX IF NOT EXISTS uq_unity_config_owner ON ff_unity_config(owner_id) WHERE owner_id IS NOT NULL")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS ff_audit_log (
                     id SERIAL PRIMARY KEY,
