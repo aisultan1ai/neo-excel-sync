@@ -43,12 +43,12 @@ class CryptoSchemeCreate(BaseModel):
     edges: object
 
 
-@router.get("/api/crypto/accounts")
+@router.get("/api/v1/crypto/accounts")
 def api_get_crypto_accounts(current_user: str = Depends(get_current_user)):
     return get_crypto_accounts()
 
 
-@router.post("/api/crypto/accounts")
+@router.post("/api/v1/crypto/accounts")
 def api_create_crypto_account(
     payload: CryptoAccountCreate, current_user: str = Depends(get_current_user)
 ):
@@ -63,7 +63,7 @@ def api_create_crypto_account(
     return {"status": "success", "account": dict(row)}
 
 
-@router.put("/api/crypto/accounts/{account_id}")
+@router.put("/api/v1/crypto/accounts/{account_id}")
 def api_update_crypto_account(
     account_id: int,
     payload: CryptoAccountUpdate,
@@ -82,19 +82,19 @@ def api_update_crypto_account(
     return row
 
 
-@router.delete("/api/crypto/accounts/{account_id}")
+@router.delete("/api/v1/crypto/accounts/{account_id}")
 def api_delete_crypto_account(account_id: int, current_user: str = Depends(get_current_user)):
     if not delete_crypto_account(account_id):
         raise HTTPException(500, "DB error deleting account")
     return {"ok": True}
 
 
-@router.get("/api/crypto/transfers")
+@router.get("/api/v1/crypto/transfers")
 def api_get_crypto_transfers(current_user: str = Depends(get_current_user)):
     return get_crypto_transfers()
 
 
-@router.post("/api/crypto/transfers")
+@router.post("/api/v1/crypto/transfers")
 def api_create_crypto_transfer(
     payload: CryptoTransferCreate, current_user: str = Depends(get_current_user)
 ):
@@ -123,19 +123,19 @@ def api_create_crypto_transfer(
     return row
 
 
-@router.delete("/api/crypto/transfers/{transfer_id}")
+@router.delete("/api/v1/crypto/transfers/{transfer_id}")
 def api_delete_crypto_transfer(transfer_id: int, current_user: str = Depends(get_current_user)):
     if not delete_crypto_transfer(transfer_id):
         raise HTTPException(404, "Transfer not found")
     return {"ok": True}
 
 
-@router.get("/api/crypto/schemes")
+@router.get("/api/v1/crypto/schemes")
 def api_get_crypto_schemes(current_user: str = Depends(get_current_user)):
     return get_crypto_schemes()
 
 
-@router.post("/api/crypto/schemes")
+@router.post("/api/v1/crypto/schemes")
 def api_create_crypto_scheme(
     payload: CryptoSchemeCreate, current_user: str = Depends(get_current_user)
 ):
@@ -148,7 +148,7 @@ def api_create_crypto_scheme(
     return row
 
 
-@router.delete("/api/crypto/schemes/{scheme_id}")
+@router.delete("/api/v1/crypto/schemes/{scheme_id}")
 def api_delete_crypto_scheme(scheme_id: int, current_user: str = Depends(get_current_user)):
     if not delete_crypto_scheme(scheme_id):
         raise HTTPException(500, "DB error deleting scheme")

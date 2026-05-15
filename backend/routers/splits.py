@@ -9,7 +9,7 @@ from utils.files import cleanup_files, save_upload_file
 router = APIRouter()
 
 
-@router.post("/api/check-splits")
+@router.post("/api/v1/check-splits")
 async def check_splits(
     daily_file: UploadFile = File(...), settings_json: str = Form(...)
 ):

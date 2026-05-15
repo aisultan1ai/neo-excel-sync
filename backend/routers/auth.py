@@ -21,7 +21,7 @@ class PasswordChange(BaseModel):
     new_password: str
 
 
-@router.post("/api/token")
+@router.post("/api/v1/token")
 @limiter.limit("10/minute")
 async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
     user = get_user_by_username(form_data.username)
@@ -33,7 +33,7 @@ async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequ
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.get("/api/profile")
+@router.get("/api/v1/profile")
 async def get_profile_info(current_user: str = Depends(get_current_user)):
     user = get_user_by_username(current_user)
     if not user:
@@ -48,7 +48,7 @@ async def get_profile_info(current_user: str = Depends(get_current_user)):
     }
 
 
-@router.post("/api/profile/change-password")
+@router.post("/api/v1/profile/change-password")
 async def change_password(
     data: PasswordChange, current_user: str = Depends(get_current_user)
 ):
@@ -64,12 +64,12 @@ async def change_password(
     raise HTTPException(500, "Error updating password")
 
 
-@router.get("/api/dashboard")
+@router.get("/api/v1/dashboard")
 async def get_dashboard_data(current_user: str = Depends(get_current_user)):
     return get_dashboard_stats() or {"users": 0, "total_tasks": 0}
 
 
-@router.get("/api/health")
+@router.get("/api/v1/health")
 def health_check():
     db_status = "Disconnected"
     conn = None

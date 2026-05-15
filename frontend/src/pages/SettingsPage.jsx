@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import axios from "axios";
 import {
   Save,
@@ -29,8 +29,8 @@ const SettingsPage = () => {
       try {
         const token = localStorage.getItem("token");
         const [settingsRes, profileRes] = await Promise.all([
-          axios.get("/api/settings"),
-          axios.get("/api/profile", { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get("/api/v1/settings"),
+          axios.get("/api/v1/profile", { headers: { Authorization: `Bearer ${token}` } }),
         ]);
 
         setSettings(settingsRes.data);
@@ -84,7 +84,7 @@ const SettingsPage = () => {
     formData.append("file", file);
     const toastId = toast.loading("Загрузка...");
     try {
-      const res = await axios.post("/api/settings/upload-split-list", formData);
+      const res = await axios.post("/api/v1/settings/upload-split-list", formData);
       setSettings((prev) => ({ ...prev, split_list_path: res.data.new_path }));
       toast.update(toastId, {
         render: "Файл обновлен",
@@ -101,7 +101,7 @@ const SettingsPage = () => {
     if (!canEdit) return;
     setSaving(true);
     try {
-      await axios.post("/api/settings", settings);
+      await axios.post("/api/v1/settings", settings);
       toast.success("Настройки сохранены");
     } catch (error) {
       toast.error("Ошибка сохранения");

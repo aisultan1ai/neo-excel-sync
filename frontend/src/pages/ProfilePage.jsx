@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import axios from "axios";
 import {
   User,
@@ -59,7 +59,7 @@ const ProfilePage = ({ onLogout }) => {
         onLogout();
         return;
       }
-      const res = await axios.get("/api/profile", {
+      const res = await axios.get("/api/v1/profile", {
         headers: { Authorization: `Bearer ${token}` },
       });
       setProfile(res.data);
@@ -84,7 +84,7 @@ const ProfilePage = ({ onLogout }) => {
 
   const fetchUsers = async (token) => {
     try {
-      const res = await axios.get("/api/admin/users", {
+      const res = await axios.get("/api/v1/admin/users", {
         headers: { Authorization: `Bearer ${token}` },
       });
       setUsers(res.data);
@@ -95,7 +95,7 @@ const ProfilePage = ({ onLogout }) => {
 
   const fetchDepartments = async () => {
     try {
-      const res = await axios.get("/api/departments");
+      const res = await axios.get("/api/v1/departments");
       setDepartments(res.data);
       if (res.data.length > 0) {
         setNewUser((prev) => ({ ...prev, department: res.data[0].name }));
@@ -113,7 +113,7 @@ const ProfilePage = ({ onLogout }) => {
     }
     try {
       const token = localStorage.getItem("token");
-      await axios.post("/api/admin/users", newUser, {
+      await axios.post("/api/v1/admin/users", newUser, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.success("Пользователь создан");
@@ -134,7 +134,7 @@ const ProfilePage = ({ onLogout }) => {
     if (!window.confirm("Удалить пользователя?")) return;
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(`/api/admin/users/${id}`, {
+      await axios.delete(`/api/v1/admin/users/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.success("Удалено");
@@ -150,7 +150,7 @@ const ProfilePage = ({ onLogout }) => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "/api/admin/departments",
+        "/api/v1/admin/departments",
         { name: newDeptName },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -166,7 +166,7 @@ const ProfilePage = ({ onLogout }) => {
     if (!window.confirm("Удалить отдел?")) return;
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(`/api/admin/departments/${id}`, {
+      await axios.delete(`/api/v1/admin/departments/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.success("Отдел удален");
@@ -186,7 +186,7 @@ const ProfilePage = ({ onLogout }) => {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `/api/admin/departments/${editingDept}`,
+        `/api/v1/admin/departments/${editingDept}`,
         { name: editDeptName },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -209,7 +209,7 @@ const ProfilePage = ({ onLogout }) => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "/api/profile/change-password",
+        "/api/v1/profile/change-password",
         { old_password: oldPass, new_password: newPass },
         { headers: { Authorization: `Bearer ${token}` } }
       );

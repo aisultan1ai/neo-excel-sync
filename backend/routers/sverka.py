@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/api/compare")
+@router.post("/api/v1/compare")
 async def run_comparison(
     file1: UploadFile = File(...),
     file2: UploadFile = File(...),
@@ -77,7 +77,7 @@ async def run_comparison(
         cleanup_files(f1_path, f2_path)
 
 
-@router.get("/api/export/{comparison_id}")
+@router.get("/api/v1/export/{comparison_id}")
 async def export_excel_file(
     comparison_id: str, current_user: str = Depends(get_current_user)
 ):
@@ -106,7 +106,7 @@ async def export_excel_file(
         raise HTTPException(status_code=500, detail="Ошибка генерации Excel")
 
 
-@router.get("/api/last-result")
+@router.get("/api/v1/last-result")
 def get_last_result(current_user: str = Depends(get_current_user)):
     cleanup_cache()
     with CACHE_LOCK:

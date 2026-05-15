@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+﻿import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { Lock, Plus, ShieldAlert } from "lucide-react";
@@ -39,7 +39,7 @@ export default function FundingFeePage() {
     const checkPermission = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get("/api/profile", {
+        const res = await axios.get("/api/v1/profile", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setUserDept(res.data.department);

@@ -11,12 +11,12 @@ class DeptCreate(BaseModel):
     name: str
 
 
-@router.get("/api/departments")
+@router.get("/api/v1/departments")
 def get_departments_list():
     return get_all_departments()
 
 
-@router.post("/api/admin/departments")
+@router.post("/api/v1/admin/departments")
 def create_department(dept: DeptCreate, current_user: str = Depends(require_admin)):
     success, msg = add_department(dept.name)
     if not success:
@@ -24,14 +24,14 @@ def create_department(dept: DeptCreate, current_user: str = Depends(require_admi
     return {"status": "success"}
 
 
-@router.delete("/api/admin/departments/{dept_id}")
+@router.delete("/api/v1/admin/departments/{dept_id}")
 def remove_department(dept_id: int, current_user: str = Depends(require_admin)):
     if delete_department(dept_id):
         return {"status": "success"}
     raise HTTPException(400, "Error deleting department")
 
 
-@router.put("/api/admin/departments/{dept_id}")
+@router.put("/api/v1/admin/departments/{dept_id}")
 def rename_department_endpoint(
     dept_id: int, dept: DeptCreate, current_user: str = Depends(require_admin)
 ):

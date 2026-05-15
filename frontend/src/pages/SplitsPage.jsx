@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import axios from "axios";
 import {
   Layers,
@@ -45,10 +45,10 @@ const SplitsPage = () => {
     formData.append("daily_file", file);
 
     try {
-      const settingsRes = await axios.get("/api/settings");
+      const settingsRes = await axios.get("/api/v1/settings");
       formData.append("settings_json", JSON.stringify(settingsRes.data));
 
-      const res = await axios.post("/api/check-splits", formData, {
+      const res = await axios.post("/api/v1/check-splits", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -80,7 +80,7 @@ const SplitsPage = () => {
     formData.append("file", refFile);
 
     try {
-      await axios.post("/api/settings/upload-split-list", formData, {
+      await axios.post("/api/v1/settings/upload-split-list", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -106,7 +106,7 @@ const SplitsPage = () => {
 
     setLoadingView(true);
     try {
-      const res = await axios.get("/api/settings/split-list-content");
+      const res = await axios.get("/api/v1/settings/split-list-content");
       if (res.data.status === "empty") {
         toast.info(res.data.message);
       } else {

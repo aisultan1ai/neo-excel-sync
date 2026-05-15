@@ -14,7 +14,7 @@ from services.encryption import encrypt_value, decrypt_value
 from services.ff_export import build_funding_export, build_export_filename
 
 log = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/ff")
+router = APIRouter(prefix="/api/v1/ff")
 
 
 class FFAccountCreate(BaseModel):

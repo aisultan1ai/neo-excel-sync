@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+﻿import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import {
   Search,
@@ -107,7 +107,7 @@ const ReportsPage = () => {
     const checkPermission = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get("/api/profile", {
+        const res = await axios.get("/api/v1/profile", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setUserDept(res.data.department);
@@ -129,7 +129,7 @@ const ReportsPage = () => {
   const fetchClients = useCallback(async (searchTerm = "", tokenOverride = null) => {
     try {
       const token = tokenOverride || localStorage.getItem("token");
-      const res = await axios.get(`/api/clients?search=${searchTerm}`, {
+      const res = await axios.get(`/api/v1/clients?search=${searchTerm}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setClients(res.data);
@@ -155,7 +155,7 @@ const ReportsPage = () => {
   const fetchDetails = useCallback(async (id) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`/api/clients/${id}`, {
+      const res = await axios.get(`/api/v1/clients/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setClientDetails(res.data);
@@ -196,7 +196,7 @@ const ReportsPage = () => {
     Object.keys(newClient).forEach((k) => formData.append(k, newClient[k]));
     try {
       const token = localStorage.getItem("token");
-      await axios.post("/api/clients", formData, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post("/api/v1/clients", formData, { headers: { Authorization: `Bearer ${token}` } });
       setShowAddModal(false);
       setNewClient({ name: "", email: "", account: "", folder_path: "" });
       fetchClients(search);
@@ -223,7 +223,7 @@ const ReportsPage = () => {
     Object.keys(editingClient).forEach((k) => formData.append(k, editingClient[k]));
     try {
       const token = localStorage.getItem("token");
-      await axios.put(`/api/clients/${selectedClient.id}`, formData, {
+      await axios.put(`/api/v1/clients/${selectedClient.id}`, formData, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setShowEditModal(false);
@@ -240,7 +240,7 @@ const ReportsPage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `/api/clients/${selectedClient.id}/status`,
+        `/api/v1/clients/${selectedClient.id}/status`,
         { status: dbStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -262,7 +262,7 @@ const ReportsPage = () => {
     try {
       const token = localStorage.getItem("token");
       await axios.post(
-        "/api/clients/reset-status",
+        "/api/v1/clients/reset-status",
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -280,7 +280,7 @@ const ReportsPage = () => {
     if (!confirm("Удалить клиента?")) return;
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(`/api/clients/${selectedClient.id}`, {
+      await axios.delete(`/api/v1/clients/${selectedClient.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       closeDrawer();
@@ -298,7 +298,7 @@ const ReportsPage = () => {
     formData.append("file", file);
     try {
       const token = localStorage.getItem("token");
-      await axios.post(`/api/clients/${selectedClient.id}/upload`, formData, {
+      await axios.post(`/api/v1/clients/${selectedClient.id}/upload`, formData, {
         headers: { Authorization: `Bearer ${token}` },
       });
       fetchDetails(selectedClient.id);
@@ -312,7 +312,7 @@ const ReportsPage = () => {
     if (!confirm("Удалить файл?")) return;
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(`/api/clients/${selectedClient.id}/files/${filename}`, {
+      await axios.delete(`/api/v1/clients/${selectedClient.id}/files/${filename}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       fetchDetails(selectedClient.id);
@@ -325,7 +325,7 @@ const ReportsPage = () => {
   const handleDownloadFile = async (filename) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get(`/api/clients/${selectedClient.id}/files/${filename}`, {
+      const res = await axios.get(`/api/v1/clients/${selectedClient.id}/files/${filename}`, {
         responseType: "blob",
         headers: { Authorization: `Bearer ${token}` },
       });

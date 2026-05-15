@@ -221,7 +221,7 @@ def find_duplicates_one_file(
 # REGISTRATION (1 LINE IN MAIN)
 # ------------------------------
 def register_excel_reconcile(app: FastAPI) -> None:
-    @app.post("/api/tools/excel-reconcile")
+    @app.post("/api/v1/tools/excel-reconcile")
     async def excel_reconcile(
         mode: str = Query(..., regex="^(twofiles|duplicates)$"),
         export: int = Query(0, ge=0, le=1),

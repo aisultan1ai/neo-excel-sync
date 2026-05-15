@@ -23,7 +23,7 @@ UNITY_EXCHANGE_REPORT_DIR = BASE_DIR / "client_reports" / "unity_exchange"
 UNITY_EXCHANGE_REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-@router.post("/api/unity-exchange/run")
+@router.post("/api/v1/unity-exchange/run")
 async def run_unity_exchange(
     unity_file: UploadFile = File(...),
     exchange_file: UploadFile = File(...),
@@ -82,7 +82,7 @@ async def run_unity_exchange(
         cleanup_files(unity_path, ex_path)
 
 
-@router.get("/api/unity-exchange/export/{run_id}")
+@router.get("/api/v1/unity-exchange/export/{run_id}")
 async def export_unity_exchange_report(
     run_id: str, current_user: str = Depends(get_current_user)
 ):

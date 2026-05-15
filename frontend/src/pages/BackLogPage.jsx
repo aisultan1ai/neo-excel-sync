@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+﻿import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { RefreshCw, Loader2, ChevronDown } from "lucide-react";
@@ -63,7 +63,7 @@ export default function BackLogPage() {
   const [filterEndDate,   setFilterEndDate]   = useState("");
 
   useEffect(() => {
-    axios.get("/api/ff/admin/users", { headers: authHeaders() })
+    axios.get("/api/v1/ff/admin/users", { headers: authHeaders() })
       .then(({ data }) => setUsers(data || []))
       .catch(() => {});
   }, []);
@@ -76,7 +76,7 @@ export default function BackLogPage() {
       if (filterUser)      params.user_id    = filterUser;
       if (filterStartDate) params.start_date = filterStartDate;
       if (filterEndDate)   params.end_date   = filterEndDate;
-      const { data } = await axios.get("/api/ff/admin/backlog", { headers: authHeaders(), params });
+      const { data } = await axios.get("/api/v1/ff/admin/backlog", { headers: authHeaders(), params });
       setRows(data || []);
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Ошибка загрузки");

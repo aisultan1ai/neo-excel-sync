@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import axios from "axios";
 import {
   BrowserRouter as Router,
@@ -154,7 +154,7 @@ function App() {
 
   useEffect(() => {
     if (!token) { setIsAdmin(false); setUserDept(""); return; }
-    axios.get("/api/profile", { headers: { Authorization: `Bearer ${token}` } })
+    axios.get("/api/v1/profile", { headers: { Authorization: `Bearer ${token}` } })
       .then(({ data }) => {
         setIsAdmin(data?.is_admin === true);
         setUserDept(data?.department || "");

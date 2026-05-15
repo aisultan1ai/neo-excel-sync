@@ -326,3 +326,101 @@ def mark_schedule_run(ff_account_id: int, run_date: str) -> bool:
         return False
     finally:
         conn.close()
+
+
+def save_scheduled_cashout_success(
+    ff_account_id: int,
+    amount: float,
+    netting_date: str,
+    start_date: str,
+    end_date: str,
+    transaction_id: str,
+    comment: str,
+    internal_comment: str,
+    run_date: str,
+    owner_id: Optional[int],
+    acc_name: str,
+    tx_type: str,
+    period: str,
+    triggered_by: str = "schedule",
+) -> Optional[dict]:
+    """Atomically insert cashout record, mark schedule run, and log the action."""
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                INSERT INTO ff_cashout_history
+                    (ff_account_id, amount, netting_date, start_date, end_date,
+                     transaction_id, status, comment, internal_comment,
+                     error_message, triggered_by, created_by_user_id, transaction_type)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *
+                """,
+                (
+                    ff_account_id, amount, netting_date, start_date, end_date,
+                    transaction_id, "success", comment, internal_comment,
+                    None, triggered_by, None, tx_type,
+                ),
+            )
+            record = cur.fetchone()
+            cur.execute(
+                "UPDATE ff_cashout_schedules SET last_run_date = %s WHERE ff_account_id = %s",
+                (run_date, ff_account_id),
+            )
+            details = {
+                "account_id": ff_account_id, "account_name": acc_name,
+                "tx_type": tx_type, "amount": amount, "tx_id": transaction_id,
+                "period": period, "triggered_by": triggered_by,
+            }
+            cur.execute(
+                "INSERT INTO ff_audit_log (user_id, username, action, details) VALUES (%s, %s, %s, %s)",
+                (owner_id, "schedule", "cashout_send", json.dumps(details)),
+            )
+        conn.commit()
+        return dict(record) if record else None
+    except Exception as e:
+        log.error("save_scheduled_cashout_success error: %s", e, exc_info=True)
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+
+def save_scheduled_cashout_error(
+    ff_account_id: int,
+    amount: float,
+    netting_date: str,
+    start_date: Optional[str],
+    end_date: Optional[str],
+    comment: str,
+    error_message: str,
+    triggered_by: str = "schedule",
+) -> None:
+    """Atomically save a failed scheduled cashout record."""
+    conn = get_db_connection()
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO ff_cashout_history
+                    (ff_account_id, amount, netting_date, start_date, end_date,
+                     transaction_id, status, comment, internal_comment,
+                     error_message, triggered_by, created_by_user_id, transaction_type)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    ff_account_id, amount, netting_date, start_date, end_date,
+                    None, "error", comment, None,
+                    error_message, triggered_by, None, "cashout",
+                ),
+            )
+        conn.commit()
+    except Exception as e:
+        log.error("save_scheduled_cashout_error error: %s", e, exc_info=True)
+        conn.rollback()
+    finally:
+        conn.close()

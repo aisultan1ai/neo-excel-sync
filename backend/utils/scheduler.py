@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from core.constants import TransactionType, TriggeredBy
 from db import funding as funding_db
 from db import cashout as cashout_db
+from db.cashout import save_scheduled_cashout_success, save_scheduled_cashout_error
 from services.encryption import decrypt_value
 from services import unity as unity_service
 
@@ -85,41 +86,32 @@ def run_scheduled_cashouts():
                 internal_comment=f"Schedule {sched['frequency']} account={sched['ff_account_id']}",
             )
             tx_id = str(result.get("transactionId", result) if isinstance(result, dict) else result)
-            cashout_db.save_cashout_record(
+            save_scheduled_cashout_success(
                 ff_account_id=sched["ff_account_id"],
                 amount=amount,
                 netting_date=str(today),
                 start_date=start_str,
                 end_date=end_str,
                 transaction_id=tx_id,
-                status="success",
                 comment=auto_comment,
                 internal_comment=f"Schedule {sched['frequency']}",
-                error_message=None,
+                run_date=str(today),
+                owner_id=owner_id,
+                acc_name=acc_name,
+                tx_type=tx_type.value,
+                period=f"{start_str} — {end_str}",
                 triggered_by=TriggeredBy.SCHEDULE.value,
-                created_by_user_id=None,
-                transaction_type=tx_type.value,
             )
-            cashout_db.mark_schedule_run(sched["ff_account_id"], str(today))
-            cashout_db.log_ff_action(owner_id, "schedule", "cashout_send", {
-                "account_id": sched["ff_account_id"], "account_name": acc_name,
-                "tx_type": tx_type.value, "amount": amount, "tx_id": tx_id,
-                "period": f"{start_str} — {end_str}", "triggered_by": TriggeredBy.SCHEDULE.value,
-            })
             log.info("Schedule %s done: account=%d txId=%s", tx_type.value, sched["ff_account_id"], tx_id)
         except Exception as e:
             log.error("Schedule cashout failed: account=%d: %s", sched["ff_account_id"], e, exc_info=True)
-            cashout_db.save_cashout_record(
+            save_scheduled_cashout_error(
                 ff_account_id=sched["ff_account_id"],
                 amount=amount,
                 netting_date=str(today),
                 start_date=start_str,
                 end_date=end_str,
-                transaction_id=None,
-                status="error",
                 comment=auto_comment,
-                internal_comment=None,
                 error_message=str(e),
                 triggered_by=TriggeredBy.SCHEDULE.value,
-                created_by_user_id=None,
             )

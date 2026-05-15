@@ -81,13 +81,13 @@ class PodftSnapshotSaveIn(BaseModel):
 
 # ── Tasks ──────────────────────────────────────────────────────
 
-@router.get("/api/tasks/{department}")
+@router.get("/api/v1/tasks/{department}")
 async def read_tasks(department: str, current_user: str = Depends(get_current_user)):
     tasks = get_tasks_by_dept(department)
     return [dict(t) for t in tasks]
 
 
-@router.post("/api/tasks")
+@router.post("/api/v1/tasks")
 async def create_new_task(
     task: TaskCreate, current_user: str = Depends(get_current_user)
 ):
@@ -121,7 +121,7 @@ async def create_new_task(
     raise HTTPException(500, "Error creating task")
 
 
-@router.post("/api/tasks/{task_id}/accept")
+@router.post("/api/v1/tasks/{task_id}/accept")
 async def accept_task_endpoint(task_id: int, current_user: str = Depends(get_current_user)):
     user = get_user_by_username(current_user)
     if not user:
@@ -157,7 +157,7 @@ async def accept_task_endpoint(task_id: int, current_user: str = Depends(get_cur
 _VALID_STATUSES = {"Pending", "In Progress", "Done", "Rejected"}
 
 
-@router.put("/api/tasks/{task_id}/status")
+@router.put("/api/v1/tasks/{task_id}/status")
 async def change_task_status(
     task_id: int,
     status_data: TaskStatusUpdate,
@@ -170,7 +170,7 @@ async def change_task_status(
     raise HTTPException(500, "Error updating status")
 
 
-@router.put("/api/tasks/{task_id}")
+@router.put("/api/v1/tasks/{task_id}")
 async def update_task_endpoint(
     task_id: int, task: TaskUpdateContent, current_user: str = Depends(get_current_user)
 ):
@@ -184,7 +184,7 @@ async def update_task_endpoint(
     return {"status": "success", "message": "Task updated"}
 
 
-@router.delete("/api/tasks/{task_id}")
+@router.delete("/api/v1/tasks/{task_id}")
 async def remove_task(task_id: int, current_user: str = Depends(get_current_user)):
     user = get_user_by_username(current_user)
     task = get_task_by_id(task_id)
@@ -196,7 +196,7 @@ async def remove_task(task_id: int, current_user: str = Depends(get_current_user
     raise HTTPException(status_code=500, detail="Failed to delete task")
 
 
-@router.get("/api/my-tasks")
+@router.get("/api/v1/my-tasks")
 async def read_my_tasks(current_user: str = Depends(get_current_user)):
     user = get_user_by_username(current_user)
     if not user:
@@ -206,12 +206,12 @@ async def read_my_tasks(current_user: str = Depends(get_current_user)):
 
 # ── Comments ───────────────────────────────────────────────────
 
-@router.get("/api/tasks/{task_id}/comments")
+@router.get("/api/v1/tasks/{task_id}/comments")
 async def read_comments(task_id: int, current_user: str = Depends(get_current_user)):
     return [dict(c) for c in get_comments(task_id)]
 
 
-@router.post("/api/tasks/{task_id}/comments")
+@router.post("/api/v1/tasks/{task_id}/comments")
 async def create_new_comment(
     task_id: int, comment: CommentCreate, current_user: str = Depends(get_current_user)
 ):
@@ -225,7 +225,7 @@ async def create_new_comment(
 
 # ── Attachments ────────────────────────────────────────────────
 
-@router.post("/api/tasks/{task_id}/attachments")
+@router.post("/api/v1/tasks/{task_id}/attachments")
 async def upload_task_attachment(
     task_id: int, file: UploadFile = File(...), current_user: str = Depends(get_current_user)
 ):
@@ -240,12 +240,12 @@ async def upload_task_attachment(
     raise HTTPException(500, "Error saving attachment")
 
 
-@router.get("/api/tasks/{task_id}/attachments")
+@router.get("/api/v1/tasks/{task_id}/attachments")
 async def get_task_files(task_id: int, current_user: str = Depends(get_current_user)):
     return get_task_attachments(task_id)
 
 
-@router.get("/api/attachments/{attachment_id}")
+@router.get("/api/v1/attachments/{attachment_id}")
 async def download_attachment(attachment_id: int, current_user: str = Depends(get_current_user)):
     file_data = get_attachment_by_id(attachment_id)
     if not file_data or not os.path.exists(file_data["file_path"]):
@@ -253,7 +253,7 @@ async def download_attachment(attachment_id: int, current_user: str = Depends(ge
     return FileResponse(file_data["file_path"], filename=file_data["filename"])
 
 
-@router.delete("/api/attachments/{attachment_id}")
+@router.delete("/api/v1/attachments/{attachment_id}")
 async def remove_attachment(attachment_id: int, current_user: str = Depends(get_current_user)):
     user = get_user_by_username(current_user)
     file_data = get_attachment_by_id(attachment_id)
@@ -272,12 +272,12 @@ async def remove_attachment(attachment_id: int, current_user: str = Depends(get_
 
 # ── Problems ───────────────────────────────────────────────────
 
-@router.get("/api/problems")
+@router.get("/api/v1/problems")
 async def api_get_problems(limit: int = 50, current_user: str = Depends(get_current_user)):
     return [dict(r) for r in get_problems(limit=limit)]
 
 
-@router.get("/api/problems/{problem_id}")
+@router.get("/api/v1/problems/{problem_id}")
 async def api_get_problem(problem_id: int, current_user: str = Depends(get_current_user)):
     row = get_problem_by_id(problem_id)
     if not row:
@@ -285,7 +285,7 @@ async def api_get_problem(problem_id: int, current_user: str = Depends(get_curre
     return dict(row)
 
 
-@router.post("/api/problems")
+@router.post("/api/v1/problems")
 async def api_create_problem(payload: ProblemCreate, current_user: str = Depends(require_admin)):
     admin_user = get_user_by_username(current_user)
     if not admin_user:
@@ -303,7 +303,7 @@ async def api_create_problem(payload: ProblemCreate, current_user: str = Depends
     return {"status": "success", "problem": dict(row)}
 
 
-@router.put("/api/problems/{problem_id}")
+@router.put("/api/v1/problems/{problem_id}")
 async def api_update_problem(
     problem_id: int, payload: ProblemUpdate, current_user: str = Depends(require_admin)
 ):
@@ -320,7 +320,7 @@ async def api_update_problem(
     return {"status": "success", "problem": dict(row)}
 
 
-@router.delete("/api/problems/{problem_id}")
+@router.delete("/api/v1/problems/{problem_id}")
 async def api_delete_problem(problem_id: int, current_user: str = Depends(require_admin)):
     if not delete_problem(problem_id):
         raise HTTPException(404, "Problem not found")
@@ -329,7 +329,7 @@ async def api_delete_problem(problem_id: int, current_user: str = Depends(requir
 
 # ── PODFT ──────────────────────────────────────────────────────
 
-@router.post("/api/podft/snapshots")
+@router.post("/api/v1/podft/snapshots")
 async def save_podft_snapshot(
     payload: PodftSnapshotSaveIn, current_user: str = Depends(require_admin)
 ):
@@ -349,7 +349,7 @@ async def save_podft_snapshot(
     }
 
 
-@router.get("/api/podft/today")
+@router.get("/api/v1/podft/today")
 async def podft_today(
     day: Optional[date] = Query(None, alias="date"),
     current_user: str = Depends(get_current_user),
@@ -367,7 +367,7 @@ async def podft_today(
     }
 
 
-@router.get("/api/podft/trades")
+@router.get("/api/v1/podft/trades")
 async def podft_trades(
     day: date = Query(..., alias="date"), current_user: str = Depends(get_current_user)
 ):

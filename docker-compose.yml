@@ -43,7 +43,7 @@ services:
       - ./backend/data:/app/data
       - ./backend/uploads:/app/uploads
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')\""]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\""]
       interval: 10s
       timeout: 5s
       retries: 5

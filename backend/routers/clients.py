@@ -35,13 +35,13 @@ def _safe_file_path(folder_path: str, filename: str) -> Path:
     return dest
 
 
-@router.get("/api/clients")
+@router.get("/api/v1/clients")
 def search_clients_endpoint(search: str = ""):
     raw = db_search_clients(search)
     return [{"id": c[0], "name": c[1], "status": c[2]} for c in raw]
 
 
-@router.get("/api/clients/{client_id}")
+@router.get("/api/v1/clients/{client_id}")
 def get_client_details_endpoint(client_id: int):
     details = db_get_client_details(client_id)
     if not details:
@@ -62,7 +62,7 @@ def get_client_details_endpoint(client_id: int):
     return details
 
 
-@router.post("/api/clients")
+@router.post("/api/v1/clients")
 def add_new_client(
     name: str = Form(...),
     email: str = Form(""),
@@ -75,7 +75,7 @@ def add_new_client(
     return {"status": "success", "message": msg}
 
 
-@router.put("/api/clients/{client_id}")
+@router.put("/api/v1/clients/{client_id}")
 def update_client_details(
     client_id: int,
     name: str = Form(...),
@@ -89,13 +89,13 @@ def update_client_details(
     return {"status": "success"}
 
 
-@router.put("/api/clients/{client_id}/status")
+@router.put("/api/v1/clients/{client_id}/status")
 def update_status(client_id: int, status_data: dict):
     update_client_status(client_id, status_data.get("status"))
     return {"status": "success"}
 
 
-@router.delete("/api/clients/{client_id}")
+@router.delete("/api/v1/clients/{client_id}")
 def delete_client(client_id: int):
     success, msg = db_delete_client(client_id)
     if not success:
@@ -103,7 +103,7 @@ def delete_client(client_id: int):
     return {"status": "success"}
 
 
-@router.post("/api/clients/{client_id}/upload")
+@router.post("/api/v1/clients/{client_id}/upload")
 def upload_file_to_client(client_id: int, file: UploadFile = File(...)):
     details = db_get_client_details(client_id)
     if not details:
@@ -121,7 +121,7 @@ def upload_file_to_client(client_id: int, file: UploadFile = File(...)):
         raise HTTPException(500, str(e))
 
 
-@router.get("/api/clients/{client_id}/files/{filename}")
+@router.get("/api/v1/clients/{client_id}/files/{filename}")
 def download_client_file(client_id: int, filename: str):
     details = db_get_client_details(client_id)
     if not details:
@@ -135,7 +135,7 @@ def download_client_file(client_id: int, filename: str):
     return FileResponse(str(path), filename=path.name)
 
 
-@router.delete("/api/clients/{client_id}/files/{filename}")
+@router.delete("/api/v1/clients/{client_id}/files/{filename}")
 def delete_client_file(client_id: int, filename: str):
     details = db_get_client_details(client_id)
     if not details:
@@ -150,7 +150,7 @@ def delete_client_file(client_id: int, filename: str):
     raise HTTPException(404, "File not found")
 
 
-@router.post("/api/clients/reset-status")
+@router.post("/api/v1/clients/reset-status")
 async def reset_all_clients_status(current_user: str = Depends(get_current_user)):
     success = reset_all_clients_statuses()
     if success:

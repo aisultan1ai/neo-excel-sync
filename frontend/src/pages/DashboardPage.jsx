@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+﻿import React, { useMemo, useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import {
   Activity,
@@ -91,7 +91,7 @@ const DashboardPage = () => {
 
   const checkSystemHealth = useCallback(async () => {
     try {
-      const res = await axios.get("/api/health", { timeout: 2000 });
+      const res = await axios.get("/api/v1/health", { timeout: 2000 });
       setHealth(res.data);
     } catch {
       setHealth({ api: "Offline", db: "Disconnected" });
@@ -101,7 +101,7 @@ const DashboardPage = () => {
   const fetchProblems = useCallback(async () => {
     try {
       setProblemsLoading(true);
-      const res = await axios.get("/api/problems", { headers: authHeaders() });
+      const res = await axios.get("/api/v1/problems", { headers: authHeaders() });
       setProblems(Array.isArray(res.data) ? res.data : []);
       setProblemsUpdatedAt(new Date());
     } catch (err) {
@@ -115,7 +115,7 @@ const DashboardPage = () => {
   const fetchPodftToday = useCallback(async () => {
     try {
       const day = getLocalYMD();
-      const res = await axios.get(`/api/podft/today?date=${encodeURIComponent(day)}`, {
+      const res = await axios.get(`/api/v1/podft/today?date=${encodeURIComponent(day)}`, {
         headers: authHeaders(),
       });
       const parsed = parsePodftToday(res.data);
@@ -132,7 +132,7 @@ const DashboardPage = () => {
       try {
         setPodftLoading(true);
 
-        const res = await axios.get(`/api/podft/trades?date=${encodeURIComponent(day)}`, {
+        const res = await axios.get(`/api/v1/podft/trades?date=${encodeURIComponent(day)}`, {
           headers: authHeaders(),
         });
 
@@ -163,7 +163,7 @@ const DashboardPage = () => {
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const resProfile = await axios.get("/api/profile", { headers: authHeaders() });
+      const resProfile = await axios.get("/api/v1/profile", { headers: authHeaders() });
       setUsername(resProfile.data?.username || "User");
 
       const adminFlag =
@@ -171,7 +171,7 @@ const DashboardPage = () => {
         String(resProfile.data?.role || "").toLowerCase() === "admin";
       setIsAdmin(Boolean(adminFlag));
 
-      const res = await axios.get("/api/dashboard", { headers: authHeaders() });
+      const res = await axios.get("/api/v1/dashboard", { headers: authHeaders() });
       setStats(res.data);
 
       await Promise.all([fetchProblems(), fetchPodftToday()]);
@@ -240,13 +240,13 @@ const DashboardPage = () => {
 
       if (problemModalMode === "create") {
         await axios.post(
-          "/api/problems",
+          "/api/v1/problems",
           { title, description },
           { headers: authHeaders() }
         );
       } else if (problemModalMode === "edit" && selectedProblem?.id != null) {
         await axios.put(
-          `/api/problems/${selectedProblem.id}`,
+          `/api/v1/problems/${selectedProblem.id}`,
           { title, description },
           { headers: authHeaders() }
         );
@@ -268,7 +268,7 @@ const DashboardPage = () => {
     if (!ok) return;
 
     try {
-      await axios.delete(`/api/problems/${p.id}`, { headers: authHeaders() });
+      await axios.delete(`/api/v1/problems/${p.id}`, { headers: authHeaders() });
       await fetchProblems();
       if (selectedProblem?.id === p.id) closeProblemModal();
     } catch (err) {

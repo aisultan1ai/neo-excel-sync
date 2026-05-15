@@ -49,7 +49,7 @@ def _format_report_number(num) -> str:
         return str(num)
 
 
-@router.post("/api/compare-instruments")
+@router.post("/api/v1/compare-instruments")
 async def compare_instruments(
     file1: UploadFile = File(...),
     file2: UploadFile = File(...),
@@ -83,7 +83,7 @@ async def compare_instruments(
         cleanup_files(f1_path, f2_path)
 
 
-@router.post("/api/tools/generate-trade-report")
+@router.post("/api/v1/tools/generate-trade-report")
 async def generate_trade_report(file: UploadFile = File(...)):
     temp_path = save_upload_file(file)
     try:

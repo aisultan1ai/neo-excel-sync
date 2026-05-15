@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+﻿import React, { useState, useCallback } from "react";
 import axios from "axios";
 import { api } from "../api";
 
@@ -521,7 +521,7 @@ const ReportView = () => {
     formData.append("file", file);
 
     try {
-      const res = await axios.post("/api/tools/generate-trade-report", formData);
+      const res = await axios.post("/api/v1/tools/generate-trade-report", formData);
       if (res.data.status === "success") {
         setReportText(res.data.report);
         toast.success("Отчет успешно сформирован!");
@@ -735,7 +735,7 @@ const ReconcileView = () => {
     form.append("target", target || "");
 
     try {
-      const res = await axios.post("/api/tools/excel-reconcile?mode=twofiles&export=0", form);
+      const res = await axios.post("/api/v1/tools/excel-reconcile?mode=twofiles&export=0", form);
       setTwoRes(res.data);
       toast.success("Сверка завершена!");
     } catch (e) {
@@ -759,7 +759,7 @@ const ReconcileView = () => {
     form.append("target", target || "");
 
     try {
-      const res = await axios.post("/api/tools/excel-reconcile?mode=twofiles&export=1", form, {
+      const res = await axios.post("/api/v1/tools/excel-reconcile?mode=twofiles&export=1", form, {
         responseType: "blob",
       });
       downloadBlob(res.data, "export.xlsx");
@@ -788,7 +788,7 @@ const ReconcileView = () => {
     form.append("chosen_amount", pick?.Amount != null ? String(pick.Amount) : "");
 
     try {
-      const res = await axios.post("/api/tools/excel-reconcile?mode=duplicates&export=0", form);
+      const res = await axios.post("/api/v1/tools/excel-reconcile?mode=duplicates&export=0", form);
       setDupRes(res.data);
       toast.success("Готово!");
     } catch (e) {
@@ -812,7 +812,7 @@ const ReconcileView = () => {
     form.append("chosen_amount", "");
 
     try {
-      const res = await axios.post("/api/tools/excel-reconcile?mode=duplicates&export=1", form, {
+      const res = await axios.post("/api/v1/tools/excel-reconcile?mode=duplicates&export=1", form, {
         responseType: "blob",
       });
       downloadBlob(res.data, "duplicates_export.xlsx");

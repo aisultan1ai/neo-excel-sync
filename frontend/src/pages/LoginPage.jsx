@@ -4,7 +4,7 @@ import { ShieldCheck, Zap, BarChart3, User, Lock, ArrowRight } from "lucide-reac
 import axios from "axios";
 
 const http = axios.create({
-  baseURL: "/api",
+  baseURL: "/api/v1",
   timeout: 15000,
 });
 
@@ -96,7 +96,7 @@ const LoginPage = ({ onLogin }) => {
       if (status === 401) {
         setError(typeof detail === "string" ? detail : "Неверный логин или пароль");
       } else if (status === 405) {
-        setError("Ошибка 405: неверный адрес запроса. Проверь, что фронт шлёт POST на /api/token.");
+        setError("Ошибка 405: неверный адрес запроса. Проверь, что фронт шлёт POST на /api/v1/token.");
       } else if (status === 422) {
         setError("Ошибка 422: backend не принял форму. Проверь формат x-www-form-urlencoded.");
       } else if (status) {

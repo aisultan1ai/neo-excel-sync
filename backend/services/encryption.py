@@ -1,9 +1,10 @@
 import os
 import threading
+from typing import Optional
 
 from cryptography.fernet import Fernet
 
-_fernet: Fernet | None = None
+_fernet: Optional[Fernet] = None
 _fernet_lock = threading.Lock()
 
 

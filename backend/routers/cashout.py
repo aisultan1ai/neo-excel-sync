@@ -13,7 +13,7 @@ from services import unity as cashout_service
 from services.encryption import decrypt_value, encrypt_value
 
 log = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/ff")
+router = APIRouter(prefix="/api/v1/ff")
 
 
 class UnityConfigUpdate(BaseModel):

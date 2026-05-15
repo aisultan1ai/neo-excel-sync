@@ -16,17 +16,17 @@ class UserCreate(BaseModel):
     is_admin: bool = False
 
 
-@router.get("/api/users")
+@router.get("/api/v1/users")
 async def list_users(current_user: str = Depends(get_current_user)):
     return get_users_basic()
 
 
-@router.get("/api/admin/users")
+@router.get("/api/v1/admin/users")
 async def get_users_list(current_user: str = Depends(require_admin)):
     return get_all_users()
 
 
-@router.post("/api/admin/users")
+@router.post("/api/v1/admin/users")
 async def admin_create_user(
     user: UserCreate, current_user: str = Depends(require_admin)
 ):
@@ -37,7 +37,7 @@ async def admin_create_user(
     raise HTTPException(400, "User exists or error")
 
 
-@router.delete("/api/admin/users/{user_id}")
+@router.delete("/api/v1/admin/users/{user_id}")
 async def admin_delete_user(user_id: int, current_user: str = Depends(require_admin)):
     caller = get_user_by_username(current_user)
     if caller and caller.id == user_id:

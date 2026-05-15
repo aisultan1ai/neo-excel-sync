@@ -9,17 +9,17 @@ import settings_manager
 router = APIRouter()
 
 
-@router.get("/api/settings")
+@router.get("/api/v1/settings")
 def get_settings():
     return settings_manager.load_settings()
 
 
-@router.post("/api/settings")
+@router.post("/api/v1/settings")
 def update_settings(new_settings: dict):
     return settings_manager.save_settings(new_settings)
 
 
-@router.post("/api/settings/upload-split-list")
+@router.post("/api/v1/settings/upload-split-list")
 async def upload_split_list_reference(file: UploadFile = File(...)):
     try:
         upload_dir = "data"
@@ -36,7 +36,7 @@ async def upload_split_list_reference(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/api/settings/split-list-content")
+@router.get("/api/v1/settings/split-list-content")
 def get_split_list_content():
     try:
         s = settings_manager.load_settings()

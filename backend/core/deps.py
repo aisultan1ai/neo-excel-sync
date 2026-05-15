@@ -4,7 +4,7 @@ from jose import JWTError, jwt
 
 from core.config import SECRET_KEY, ALGORITHM
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/token")
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
