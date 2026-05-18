@@ -35,7 +35,7 @@ class FFLoadRequest(BaseModel):
 @router.get("/accounts")
 async def ff_list_accounts(current_user: str = Depends(get_current_user)):
     user = ff_get_user(current_user)
-    return funding_manager.get_ff_accounts_with_stats(user.id, user.is_admin)
+    return funding_manager.get_ff_accounts_with_stats(user.id, is_admin=True)
 
 
 @router.post("/accounts", status_code=201)
@@ -159,7 +159,7 @@ async def ff_get_records(
         ff_check_account(account_id, user)
         allowed_ids = [account_id]
     else:
-        accounts = funding_manager.get_ff_accounts(user.id, user.is_admin)
+        accounts = funding_manager.get_ff_accounts(user.id, is_admin=True)
         allowed_ids = [a["id"] for a in accounts]
 
     if not allowed_ids:

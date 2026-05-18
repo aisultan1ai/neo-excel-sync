@@ -53,6 +53,16 @@ async def require_admin(current_user: str = Depends(get_current_user)) -> str:
     return current_user
 
 
+async def require_settings_admin(current_user: str = Depends(get_current_user)) -> str:
+    from db.users import get_user_by_username
+    user = get_user_by_username(current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.is_admin or user.department == "Back Office":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
 def ensure_task_owner_or_admin(task_row: dict, user_row):
     if not user_row:
         raise HTTPException(status_code=404, detail="User not found")
