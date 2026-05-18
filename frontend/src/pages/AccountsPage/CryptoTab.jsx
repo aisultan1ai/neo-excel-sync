@@ -156,9 +156,9 @@ const CryptoTab = () => {
       if (!fromAcc || !toAcc) return toast.warning("Выберите Откуда и Куда");
       if (fromAcc.id === toAcc.id) return toast.warning("Нельзя переводить на тот же счет");
     } else if (type === "deposit") {
-      if (!toAcc) return toast.warning("Для пополнения выберите "Куда"");
+      if (!toAcc) return toast.warning('Для пополнения выберите "Куда"');
     } else if (type === "withdraw") {
-      if (!fromAcc) return toast.warning("Для вывода выберите "Откуда"");
+      if (!fromAcc) return toast.warning('Для вывода выберите "Откуда"');
     }
     const label = edgeLabelFromTx({ type, amount: amountNum, asset: assetUp, comment });
     try {
