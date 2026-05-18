@@ -8,6 +8,7 @@ const ProblemModal = ({ open, mode, problem, isAdmin, onClose, onSaved, onEditMo
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTitle(problem?.title || "");
       setDescription(problem?.description || "");
       setSaving(false);

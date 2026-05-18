@@ -10,7 +10,6 @@ import requests
 BASE_URL = "https://fapi.binance.com"
 RECV_WINDOW = 5000
 LIMIT = 1000
-LOCAL_TZ = timezone(timedelta(hours=5))
 FUTURES_LAUNCH = datetime(2019, 9, 1, tzinfo=timezone.utc)
 
 

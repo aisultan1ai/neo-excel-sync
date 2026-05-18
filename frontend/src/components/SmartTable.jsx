@@ -1,32 +1,25 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { AgGridReact } from "ag-grid-react";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import { Download } from "lucide-react";
 
 const SmartTable = ({ data, title, height = "500px" }) => {
-  const [rowData, setRowData] = useState([]);
-  const [columnDefs, setColumnDefs] = useState([]);
   const [gridApi, setGridApi] = useState(null);
 
-  useEffect(() => {
-    if (data && data.length > 0) {
-      setRowData(data);
+  const rowData = useMemo(() => (data && data.length > 0 ? data : []), [data]);
 
-      const keys = Object.keys(data[0]);
-      const cols = keys.map((key) => ({
-        field: key,
-        headerName: key,
-        filter: true,
-        sortable: true,
-        resizable: true,
-        flex: 1,
-        minWidth: 150,
-      }));
-      setColumnDefs(cols);
-    } else {
-      setRowData([]);
-    }
+  const columnDefs = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    return Object.keys(data[0]).map((key) => ({
+      field: key,
+      headerName: key,
+      filter: true,
+      sortable: true,
+      resizable: true,
+      flex: 1,
+      minWidth: 150,
+    }));
   }, [data]);
 
   const defaultColDef = useMemo(

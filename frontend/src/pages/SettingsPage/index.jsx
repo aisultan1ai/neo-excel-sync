@@ -32,7 +32,7 @@ const SettingsPage = () => {
         const [settingsRes, profileRes] = await Promise.all([axios.get("/api/v1/settings"), axios.get("/api/v1/profile")]);
         setSettings(settingsRes.data);
         const { department, is_admin } = profileRes.data;
-        setCanEdit(department === "Back Office" || is_admin);
+        setCanEdit(!!is_admin);
         setUserRole(is_admin ? "Admin" : department);
       } catch (err) {
         console.error(err);

@@ -75,7 +75,7 @@ const ProtectedRoute = ({ isAuthenticated }) => {
 };
 
 
-const AppLayout = ({ isAdmin, userDept }) => {
+const AppLayout = ({ isAdmin }) => {
   return (
     <div className="app-container">
       <aside className="sidebar">

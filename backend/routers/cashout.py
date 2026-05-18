@@ -67,7 +67,8 @@ async def ff_save_unity_config(
         try:
             token_enc = encrypt_value(req.auth_token)
         except Exception as e:
-            raise HTTPException(500, f"Encryption error: {e}")
+            log.error("Token encryption error: %s", e, exc_info=True)
+            raise HTTPException(500, "Failed to save Unity configuration")
     cashout_manager.save_unity_config(req.base_url, token_enc, user.id)
     cashout_manager.log_ff_action(user.id, user.username, "settings_update", {
         "base_url": req.base_url, "token_changed": req.auth_token is not None
@@ -136,12 +137,16 @@ async def ff_cashout(req: CashoutRequest, current_user: str = Depends(get_curren
     try:
         auth_token = decrypt_value(cfg["auth_token_enc"])
     except Exception as e:
-        raise HTTPException(500, f"Token decryption error: {e}")
+        log.error("Token decryption error for user %s: %s", user.id, e, exc_info=True)
+        raise HTTPException(500, "Failed to decrypt Unity API token — re-save your Unity configuration")
 
     is_cashin = req.amount > 0
     tx_type = TransactionType.CASHIN if is_cashin else TransactionType.CASHOUT
     abs_amount = round(abs(req.amount), 6)
     caller = cashout_service.send_cashin if is_cashin else cashout_service.send_cashout
+
+    if cashout_manager.recent_successful_cashout_exists(req.ff_account_id, req.amount, req.netting_date):
+        raise HTTPException(409, "Дублирующийся запрос: успешная транзакция с теми же параметрами уже была отправлена менее минуты назад")
 
     try:
         result = caller(
@@ -237,7 +242,7 @@ async def ff_upsert_schedule(
     current_user: str = Depends(get_current_user),
 ):
     user = ff_get_user(current_user)
-    ff_check_account(ff_account_id, user)
+    account = ff_check_account(ff_account_id, user)
     if req.frequency == ScheduleFrequency.MONTHLY and not (1 <= req.day_of_period <= 28):
         raise HTTPException(400, "day_of_period for monthly must be 1-28")
     if req.frequency == ScheduleFrequency.WEEKLY and not (1 <= req.day_of_period <= 7):
@@ -245,7 +250,6 @@ async def ff_upsert_schedule(
     result = cashout_manager.upsert_cashout_schedule(
         ff_account_id, req.frequency.value, req.day_of_period, req.enabled
     )
-    account = ff_check_account(ff_account_id, user)
     cashout_manager.log_ff_action(user.id, user.username, "schedule_upsert", {
         "account_id": ff_account_id, "account_name": account["name"],
         "frequency": req.frequency.value, "day_of_period": req.day_of_period, "enabled": req.enabled,

@@ -124,8 +124,8 @@ async def generate_trade_report(
 
         return {"status": "success", "report": "\n".join(report_lines)}
     except Exception as e:
-        log.error(f"Report generation error: {e}", exc_info=True)
-        raise HTTPException(500, f"Ошибка обработки файла: {str(e)}")
+        log.error("Report generation error: %s", e, exc_info=True)
+        raise HTTPException(500, "Ошибка обработки файла")
     finally:
         cleanup_files(temp_path)
 

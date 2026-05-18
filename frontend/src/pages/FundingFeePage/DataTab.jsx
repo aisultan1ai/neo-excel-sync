@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { ChevronDown, Download, Eye, Loader2, RefreshCw, TrendingDown, TrendingUp, X } from "lucide-react";
 import { Label, PeriodStrip, SectionTitle, Pill } from "./ui";
-import { fmt, fmt8, fmtDate, fmtDT, T, S } from "./helpers";
+import { fmt8, fmtDate, fmtDT, T, S } from "./helpers";
 import { getSummary, getRecords, exportExcel, deleteRecords, getSymbols, loadStream } from "./api";
 
 export default function DataTab({ accounts, selAccountId, onSelect, onAccountsRefresh, tz = 0 }) {

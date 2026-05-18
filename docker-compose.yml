@@ -16,6 +16,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   backend:
     image: aisultan1a/neoexcelsync-backend:1.1
@@ -23,6 +35,7 @@ services:
     restart: always
     expose:
       - "8000"
+    user: "1001:1001"
     depends_on:
       db:
         condition: service_healthy
@@ -48,6 +61,47 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "10"
+
+  scheduler:
+    image: aisultan1a/neoexcelsync-backend:1.1
+    container_name: neo_scheduler
+    command: ["python", "scheduler_worker.py"]
+    restart: always
+    user: "1001:1001"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      FERNET_KEY: ${FERNET_KEY}
+    volumes:
+      - ./backend/data:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   frontend:
     image: aisultan1a/neoexcelsync-frontend:1.1
@@ -58,6 +112,16 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   postgres_data:

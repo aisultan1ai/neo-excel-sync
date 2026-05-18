@@ -14,7 +14,13 @@ def get_ff_accounts(user_id: int = None, is_admin: bool = True) -> list:
         return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT id, name, owner_id, created_at FROM ff_sub_accounts ORDER BY id")
+            if is_admin or user_id is None:
+                cur.execute("SELECT id, name, owner_id, created_at FROM ff_sub_accounts ORDER BY id")
+            else:
+                cur.execute(
+                    "SELECT id, name, owner_id, created_at FROM ff_sub_accounts WHERE owner_id = %s ORDER BY id",
+                    (user_id,),
+                )
             return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
@@ -83,21 +89,19 @@ def save_ff_records(account_id: int, records: list) -> int:
         new_count = 0
         with conn.cursor() as cur:
             for r in records:
-                cur.execute("SELECT 1 FROM ff_funding_records WHERE tran_id = %s", (r["tran_id"],))
-                if cur.fetchone():
-                    continue
                 cur.execute(
                     """
                     INSERT INTO ff_funding_records
                     (account_id, symbol, asset, income, income_type, tran_id, time_ms, datetime_utc, date_local)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (tran_id) DO NOTHING
                     """,
                     (
                         account_id, r["symbol"], r["asset"], r["income"], r["income_type"],
                         r["tran_id"], r["time_ms"], r["datetime_utc"], r["date_local"],
                     ),
                 )
-                new_count += 1
+                new_count += cur.rowcount
         conn.commit()
         return new_count
     except Exception as e:
@@ -192,7 +196,13 @@ def get_ff_accounts_with_stats(user_id: int = None, is_admin: bool = True) -> li
         return []
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT id, name, owner_id, created_at FROM ff_sub_accounts ORDER BY id")
+            if is_admin or user_id is None:
+                cur.execute("SELECT id, name, owner_id, created_at FROM ff_sub_accounts ORDER BY id")
+            else:
+                cur.execute(
+                    "SELECT id, name, owner_id, created_at FROM ff_sub_accounts WHERE owner_id = %s ORDER BY id",
+                    (user_id,),
+                )
             accounts = [dict(r) for r in cur.fetchall()]
             if not accounts:
                 return []

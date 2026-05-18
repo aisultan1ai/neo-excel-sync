@@ -39,6 +39,7 @@ const ReportsPage = () => {
       })
       .catch(console.error)
       .finally(() => setLoadingAuth(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadClients = useCallback(async (term = "") => {

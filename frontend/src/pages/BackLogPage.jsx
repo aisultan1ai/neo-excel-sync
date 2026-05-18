@@ -30,7 +30,7 @@ const ActionPill = ({ action }) => {
 const fmtDT = (v) => {
   if (!v) return "—";
   const s = String(v).replace(" ", "T");
-  const norm = /[Zz]|[+\-]\d{2}:?\d{2}$/.test(s) ? s : s + "Z";
+  const norm = /[Zz]|[-+]\d{2}:?\d{2}$/.test(s) ? s : s + "Z";
   const d = new Date(norm);
   if (isNaN(d.getTime())) return s.slice(0, 19).replace("T", " ");
   return d.toLocaleString("ru-RU", { timeZone: "Asia/Almaty", hour12: false }).replace(",", "");

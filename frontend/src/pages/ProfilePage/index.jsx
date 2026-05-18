@@ -14,6 +14,7 @@ const ProfilePage = ({ onLogout }) => {
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchProfile(); fetchDepartments(); }, []);
 
   const fetchProfile = async () => {

@@ -34,8 +34,8 @@ class FFLoadRequest(BaseModel):
 
 @router.get("/accounts")
 async def ff_list_accounts(current_user: str = Depends(get_current_user)):
-    ff_get_user(current_user)
-    return funding_manager.get_ff_accounts_with_stats()
+    user = ff_get_user(current_user)
+    return funding_manager.get_ff_accounts_with_stats(user.id, user.is_admin)
 
 
 @router.post("/accounts", status_code=201)
@@ -45,7 +45,8 @@ async def ff_create_account(req: FFAccountCreate, current_user: str = Depends(ge
         api_key_enc = encrypt_value(req.api_key)
         api_secret_enc = encrypt_value(req.api_secret)
     except Exception as e:
-        raise HTTPException(500, f"Encryption error: {e}")
+        log.error("API key encryption error: %s", e, exc_info=True)
+        raise HTTPException(500, "Failed to encrypt API credentials")
     result = funding_manager.create_ff_account(user.id, req.name, api_key_enc, api_secret_enc)
     if not result:
         raise HTTPException(500, "Failed to create account")

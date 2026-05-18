@@ -205,6 +205,30 @@ def save_cashout_record(
         conn.close()
 
 
+def recent_successful_cashout_exists(ff_account_id: int, amount: float, netting_date: str, within_seconds: int = 60) -> bool:
+    """Returns True if a successful cashout for the same account/amount/netting_date was saved within the last N seconds."""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1 FROM ff_cashout_history
+                WHERE ff_account_id = %s
+                  AND amount = %s
+                  AND netting_date = %s
+                  AND status = 'success'
+                  AND created_at >= NOW() - (%s * INTERVAL '1 second')
+                LIMIT 1
+                """,
+                (ff_account_id, amount, netting_date, within_seconds),
+            )
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
 def get_cashout_history(ff_account_id: Optional[int] = None, limit: int = 200) -> list:
     conn = get_db_connection()
     if not conn:

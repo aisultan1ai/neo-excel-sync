@@ -165,6 +165,21 @@ async def change_task_status(
 ):
     if status_data.status not in _VALID_STATUSES:
         raise HTTPException(400, f"status must be one of: {', '.join(sorted(_VALID_STATUSES))}")
+
+    user = get_user_by_username(current_user)
+    if not user:
+        raise HTTPException(404, "User not found")
+    task = get_task_by_id(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+
+    if not user.is_admin:
+        is_creator = task.get("from_user_id") == user.id
+        is_specific_assignee = task.get("to_user_id") == user.id
+        is_dept_assignee = task.get("to_user_id") is None and task.get("to_department") == user.department
+        if not (is_creator or is_specific_assignee or is_dept_assignee):
+            raise HTTPException(403, "Not allowed")
+
     if update_task_status(task_id, status_data.status):
         return {"status": "success"}
     raise HTTPException(500, "Error updating status")

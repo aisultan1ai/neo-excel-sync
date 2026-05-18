@@ -22,6 +22,7 @@ const EdgeTxModal = ({ open, onClose, onSubmit, fromTitle, toTitle }) => {
 
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm({ type: "transfer", amount: "", asset: "USDT", comment: "" });
   }, [open]);
 
@@ -120,7 +121,11 @@ const EdgeTxModal = ({ open, onClose, onSubmit, fromTitle, toTitle }) => {
 const SaveSchemeModal = ({ open, onClose, onSave }) => {
   const [name, setName] = useState("");
 
-  useEffect(() => { if (!open) return; setName(""); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setName("");
+  }, [open]);
 
   const submit = () => {
     const n = name.trim();
@@ -175,6 +180,7 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
       position: { x: 120 + index * 240, y: 130 + (index % 2 ? 110 : 0) },
       data: { provider: acc.provider, name: acc.name, badge: acc.asset || "" },
     }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData?.id, accounts]);
 
   const baseEdges = useMemo(() => {
@@ -182,6 +188,7 @@ const VisualEditorModal = ({ accounts, initialData, onClose, onAddTransfer, onSa
       return initialData.edges.map(normalizeEdge);
     }
     return [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData?.id]);
 
   const accountsById = useMemo(() => {

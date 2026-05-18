@@ -5,7 +5,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 import settings_manager
-from core.deps import get_current_user
+from core.deps import get_current_user, require_admin
 from core.limiter import limiter
 
 router = APIRouter()
@@ -22,7 +22,7 @@ def get_settings(current_user: str = Depends(get_current_user)):
 @router.post("/api/v1/settings")
 def update_settings(
     new_settings: dict,
-    current_user: str = Depends(get_current_user),
+    current_user: str = Depends(require_admin),
 ):
     return settings_manager.save_settings(new_settings)
 
@@ -32,7 +32,7 @@ def update_settings(
 async def upload_split_list_reference(
     request: Request,
     file: UploadFile = File(...),
-    current_user: str = Depends(get_current_user),
+    current_user: str = Depends(require_admin),
 ):
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in _ALLOWED_SPLIT_EXTENSIONS:

@@ -235,6 +235,7 @@ def init_ff_tables():
             safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_ff_records_account ON ff_funding_records(account_id)")
             safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_ff_records_symbol ON ff_funding_records(symbol)")
             safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_ff_records_date ON ff_funding_records(date_local)")
+            safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_ff_records_account_date ON ff_funding_records(account_id, date_local)")
         log.info("FF tables initialized.")
     except Exception as e:
         log.error("init_ff_tables error: %s", e, exc_info=True)

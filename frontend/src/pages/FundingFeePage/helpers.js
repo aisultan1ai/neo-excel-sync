@@ -10,7 +10,7 @@ export const fmtDate = (v) => (!v ? "-" : String(v).slice(0, 10));
 export const fmtDT = (v, tzOffset = 0) => {
   if (!v) return "-";
   const s = String(v).replace(" ", "T");
-  const norm = /[Zz]|[+\-]\d{2}:?\d{2}$/.test(s) ? s : s + "Z";
+  const norm = /[Zz]|[-+]\d{2}:?\d{2}$/.test(s) ? s : s + "Z";
   const d = new Date(norm);
   if (isNaN(d.getTime())) return s.slice(0, 19).replace("T", " ");
   return new Date(d.getTime() + tzOffset * 3600 * 1000).toISOString().slice(0, 19).replace("T", " ");

@@ -15,7 +15,6 @@ from db.migrations import init_all
 from db import users as users_db
 from excel_reconcile_single import register_excel_reconcile
 from utils.cache import cleanup_cache, cleanup_unity_exchange_cache
-from utils.scheduler import run_scheduled_cashouts
 
 from routers import (
     auth,
@@ -74,7 +73,6 @@ _scheduler = BackgroundScheduler(timezone="UTC")
 @app.on_event("startup")
 def startup_event():
     init_all()
-    _scheduler.add_job(run_scheduled_cashouts, "cron", hour=9, minute=0, id="cashout_daily")
     _scheduler.add_job(cleanup_cache, "interval", minutes=15, id="cache_cleanup")
     _scheduler.add_job(cleanup_unity_exchange_cache, "interval", minutes=15, id="unity_cache_cleanup")
     _scheduler.start()
@@ -90,8 +88,11 @@ def startup_event():
             if users_db.count_users() == 0:
                 salt = bcrypt.gensalt()
                 hashed = bcrypt.hashpw(init_pass.encode("utf-8"), salt).decode("utf-8")
-                users_db.create_new_user(init_user, hashed, init_dept, init_is_admin)
-                log.info("Bootstrap admin created.")
+                ok = users_db.create_new_user(init_user, hashed, init_dept, init_is_admin)
+                if ok:
+                    log.info("Bootstrap admin '%s' created (dept=%s, admin=%s).", init_user, init_dept, init_is_admin)
+                else:
+                    log.critical("Bootstrap admin creation FAILED — create_new_user returned False. Check DB logs.")
             else:
                 log.info("Bootstrap admin skipped (users already exist).")
     except Exception:

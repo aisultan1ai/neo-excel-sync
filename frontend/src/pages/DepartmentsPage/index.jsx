@@ -116,7 +116,7 @@ const DepartmentsPage = () => {
     try {
       const [c, a] = await Promise.all([fetchTaskComments(task.id), fetchTaskAttachments(task.id)]);
       setComments(c); setAttachments(a);
-    } catch {}
+    } catch { /* ignore fetch error, UI shows empty state */ }
   };
 
   const executeDeleteTask = async () => {
