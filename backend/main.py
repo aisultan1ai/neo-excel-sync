@@ -31,6 +31,7 @@ from routers import (
     funding_fee,
     cashout,
 )
+from routers import balance_history
 
 pd.set_option("future.no_silent_downcasting", True)
 
@@ -39,7 +40,13 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-app = FastAPI(title="NeoExcelSync API")
+_debug = os.getenv("ENABLE_DOCS", "false").lower() in ("1", "true", "yes")
+app = FastAPI(
+    title="NeoExcelSync API",
+    docs_url="/docs" if _debug else None,
+    redoc_url="/redoc" if _debug else None,
+    openapi_url="/openapi.json" if _debug else None,
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -66,6 +73,7 @@ app.include_router(crypto.router)
 app.include_router(unity_exchange.router)
 app.include_router(funding_fee.router)
 app.include_router(cashout.router)
+app.include_router(balance_history.router)
 
 _scheduler = BackgroundScheduler(timezone="UTC")
 

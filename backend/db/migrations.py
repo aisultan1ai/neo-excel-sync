@@ -324,7 +324,31 @@ def init_cashout_tables():
         conn.close()
 
 
+def init_bh_tables():
+    conn = get_db_connection()
+    if not conn:
+        return
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bh_accounts (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    account_id TEXT NOT NULL,
+                    asset_id TEXT NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+        log.info("BH tables initialized.")
+    except Exception as e:
+        log.error("init_bh_tables error: %s", e, exc_info=True)
+    finally:
+        conn.close()
+
+
 def init_all():
     init_database()
     init_ff_tables()
     init_cashout_tables()
+    init_bh_tables()

@@ -25,6 +25,7 @@ import {
   Wallet,
   TrendingUp,
   ClipboardList,
+  BarChart3,
 } from "lucide-react";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -42,6 +43,7 @@ import InstrumentsPage from "./pages/InstrumentsPage";
 import AccountsPage from "./pages/AccountsPage";
 import UnityExchangePage from "./pages/UnityExchangePage";
 import FundingFeePage from "./pages/FundingFeePage";
+import BalanceHistoryPage from "./pages/BalanceHistoryPage";
 import BackLogPage from "./pages/BackLogPage";
 
 
@@ -93,6 +95,7 @@ const AppLayout = ({ isAdmin }) => {
           <NavButton to="/unity-exchange" icon={FileDiff} label="Unity ↔ Биржа" />
           <NavButton to="/crypto" icon={Wallet} label="Крипто-счета" />
           <NavButton to="/funding-fee" icon={TrendingUp} label="Funding Fee" />
+          <NavButton to="/balances" icon={BarChart3} label="Остатки" />
           {isAdmin && <NavButton to="/backlog" icon={ClipboardList} label="BackLog" />}
 
           <div className="spacer" style={{ flex: 1 }} />
@@ -193,6 +196,7 @@ function App() {
             <Route path="/unity-exchange" element={<UnityExchangePage />} />
             <Route path="/crypto" element={<AccountsPage />} />
             <Route path="/funding-fee" element={<FundingFeePage />} />
+            <Route path="/balances" element={<BalanceHistoryPage />} />
             <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
             <Route path="/settings" element={<SettingsPage />} />
             {isAdmin && <Route path="/backlog" element={<BackLogPage />} />}
