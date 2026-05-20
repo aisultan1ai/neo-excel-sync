@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -191,10 +192,13 @@ async def ff_export(
     user = ff_get_user(current_user)
     account = ff_check_account(account_id, user)
 
-    records = funding_manager.get_ff_records(
-        [account_id], start_date, end_date, symbol, limit=100000, offset=0
-    )
-    buf = build_funding_export(account, records, start_date, end_date, symbol)
+    def _build_export():
+        records = funding_manager.get_ff_records(
+            [account_id], start_date, end_date, symbol, limit=100000, offset=0
+        )
+        return build_funding_export(account, records, start_date, end_date, symbol)
+
+    buf = await run_in_threadpool(_build_export)
     filename = build_export_filename(account, start_date, end_date)
 
     return StreamingResponse(
