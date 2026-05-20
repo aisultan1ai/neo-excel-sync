@@ -71,8 +71,8 @@ async def run_comparison(
         return json_response
 
     except Exception as e:
-        log.error(f"Comparison error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        log.error("Comparison error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка обработки сверки")
     finally:
         cleanup_files(f1_path, f2_path)
 

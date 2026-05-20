@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 
@@ -8,6 +9,7 @@ import settings_manager
 from core.deps import get_current_user, require_admin, require_settings_admin
 from core.limiter import limiter
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 _ALLOWED_SPLIT_EXTENSIONS = {".xlsx", ".xls", ".csv"}
@@ -54,7 +56,8 @@ async def upload_split_list_reference(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        log.error("save split-list-path error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка сохранения настроек")
 
 
 @router.get("/api/v1/settings/split-list-content")
@@ -71,4 +74,5 @@ def get_split_list_content(current_user: str = Depends(get_current_user)):
             "filename": os.path.basename(path),
         }
     except Exception as e:
-        raise HTTPException(500, str(e))
+        log.error("split-list-content read error: %s", e, exc_info=True)
+        raise HTTPException(500, "Ошибка чтения файла")

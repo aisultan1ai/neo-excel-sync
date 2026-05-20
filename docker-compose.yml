@@ -92,6 +92,12 @@ services:
       FERNET_KEY: ${FERNET_KEY}
     volumes:
       - ./backend/data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "find /tmp/scheduler_alive -mmin -2 2>/dev/null | grep -q ."]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:

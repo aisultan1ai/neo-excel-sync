@@ -139,7 +139,8 @@ async def upload_file_to_client(
         dest.write_bytes(content)
         return {"status": "success"}
     except Exception as e:
-        raise HTTPException(500, str(e))
+        log.error("File upload error: %s", e, exc_info=True)
+        raise HTTPException(500, "Ошибка сохранения файла")
 
 
 @router.get("/api/v1/clients/{client_id}/files/{filename}")

@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -8,6 +9,7 @@ from core.deps import get_current_user
 from core.limiter import limiter
 from utils.files import cleanup_files, save_upload_file
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 _ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
@@ -42,6 +44,7 @@ async def check_splits(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, str(e))
+        log.error("splits processing error: %s", e, exc_info=True)
+        raise HTTPException(500, "Ошибка обработки файла")
     finally:
         cleanup_files(daily_path)

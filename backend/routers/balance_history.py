@@ -5,6 +5,8 @@ import openpyxl
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from pydantic import BaseModel
 
 from core.deps import get_current_user
@@ -26,6 +28,46 @@ EXCEL_HEADERS = [
     "cashIn", "cashOut", "cashAvailable", "externalTransfers",
     "dailyPnl", "dailyPnlPercent", "prevDayTotalAssets",
 ]
+
+_FIELD_KEYS = [
+    None, None, None,
+    "totalAssets", "cashBalance", "portfolioValue",
+    "blocked", "blockedForOrders", "assetMarketValue",
+    "cryptoBalance", "futureCashFlow", "unrealizedPnl",
+    "accruedInterest", "totalUnrealizedPnl",
+    "marginUtilization", "marginUsage", "marginBalance", "marginAvailable",
+    "positionMargin", "cashMargin", "orderMargin",
+    "cashIn", "cashOut", "cashAvailable", "externalTransfers",
+    "dailyPnl", "dailyPnlPercent", "prevDayTotalAssets",
+]
+
+_ROW_FILL = PatternFill("solid", fgColor="D6E4F0")  # светло-синий для всех строк
+
+_HEADER_FILL = PatternFill("solid", fgColor="1F4E79")
+_HEADER_FONT = Font(bold=True, color="FFFFFF", size=10)
+_THIN = Side(style="thin", color="B0BEC5")
+_THICK = Side(style="medium", color="455A64")
+
+
+def _border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN) -> Border:
+    return Border(left=left, right=right, top=top, bottom=bottom)
+
+
+def _apply_header(ws) -> None:
+    for col, header in enumerate(EXCEL_HEADERS, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = _HEADER_FILL
+        cell.font = _HEADER_FONT
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = _border()
+    ws.row_dimensions[1].height = 40
+
+
+def _auto_widths(ws, min_w: int = 10, max_w: int = 30) -> None:
+    for col_cells in ws.columns:
+        col_idx = col_cells[0].column
+        max_len = max((len(str(c.value or "")) for c in col_cells), default=0)
+        ws.column_dimensions[get_column_letter(col_idx)].width = max(min_w, min(max_len + 2, max_w))
 
 
 class BHAccountCreate(BaseModel):
@@ -105,16 +147,33 @@ async def export_excel(
     current_user: str = Depends(get_current_user),
 ):
     base_url, token = _unity_cfg(current_user)
+    accounts = bh_db.list_bh_accounts()
 
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Остатки"
-    ws.append(EXCEL_HEADERS)
 
-    for acc in bh_db.list_bh_accounts():
-        for entry in _fetch(base_url, token, acc["account_id"], acc["asset_id"], from_date, to_date):
+    # ── Общий лист со всеми счетами ──────────────────────────────────────────
+    ws_all = wb.active
+    ws_all.title = "Все счета"
+    _apply_header(ws_all)
+    ws_all.freeze_panes = "D2"  # фиксируем шапку + первые 3 колонки
+    ws_all.auto_filter.ref = f"A1:{get_column_letter(len(EXCEL_HEADERS))}1"
+
+    num_fmt = '#,##0.00'
+    date_fmt = 'DD.MM.YYYY'
+
+    all_row = 2
+    prev_account_id = None
+
+    for acc in accounts:
+        entries = _fetch(base_url, token, acc["account_id"], acc["asset_id"], from_date, to_date)
+        if not entries:
+            continue
+
+        is_new_group = prev_account_id != acc["account_id"]
+
+        for entry in entries:
             b = entry.get("balance", {})
-            ws.append([
+            row_values = [
                 acc["name"], acc["account_id"], entry.get("date"),
                 b.get("totalAssets"), b.get("cashBalance"), b.get("portfolioValue"),
                 b.get("blocked"), b.get("blockedForOrders"), b.get("assetMarketValue"),
@@ -125,7 +184,26 @@ async def export_excel(
                 b.get("orderMargin"), b.get("cashIn"), b.get("cashOut"),
                 b.get("cashAvailable"), b.get("externalTransfers"),
                 b.get("dailyPnl"), b.get("dailyPnlPercent"), b.get("prevDayTotalAssets"),
-            ])
+            ]
+
+            top_side = _THICK if is_new_group else _THIN
+            for col_idx, val in enumerate(row_values, 1):
+                cell = ws_all.cell(row=all_row, column=col_idx, value=val)
+                cell.fill = _ROW_FILL
+                cell.border = _border(top=top_side)
+                if col_idx == 3 and val:  # Дата
+                    cell.number_format = date_fmt
+                    cell.alignment = Alignment(horizontal="center")
+                elif col_idx > 3 and isinstance(val, (int, float)):  # числа
+                    cell.number_format = num_fmt
+                    cell.alignment = Alignment(horizontal="right")
+                elif col_idx <= 2:
+                    cell.alignment = Alignment(horizontal="left")
+            is_new_group = False
+            prev_account_id = acc["account_id"]
+            all_row += 1
+
+    _auto_widths(ws_all)
 
     buf = io.BytesIO()
     wb.save(buf)
