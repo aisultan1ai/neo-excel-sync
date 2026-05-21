@@ -17,6 +17,7 @@ export default function DataTab({ accounts, selAccountId, onSelect, onAccountsRe
   const [streaming,    setStreaming]    = useState(false);
   const [streamMsg,    setStreamMsg]    = useState("");
   const [streamN,      setStreamN]      = useState(0);
+  const [loadingExport, setLoadingExport] = useState(false);
   const abortRef = useRef(null);
 
   const selAcc = accounts.find((a) => String(a.id) === String(selAccountId));
@@ -105,6 +106,7 @@ export default function DataTab({ accounts, selAccountId, onSelect, onAccountsRe
     if (startDate) p.set("start_date", startDate);
     if (endDate)   p.set("end_date",   endDate);
     if (selSymbol) p.set("symbol",     selSymbol);
+    setLoadingExport(true);
     try {
       const resp = await exportExcel(p.toString());
       const url = URL.createObjectURL(resp.data);
@@ -117,6 +119,8 @@ export default function DataTab({ accounts, selAccountId, onSelect, onAccountsRe
       setTimeout(() => URL.revokeObjectURL(url), 200);
     } catch {
       toast.error("Ошибка экспорта");
+    } finally {
+      setLoadingExport(false);
     }
   };
 
@@ -194,8 +198,11 @@ export default function DataTab({ accounts, selAccountId, onSelect, onAccountsRe
           {loadingData ? <Loader2 size={14} style={{ marginRight: 5, animation: "spin 1s linear infinite" }} /> : <Eye size={14} style={{ marginRight: 5 }} />}
           Показать данные
         </button>
-        <button className="btn" onClick={handleExport} disabled={!selAccountId} style={{ backgroundColor: "#10b981" }}>
-          <Download size={14} style={{ marginRight: 5 }} />Экспорт Excel
+        <button className="btn" onClick={handleExport} disabled={!selAccountId || loadingExport} style={{ backgroundColor: "#10b981" }}>
+          {loadingExport
+            ? <Loader2 size={14} style={{ marginRight: 5, animation: "spin 1s linear infinite" }} />
+            : <Download size={14} style={{ marginRight: 5 }} />}
+          {loadingExport ? "Экспорт..." : "Экспорт Excel"}
         </button>
         <button onClick={handleDelete} disabled={!selAccountId} style={{ ...S.dangerBtn, opacity: selAccountId ? 1 : 0.45 }}>
           Удалить записи
