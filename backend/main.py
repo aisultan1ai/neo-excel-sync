@@ -30,6 +30,7 @@ from routers import (
     unity_exchange,
     funding_fee,
     cashout,
+    convert_template,
 )
 from routers import balance_history
 
@@ -74,6 +75,7 @@ app.include_router(unity_exchange.router)
 app.include_router(funding_fee.router)
 app.include_router(cashout.router)
 app.include_router(balance_history.router)
+app.include_router(convert_template.router)
 
 _scheduler = BackgroundScheduler(timezone="UTC")
 
