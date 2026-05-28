@@ -2,12 +2,13 @@ import io
 import logging
 import re
 import uuid
+import zipfile
 from datetime import datetime
 from threading import Lock
 from typing import Any, Dict
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
@@ -290,6 +291,21 @@ def _build_excel(data: list) -> io.BytesIO:
     return buf
 
 
+_SPLIT_CHUNK_SIZE = 5000
+
+
+def _build_excel_split(data: list) -> io.BytesIO:
+    chunks = [data[i:i + _SPLIT_CHUNK_SIZE] for i in range(0, len(data), _SPLIT_CHUNK_SIZE)]
+    total_parts = len(chunks)
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for idx, chunk in enumerate(chunks, 1):
+            excel_buf = _build_excel(chunk)
+            zf.writestr(f"trade_report_part{idx}_of{total_parts}.xlsx", excel_buf.read())
+    zip_buf.seek(0)
+    return zip_buf
+
+
 # ── Endpoints ──────────────────────────────────────────────────
 
 @router.post("/process")
@@ -338,7 +354,11 @@ async def process_file(
 
 
 @router.get("/export/{result_id}")
-async def export_excel(result_id: str, current_user: str = Depends(get_current_user)):
+async def export_excel(
+    result_id: str,
+    split: bool = Query(False),
+    current_user: str = Depends(get_current_user),
+):
     with _CACHE_LOCK:
         entry = _CACHE.get(result_id)
     if not entry:
@@ -346,10 +366,19 @@ async def export_excel(result_id: str, current_user: str = Depends(get_current_u
     if entry["owner"] != current_user:
         raise HTTPException(403, "Нет доступа")
 
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    if split and len(entry["data"]) > _SPLIT_CHUNK_SIZE:
+        buf = await run_in_threadpool(_build_excel_split, entry["data"])
+        return StreamingResponse(
+            buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="trade_report_{ts}.zip"'},
+        )
+
     buf = await run_in_threadpool(_build_excel, entry["data"])
-    filename = f"trade_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="trade_report_{ts}.xlsx"'},
     )

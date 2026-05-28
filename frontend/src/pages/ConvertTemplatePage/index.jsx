@@ -200,6 +200,7 @@ const ConvertTemplatePage = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [splitExport, setSplitExport] = useState(false);
 
   const isExcel = file && (file.name.endsWith(".xlsx") || file.name.endsWith(".xls"));
 
@@ -264,7 +265,8 @@ const ConvertTemplatePage = () => {
 
   const handleExport = () => {
     if (!result?.result_id) return;
-    window.location.href = `/api/v1/convert-template/export/${result.result_id}`;
+    const params = splitExport ? "?split=true" : "";
+    window.location.href = `/api/v1/convert-template/export/${result.result_id}${params}`;
   };
 
   return (
@@ -414,16 +416,34 @@ const ConvertTemplatePage = () => {
                   </span>
                 </div>
               </div>
-              <button
-                className="btn"
-                onClick={handleExport}
-                style={{ background: "#10b981", display: "flex", alignItems: "center", gap: 8, height: 38, padding: "0 20px" }}
-                onMouseOver={(e) => (e.currentTarget.style.background = "#059669")}
-                onMouseOut={(e) => (e.currentTarget.style.background = "#10b981")}
-              >
-                <Download size={16} />
-                Скачать Excel
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", userSelect: "none" }}>
+                  <input
+                    type="checkbox"
+                    checked={splitExport}
+                    onChange={(e) => setSplitExport(e.target.checked)}
+                    style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#3b82f6" }}
+                  />
+                  <span style={{ fontSize: 13, color: "#475569", whiteSpace: "nowrap" }}>
+                    Разбить по 5000 строк
+                    {splitExport && result?.total > 5000 && (
+                      <span style={{ marginLeft: 5, color: "#3b82f6", fontWeight: 600 }}>
+                        ({Math.ceil(result.total / 5000)} файла → .zip)
+                      </span>
+                    )}
+                  </span>
+                </label>
+                <button
+                  className="btn"
+                  onClick={handleExport}
+                  style={{ background: "#10b981", display: "flex", alignItems: "center", gap: 8, height: 38, padding: "0 20px", whiteSpace: "nowrap" }}
+                  onMouseOver={(e) => (e.currentTarget.style.background = "#059669")}
+                  onMouseOut={(e) => (e.currentTarget.style.background = "#10b981")}
+                >
+                  <Download size={16} />
+                  {splitExport && result?.total > 5000 ? "Скачать ZIP" : "Скачать Excel"}
+                </button>
+              </div>
             </div>
 
             <div className="result-table-wrapper" style={{ maxHeight: 440, overflowY: "auto" }}>
