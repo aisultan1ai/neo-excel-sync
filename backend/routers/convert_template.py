@@ -79,14 +79,11 @@ def _validate_raw_row(row: pd.Series, seen_ids: set) -> list:
             issues.append({"type": "error", "field": field,
                             "msg": f"{field} не является числом: «{raw}»"})
 
-    # Fee: non-numeric or negative (zero is acceptable)
+    # Fee: must be numeric (negative values are allowed)
     fee_raw = str(row.get("Fee", "")).strip()
     fee_clean = re.sub(r"\s+[A-Z]+$", "", fee_raw).strip()
     try:
-        fee_val = float(fee_clean)
-        if fee_val < 0:
-            issues.append({"type": "error", "field": "Fee",
-                            "msg": f"Fee отрицательный: {fee_raw}"})
+        float(fee_clean)
     except (ValueError, TypeError):
         issues.append({"type": "error", "field": "Fee",
                         "msg": f"Fee не является числом: «{fee_raw}»"})
@@ -124,7 +121,11 @@ def _transform_symbol(symbol: str, exchange: str) -> str:
 
 
 def _transform_fee(fee) -> str:
-    return re.sub(r"\s+[A-Z]+$", "", str(fee).strip()).strip()
+    cleaned = re.sub(r"\s+[A-Z]+$", "", str(fee).strip()).strip()
+    try:
+        return f"{float(cleaned):.10f}".rstrip("0").rstrip(".")
+    except (ValueError, TypeError):
+        return cleaned
 
 
 def _split_datetime(dt_str: str):
