@@ -21,7 +21,7 @@ import {
 import { toast } from "react-toastify";
 
 const EXCHANGES = ["OKXE", "BINA"];
-const DEFAULT_ACCOUNT = "#33755 Alexander Krasnyy HRP Guido Binance 2";
+const INSTRUMENT_TYPES = ["FU", "CFD"];
 const ACCEPTED = ".csv,.xlsx,.xls";
 
 // ── Row severity helpers ─────────────────────────────────────
@@ -194,8 +194,9 @@ const ConvertTemplatePage = () => {
   const fileInputRef = useRef(null);
 
   const [file, setFile] = useState(null);
-  const [account, setAccount] = useState(DEFAULT_ACCOUNT);
+  const [account, setAccount] = useState("");
   const [exchange, setExchange] = useState("OKXE");
+  const [instrumentType, setInstrumentType] = useState("FU");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -242,6 +243,7 @@ const ConvertTemplatePage = () => {
     formData.append("file", file);
     formData.append("account", account.trim());
     formData.append("exchange", exchange);
+    formData.append("instrument_type", instrumentType);
 
     try {
       const res = await axios.post("/api/v1/convert-template/process", formData, {
@@ -345,7 +347,7 @@ const ConvertTemplatePage = () => {
           Шаг 2. Параметры конвертации
         </h3>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 16, alignItems: "end" }}>
+        <div style={{ display: "grid", gridTemplateColumns: instrumentType === "FU" ? "1fr auto auto" : "1fr auto", gap: 16, alignItems: "end" }}>
           <div className="input-group" style={{ marginBottom: 0 }}>
             <label className="input-label">Номер счёта (Account)</label>
             <input className="text-input" value={account}
@@ -354,13 +356,40 @@ const ConvertTemplatePage = () => {
           </div>
 
           <div className="input-group" style={{ marginBottom: 0 }}>
-            <label className="input-label">Биржа (Exchange)</label>
-            <select className="text-input" value={exchange}
-              onChange={(e) => setExchange(e.target.value)}
-              style={{ cursor: "pointer" }}>
-              {EXCHANGES.map((ex) => <option key={ex} value={ex}>{ex}</option>)}
-            </select>
+            <label className="input-label">Тип инструмента</label>
+            <div style={{ display: "flex", border: "1px solid #cbd5e1", borderRadius: 8, overflow: "hidden", height: 40 }}>
+              {INSTRUMENT_TYPES.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setInstrumentType(t)}
+                  style={{
+                    flex: 1,
+                    border: "none",
+                    padding: "0 18px",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    fontSize: 14,
+                    background: instrumentType === t ? "#3b82f6" : "#f8fafc",
+                    color: instrumentType === t ? "#fff" : "#64748b",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {instrumentType === "FU" && (
+            <div className="input-group" style={{ marginBottom: 0 }}>
+              <label className="input-label">Биржа (Exchange)</label>
+              <select className="text-input" value={exchange}
+                onChange={(e) => setExchange(e.target.value)}
+                style={{ cursor: "pointer" }}>
+                {EXCHANGES.map((ex) => <option key={ex} value={ex}>{ex}</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end" }}>

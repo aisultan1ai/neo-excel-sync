@@ -116,7 +116,9 @@ def _validate_raw_row(row: pd.Series, seen_ids: set) -> list:
 
 # ── Transformation ─────────────────────────────────────────────
 
-def _transform_symbol(symbol: str, exchange: str) -> str:
+def _transform_symbol(symbol: str, exchange: str, instrument_type: str = "FU") -> str:
+    if instrument_type == "CFD":
+        return f"CFD.CRYPTO.{symbol.strip()}_TOD.CTRD"
     return f"FU.{symbol.strip()}.{exchange.strip().upper()}.Z2099"
 
 
@@ -135,12 +137,12 @@ def _split_datetime(dt_str: str):
     return date_part, time_part
 
 
-def _transform_row(row: pd.Series, account: str, exchange: str) -> dict:
+def _transform_row(row: pd.Series, account: str, exchange: str, instrument_type: str = "FU") -> dict:
     date_part, time_part = _split_datetime(row["Time"])
     transact_time = f"{date_part}  {time_part}".strip() if time_part else date_part
     return {
         "ID": str(row["Trade ID"]),
-        "Instrument": _transform_symbol(str(row["Symbol"]), exchange),
+        "Instrument": _transform_symbol(str(row["Symbol"]), exchange, instrument_type),
         "Amount": row["Quantity"],
         "Quote amount": row["Amount"],
         "Price": row["Price"],
@@ -173,7 +175,7 @@ def _load_file(filepath: str, ext: str) -> pd.DataFrame:
     return df
 
 
-def _process_file(filepath: str, ext: str, account: str, exchange: str) -> dict:
+def _process_file(filepath: str, ext: str, account: str, exchange: str, instrument_type: str = "FU") -> dict:
     df = _load_file(filepath, ext)
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
@@ -186,7 +188,7 @@ def _process_file(filepath: str, ext: str, account: str, exchange: str) -> dict:
         all_issues.append(_validate_raw_row(row, seen_ids))
 
     # Transform
-    rows = [_transform_row(row, account, exchange) for _, row in df.iterrows()]
+    rows = [_transform_row(row, account, exchange, instrument_type) for _, row in df.iterrows()]
     result_df = pd.DataFrame(rows, columns=TEMPLATE_COLUMNS)
 
     instruments = int(result_df["Instrument"].nunique())
@@ -314,17 +316,20 @@ async def process_file(
     file: UploadFile = File(...),
     account: str = Form(...),
     exchange: str = Form(...),
+    instrument_type: str = Form("FU"),
     current_user: str = Depends(get_current_user),
 ):
     ext = "." + (file.filename or "").rsplit(".", 1)[-1].lower()
     if ext not in _ALLOWED_EXTENSIONS:
         raise HTTPException(400, "Допустимые форматы: .csv, .xlsx, .xls")
+    if instrument_type not in ("FU", "CFD"):
+        raise HTTPException(400, "Тип инструмента должен быть FU или CFD")
 
     filepath = None
     try:
         filepath = save_upload_file(file)
         result = await run_in_threadpool(
-            _process_file, filepath, ext, account.strip(), exchange.strip()
+            _process_file, filepath, ext, account.strip(), exchange.strip(), instrument_type
         )
         result_id = uuid.uuid4().hex
         with _CACHE_LOCK:
