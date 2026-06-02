@@ -118,7 +118,7 @@ def _validate_raw_row(row: pd.Series, seen_ids: set) -> list:
 
 def _transform_symbol(symbol: str, exchange: str, instrument_type: str = "FU") -> str:
     if instrument_type == "CFD":
-        return f"CFD.CRYPTO.{symbol.strip()}_TOD.CTRD"
+        return f"CFD.CRYPTO.{symbol.strip()}_TOD.{exchange.strip().upper()}"
     return f"FU.{symbol.strip()}.{exchange.strip().upper()}.Z2099"
 
 

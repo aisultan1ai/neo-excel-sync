@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-toastify";
 
-const EXCHANGES = ["OKXE", "BINA"];
+const EXCHANGES = { FU: ["OKXE", "BINA"], CFD: ["CTRD", "BYBIT"] };
 const INSTRUMENT_TYPES = ["FU", "CFD"];
 const ACCEPTED = ".csv,.xlsx,.xls";
 
@@ -347,7 +347,7 @@ const ConvertTemplatePage = () => {
           Шаг 2. Параметры конвертации
         </h3>
 
-        <div style={{ display: "grid", gridTemplateColumns: instrumentType === "FU" ? "1fr auto auto" : "1fr auto", gap: 16, alignItems: "end" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 16, alignItems: "end" }}>
           <div className="input-group" style={{ marginBottom: 0 }}>
             <label className="input-label">Номер счёта (Account)</label>
             <input className="text-input" value={account}
@@ -361,7 +361,7 @@ const ConvertTemplatePage = () => {
               {INSTRUMENT_TYPES.map((t) => (
                 <button
                   key={t}
-                  onClick={() => setInstrumentType(t)}
+                  onClick={() => { setInstrumentType(t); setExchange(EXCHANGES[t][0]); }}
                   style={{
                     flex: 1,
                     border: "none",
@@ -380,16 +380,14 @@ const ConvertTemplatePage = () => {
             </div>
           </div>
 
-          {instrumentType === "FU" && (
-            <div className="input-group" style={{ marginBottom: 0 }}>
-              <label className="input-label">Биржа (Exchange)</label>
-              <select className="text-input" value={exchange}
-                onChange={(e) => setExchange(e.target.value)}
-                style={{ cursor: "pointer" }}>
-                {EXCHANGES.map((ex) => <option key={ex} value={ex}>{ex}</option>)}
-              </select>
-            </div>
-          )}
+          <div className="input-group" style={{ marginBottom: 0 }}>
+            <label className="input-label">Биржа (Exchange)</label>
+            <select className="text-input" value={exchange}
+              onChange={(e) => setExchange(e.target.value)}
+              style={{ cursor: "pointer" }}>
+              {EXCHANGES[instrumentType].map((ex) => <option key={ex} value={ex}>{ex}</option>)}
+            </select>
+          </div>
         </div>
 
         <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end" }}>
