@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-toastify";
 
-const EXCHANGES = { FU: ["OKXE", "BINA"], CFD: ["CTRD", "BYBIT", "BINA"] };
+const EXCHANGES = { FU: ["OKXE", "BINA", "BYBIT"], CFD: ["CTRD", "BYBIT", "BINA"] };
 const INSTRUMENT_TYPES = ["FU", "CFD"];
 const ACCEPTED = ".csv,.xlsx,.xls";
 

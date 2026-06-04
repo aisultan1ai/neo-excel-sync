@@ -16,6 +16,11 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from core.deps import get_current_user
+from reconcile.parsers import (
+    _prepare_binance_to_standard,
+    _prepare_bybit_to_standard,
+    _prepare_okx_to_standard,
+)
 from utils.files import cleanup_files, save_upload_file
 
 log = logging.getLogger(__name__)
@@ -159,6 +164,56 @@ def _transform_row(row: pd.Series, account: str, exchange: str, instrument_type:
     }
 
 
+_EXCHANGE_PARSERS = {
+    "BYBIT": _prepare_bybit_to_standard,
+    "BINA":  _prepare_binance_to_standard,
+    "OKXE":  _prepare_okx_to_standard,
+}
+
+
+def _normalize_to_standard(df: pd.DataFrame, exchange: str) -> pd.DataFrame:
+    """Apply exchange-specific column parser when the file uses native exchange column names."""
+    parser = _EXCHANGE_PARSERS.get(exchange.upper())
+    if parser is None:
+        return df
+
+    # Preserve original Amount column before parser runs (Bybit: Amount = Price × Qty in USDT)
+    original_amount = None
+    for col in df.columns:
+        if str(col).strip().lower() == "amount":
+            original_amount = df[col].copy()
+            break
+
+    std = parser(df)
+
+    # Insert Time → Time
+    if "Insert Time" in std.columns and "Time" not in std.columns:
+        std = std.rename(columns={"Insert Time": "Time"})
+
+    # Trade ID: generate sequential if missing
+    if "Trade ID" not in std.columns:
+        std["Trade ID"] = [str(i + 1) for i in range(len(std))]
+
+    # Fee: default to 0 if missing
+    if "Fee" not in std.columns:
+        std["Fee"] = "0"
+
+    # Amount (quote amount): use original exchange column, else Price × Quantity
+    if "Amount" not in std.columns:
+        if original_amount is not None:
+            std["Amount"] = original_amount.values
+        else:
+            try:
+                std["Amount"] = (
+                    pd.to_numeric(std["Price"], errors="coerce")
+                    * pd.to_numeric(std["Quantity"], errors="coerce")
+                )
+            except Exception:
+                std["Amount"] = 0.0
+
+    return std
+
+
 def _load_file(filepath: str, ext: str) -> pd.DataFrame:
     if ext == ".csv":
         try:
@@ -177,6 +232,11 @@ def _load_file(filepath: str, ext: str) -> pd.DataFrame:
 
 def _process_file(filepath: str, ext: str, account: str, exchange: str, instrument_type: str = "FU") -> dict:
     df = _load_file(filepath, ext)
+
+    # If the file uses native exchange column names, convert to standard format first
+    if any(c not in df.columns for c in REQUIRED_COLUMNS):
+        df = _normalize_to_standard(df, exchange)
+
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"Отсутствуют колонки: {', '.join(missing)}")

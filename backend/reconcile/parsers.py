@@ -142,7 +142,7 @@ def _prepare_bybit_to_standard(df: pd.DataFrame) -> pd.DataFrame:
 
     col_trade_id = _pick_col_optional(out, ["Transaction ID", "Trasaction ID", "Trade ID", "Exec ID", "Fill ID", "ID", "id"])
     col_order_id = _pick_col_optional(out, ["Order No.", "Order No", "Order ID", "OrderId", "Order id"])
-    col_fee = _pick_col_optional(out, ["Trading Fee", "Fee", "Commission", "ExecFeeV2", "Exec Fee", "ExecFee"])
+    col_fee = _pick_col_optional(out, ["Trading Fee"])
     col_fee_asset = _pick_col_optional(out, ["feeCoin", "Fee Coin", "Commission Asset", "Fee Unit", "Fee Asset"])
 
     std = pd.DataFrame()
