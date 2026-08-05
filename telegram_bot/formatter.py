@@ -1,18 +1,19 @@
-"""Форматирование сделок для отправки в Telegram."""
+"""Форматирование сделок для отправки в Telegram (HTML parse mode)."""
 from datetime import datetime
+from html import escape
 from typing import Iterable
 
 from config import TELEGRAM_MSG_LIMIT
 
 
 def _fmt_time_utc(ts: str) -> str:
-    """ISO 8601 (например '2026-08-05T14:23:45.123Z') → 'YYYY-MM-DD HH:MM:SS UTC'."""
+    """ISO 8601 UTC → 'HH:MM:SS'."""
     if not ts:
         return "—"
     try:
         s = ts.replace("Z", "+00:00")
         dt = datetime.fromisoformat(s)
-        return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+        return dt.strftime("%H:%M:%S")
     except (ValueError, TypeError):
         return ts
 
@@ -26,27 +27,46 @@ def _fmt_num(x, digits: int = 4) -> str:
         return str(x)
 
 
-def format_trades(trades: list[dict], from_date: str, to_date: str) -> list[str]:
+def _fmt_pnl(x) -> str:
+    if x is None:
+        return "—"
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return str(x)
+    sign = "+" if v >= 0 else ""
+    return f"{sign}{v:.2f}"
+
+
+def format_trades(
+    trades: list[dict],
+    from_date: str,
+    to_date: str,
+    instruments_map: dict[int, str] | None = None,
+) -> list[str]:
     """
-    Собрать список сделок в одно или несколько сообщений,
-    каждое короче TELEGRAM_MSG_LIMIT символов.
+    Собрать сообщения в HTML-разметке.
+    Возвращает список готовых текстов ≤ TELEGRAM_MSG_LIMIT символов.
     """
+    instruments_map = instruments_map or {}
     period = from_date if from_date == to_date else f"{from_date} — {to_date}"
 
     if not trades:
-        return [f"📭 Сделок за {period} не найдено."]
+        return [f"📭 Сделок за <b>{escape(period)}</b> не найдено."]
 
     total_pnl = 0.0
-    lines: list[str] = []
+    trade_blocks: list[str] = []
 
     for t in trades:
         side = t.get("side") or "?"
         emoji = "🟢" if side == "BUY" else "🔴" if side == "SELL" else "⚪️"
-        instrument = t.get("instrumentId") or "—"
+        instr_id = t.get("instrumentId")
+        ticker = instruments_map.get(int(instr_id), str(instr_id)) if instr_id is not None else "—"
+
         amount = _fmt_num(t.get("amount"))
         price = _fmt_num(t.get("price"))
         pnl_raw = t.get("closedPnl")
-        pnl_str = _fmt_num(pnl_raw, digits=2) if pnl_raw is not None else "—"
+        pnl_str = _fmt_pnl(pnl_raw)
         time_str = _fmt_time_utc(t.get("transactTime", ""))
 
         if pnl_raw is not None:
@@ -55,41 +75,45 @@ def format_trades(trades: list[dict], from_date: str, to_date: str) -> list[str]
             except (TypeError, ValueError):
                 pass
 
-        lines.append(
-            f"{emoji} {side} {instrument} | qty {amount} @ {price}"
-            f" | PnL {pnl_str} | {time_str}"
+        block = (
+            f"{emoji} <b>{side}</b> <code>{escape(ticker)}</code>\n"
+            f"    {amount} × {price}   PnL <b>{pnl_str}</b>   <i>{time_str} UTC</i>"
         )
+        trade_blocks.append(block)
 
     header = (
-        f"📊 Сделки за {period}\n"
-        f"Всего сделок: {len(trades)}   Σ PnL: {total_pnl:.2f}\n"
-        f"{'─' * 30}"
+        f"📊 <b>Сделки за {escape(period)}</b>\n"
+        f"Всего: <b>{len(trades)}</b>   Σ PnL: <b>{_fmt_pnl(total_pnl)}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━"
     )
 
-    return _split_messages([header, *lines])
+    return _split_messages([header, *trade_blocks])
 
 
-def _split_messages(lines: Iterable[str]) -> list[str]:
-    """Склеить строки в сообщения не длиннее TELEGRAM_MSG_LIMIT."""
+def _split_messages(parts: Iterable[str]) -> list[str]:
+    """
+    Склеить куски (заголовок + блоки сделок) в сообщения не длиннее TELEGRAM_MSG_LIMIT.
+    Каждый блок отделяется пустой строкой.
+    """
     messages: list[str] = []
     buf: list[str] = []
     buf_len = 0
+    sep = "\n\n"
 
-    for line in lines:
-        # +1 на перенос строки
-        add_len = len(line) + (1 if buf else 0)
+    for part in parts:
+        add_len = len(part) + (len(sep) if buf else 0)
         if buf and buf_len + add_len > TELEGRAM_MSG_LIMIT:
-            messages.append("\n".join(buf))
-            buf = [line]
-            buf_len = len(line)
+            messages.append(sep.join(buf))
+            buf = [part]
+            buf_len = len(part)
         else:
-            buf.append(line)
+            buf.append(part)
             buf_len += add_len
 
     if buf:
-        messages.append("\n".join(buf))
+        messages.append(sep.join(buf))
 
-    # На случай если одна строка > лимита — жёстко режем
+    # На случай если одна часть > лимита — жёстко режем
     result: list[str] = []
     for m in messages:
         if len(m) <= TELEGRAM_MSG_LIMIT:

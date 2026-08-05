@@ -13,6 +13,11 @@ RUN useradd --create-home --uid 1000 bot
 
 COPY --chown=bot:bot . .
 
+# Каталог для persistent state (кэш инструментов, настройки пользователей).
+# Права выставляем ДО USER, чтобы named volume при первом монтировании
+# унаследовал ownership от bot (иначе бот, работающий под uid 1000, не сможет писать).
+RUN mkdir -p /app/data && chown -R bot:bot /app/data
+
 USER bot
 
 ENTRYPOINT ["python", "bot.py"]
