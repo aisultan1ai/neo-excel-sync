@@ -8,9 +8,14 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes, ConversationHandler
 
-from api import ApiError, fetch_instrument_details, fetch_trades
-from config import ACCOUNT_ID_DEFAULT, ALLOWED_USER_IDS
-from formatter import format_trades
+from api import (
+    ApiError,
+    fetch_instrument_details,
+    fetch_positions,
+    fetch_trades,
+)
+from config import ACCOUNT_ID_DEFAULT, ALLOWED_USER_IDS, CURRENCY_ID
+from formatter import format_positions, format_trades
 from storage import (
     add_instruments,
     get_cached_instruments,
@@ -83,11 +88,25 @@ def _effective_account(user_id: int) -> str | None:
 
 
 def _main_kb(current_account: str | None) -> InlineKeyboardMarkup:
+    """Верхний уровень: выбор раздела + смена счёта."""
     acct_label = (
         f"Счёт: {current_account} (сменить)"
         if current_account
         else "Задать счёт"
     )
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📊 Сделки", callback_data="menu_trades"),
+            InlineKeyboardButton("📈 Позиции", callback_data="positions"),
+        ],
+        [
+            InlineKeyboardButton(acct_label, callback_data="set_account"),
+        ],
+    ])
+
+
+def _trades_kb() -> InlineKeyboardMarkup:
+    """Подменю раздела «Сделки»."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("За сегодня", callback_data="today"),
@@ -98,7 +117,7 @@ def _main_kb(current_account: str | None) -> InlineKeyboardMarkup:
             InlineKeyboardButton("Ввести период", callback_data="ask_period"),
         ],
         [
-            InlineKeyboardButton(acct_label, callback_data="set_account"),
+            InlineKeyboardButton("⬅️ Назад", callback_data="menu_main"),
         ],
     ])
 
@@ -108,11 +127,11 @@ def _greeting(user_id: int) -> str:
     if acct:
         return (
             f"Привет! Текущий счёт: <b>{acct}</b>\n"
-            f"Выберите период:"
+            f"Выберите раздел:"
         )
     return (
-        "Привет! Счёт пока не задан — можно продолжить без фильтра по счёту "
-        "или задать его кнопкой ниже.\nВыберите период:"
+        "Привет! Счёт пока не задан — задай его кнопкой ниже "
+        "(для «Позиций» это обязательно).\nВыберите раздел:"
     )
 
 
@@ -142,7 +161,32 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
     await q.answer()
     user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
 
+    # ---- Навигация по меню ----
+    if q.data == "menu_main":
+        await ctx.bot.send_message(
+            chat_id,
+            _greeting(user_id),
+            reply_markup=_main_kb(_effective_account(user_id)),
+            parse_mode=ParseMode.HTML,
+        )
+        return ConversationHandler.END
+
+    if q.data == "menu_trades":
+        await ctx.bot.send_message(
+            chat_id,
+            "Раздел «Сделки». Выберите период:",
+            reply_markup=_trades_kb(),
+        )
+        return ConversationHandler.END
+
+    # ---- Позиции ----
+    if q.data == "positions":
+        await _send_positions(update, ctx)
+        return ConversationHandler.END
+
+    # ---- Сделки ----
     if q.data == "today":
         d = date.today().isoformat()
         await _send_trades(update, ctx, d, d)
@@ -170,13 +214,13 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return WAIT_PERIOD
 
+    # ---- Настройки ----
     if q.data == "set_account":
         await q.message.reply_text(
             "Введите ID счёта (только цифры). /cancel — отмена."
         )
         return WAIT_ACCOUNT
 
-    _ = user_id  # placeholder — не удаляем на будущее
     return ConversationHandler.END
 
 
@@ -283,16 +327,16 @@ async def _send_trades(
     except ApiError as e:
         await status.edit_text(f"⚠️ {e}")
         await ctx.bot.send_message(
-            chat_id, "Выберите период:",
-            reply_markup=_main_kb(account_id),
+            chat_id, "Раздел «Сделки»:",
+            reply_markup=_trades_kb(),
         )
         return
     except Exception as e:  # noqa: BLE001
         log.exception("Неожиданная ошибка при запросе /trades")
         await status.edit_text(f"⚠️ Внутренняя ошибка: {type(e).__name__}")
         await ctx.bot.send_message(
-            chat_id, "Выберите период:",
-            reply_markup=_main_kb(account_id),
+            chat_id, "Раздел «Сделки»:",
+            reply_markup=_trades_kb(),
         )
         return
 
@@ -319,9 +363,77 @@ async def _send_trades(
     for m in messages[1:]:
         await ctx.bot.send_message(chat_id, m, parse_mode=ParseMode.HTML)
 
-    # Снова показываем меню
+    # Показываем подменю сделок и главное меню
     await ctx.bot.send_message(
         chat_id,
-        "Выберите ещё период:",
+        "Выберите ещё период или ⬅️ назад в меню:",
+        reply_markup=_trades_kb(),
+    )
+
+
+async def _send_positions(
+    update: Update,
+    ctx: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """
+    Запросить открытые позиции по счёту и вывести форматированный список.
+    accountId обязателен, currency берётся из env (CURRENCY_ID, дефолт 1).
+    """
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    account_id = _effective_account(user_id)
+
+    if not account_id:
+        await ctx.bot.send_message(
+            chat_id,
+            "⚠️ Для запроса позиций нужен ID счёта. Нажми «Задать счёт».",
+            reply_markup=_main_kb(None),
+        )
+        return
+
+    status = await ctx.bot.send_message(chat_id, "⏳ Загружаю позиции...")
+
+    try:
+        positions = await fetch_positions(account_id, CURRENCY_ID)
+    except ApiError as e:
+        await status.edit_text(f"⚠️ {e}")
+        await ctx.bot.send_message(
+            chat_id, "Меню:",
+            reply_markup=_main_kb(account_id),
+        )
+        return
+    except Exception as e:  # noqa: BLE001
+        log.exception("Неожиданная ошибка при запросе /accountPositions")
+        await status.edit_text(f"⚠️ Внутренняя ошибка: {type(e).__name__}")
+        await ctx.bot.send_message(
+            chat_id, "Меню:",
+            reply_markup=_main_kb(account_id),
+        )
+        return
+
+    # Обогащаем справочник тикеров по тем же принципам, что и для сделок
+    needed_ids = [
+        int(p["instrumentId"]) for p in positions
+        if p.get("instrumentId") is not None
+    ]
+    to_fetch = missing_instrument_ids(needed_ids)
+    if to_fetch:
+        try:
+            new_items = await fetch_instrument_details(to_fetch)
+            if new_items:
+                add_instruments(new_items)
+        except Exception:  # noqa: BLE001
+            log.exception("Не удалось обогатить справочник инструментов")
+
+    instruments = get_cached_instruments()
+    messages = format_positions(positions, instruments)
+
+    await status.edit_text(messages[0], parse_mode=ParseMode.HTML)
+    for m in messages[1:]:
+        await ctx.bot.send_message(chat_id, m, parse_mode=ParseMode.HTML)
+
+    await ctx.bot.send_message(
+        chat_id,
+        "Меню:",
         reply_markup=_main_kb(account_id),
     )

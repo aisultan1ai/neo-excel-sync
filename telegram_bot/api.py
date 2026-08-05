@@ -72,6 +72,45 @@ async def fetch_trades(
     return all_items
 
 
+async def fetch_positions(account_id: str, currency_id: int) -> list[dict]:
+    """
+    Открытые позиции по счёту, с PnL/стоимостью в валюте currency_id.
+    accountId и currency обязательны в этом endpoint.
+    """
+    url = f"{API_BASE_URL}/accountPositions"
+    headers = {"accept": "application/json", "auth-token": AUTH_TOKEN}
+    params = {"accountId": account_id, "currency": currency_id}
+
+    async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
+        try:
+            resp = await client.get(url, headers=headers, params=params)
+        except httpx.TimeoutException:
+            log.warning("Timeout при запросе /accountPositions")
+            raise ApiError("Таймаут при запросе к бирже. Попробуйте позже.")
+        except httpx.HTTPError as e:
+            log.warning("HTTP ошибка /accountPositions: %s", e)
+            raise ApiError(f"Ошибка сети: {e}")
+
+    if resp.status_code != 200:
+        log.warning(
+            "Unity /accountPositions %s: %s",
+            resp.status_code, resp.text[:500],
+        )
+        raise ApiError(f"Биржа вернула ошибку {resp.status_code}.")
+
+    try:
+        data = resp.json()
+    except ValueError:
+        raise ApiError("Некорректный ответ биржи (не JSON).")
+
+    positions = data.get("positions") or []
+    log.info(
+        "Получено %d позиций для accountId=%s (currency=%s)",
+        len(positions), account_id, currency_id,
+    )
+    return positions
+
+
 def _parse_instrument_items(data) -> dict[int, str]:
     """Достаёт {id: ticker} из ответа /instrumentDetails."""
     items = data.get("items") if isinstance(data, dict) else data

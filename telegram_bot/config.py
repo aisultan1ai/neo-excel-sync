@@ -9,6 +9,10 @@ AUTH_TOKEN = os.environ["AUTH_TOKEN"]
 # Можно оставить пустым — тогда фильтр по счёту не применится вовсе.
 ACCOUNT_ID_DEFAULT = os.environ.get("ACCOUNT_ID") or None
 
+# ID валюты для ревалюации позиций (endpoint /accountPositions).
+# По умолчанию 1 (USD в системе Unity). Меняется через env.
+CURRENCY_ID = int(os.environ.get("CURRENCY_ID") or "1")
+
 API_BASE_URL = "https://rest.unity.finance/api/v1"
 API_TIMEOUT = 30.0
 DEFAULT_LIMIT = 200
