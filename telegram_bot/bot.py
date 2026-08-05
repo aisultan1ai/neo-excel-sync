@@ -10,7 +10,7 @@ from telegram.ext import (
     filters,
 )
 
-from config import ALLOWED_USER_IDS, BOT_TOKEN
+from config import ALLOWED_USER_IDS, AUTH_TOKEN, BOT_TOKEN
 from handlers import (
     WAIT_ACCOUNT,
     WAIT_DATE,
@@ -60,6 +60,30 @@ def build_app() -> Application:
     return app
 
 
+class _SecretMaskFilter(logging.Filter):
+    """Затирает известные секреты в тексте лог-записей."""
+
+    def __init__(self, secrets: list[str]):
+        super().__init__()
+        # Игнорируем пустые/короткие значения
+        self.secrets = [s for s in secrets if s and len(s) >= 8]
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:
+            return True
+        replaced = msg
+        for s in self.secrets:
+            if s in replaced:
+                replaced = replaced.replace(s, "***REDACTED***")
+        if replaced != msg:
+            # Затираем и msg и args, чтобы форматирование не вернуло секрет
+            record.msg = replaced
+            record.args = ()
+        return True
+
+
 def main() -> None:
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -68,6 +92,11 @@ def main() -> None:
     # Приглушаем шум от long polling — httpx на каждый getUpdates пишет INFO.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("telegram.ext.Updater").setLevel(logging.WARNING)
+
+    # Маскируем токены во ВСЕХ логах на случай если что-то их протащит.
+    mask = _SecretMaskFilter([BOT_TOKEN, AUTH_TOKEN])
+    for handler in logging.root.handlers:
+        handler.addFilter(mask)
 
     app = build_app()
     if not ALLOWED_USER_IDS:
