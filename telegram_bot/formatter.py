@@ -1,19 +1,26 @@
 """Форматирование сделок для отправки в Telegram (HTML parse mode)."""
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from html import escape
 from typing import Iterable
 
 from config import TELEGRAM_MSG_LIMIT
 
+# Смещение отображаемого времени: UTC+5
+DISPLAY_TZ = timezone(timedelta(hours=5))
+DISPLAY_TZ_LABEL = "UTC+5"
 
-def _fmt_time_utc(ts: str) -> str:
-    """ISO 8601 UTC → 'HH:MM:SS'."""
+
+def _fmt_time(ts: str) -> str:
+    """ISO 8601 UTC → 'HH:MM:SS' в зоне DISPLAY_TZ."""
     if not ts:
         return "—"
     try:
         s = ts.replace("Z", "+00:00")
         dt = datetime.fromisoformat(s)
-        return dt.strftime("%H:%M:%S")
+        # Если у даты не указан tz — считаем что это UTC (Unity отдаёт UTC)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(DISPLAY_TZ).strftime("%H:%M:%S")
     except (ValueError, TypeError):
         return ts
 
@@ -65,9 +72,10 @@ def format_trades(
 
         amount = _fmt_num(t.get("amount"))
         price = _fmt_num(t.get("price"))
+        quote_amount = _fmt_num(t.get("quoteAmount"), digits=2)
         pnl_raw = t.get("closedPnl")
         pnl_str = _fmt_pnl(pnl_raw)
-        time_str = _fmt_time_utc(t.get("transactTime", ""))
+        time_str = _fmt_time(t.get("transactTime", ""))
 
         if pnl_raw is not None:
             try:
@@ -77,7 +85,8 @@ def format_trades(
 
         block = (
             f"{emoji} <b>{side}</b> <code>{escape(ticker)}</code>\n"
-            f"    {amount} × {price}   PnL <b>{pnl_str}</b>   <i>{time_str} UTC</i>"
+            f"    {amount} × {price} = {quote_amount}\n"
+            f"    PnL <b>{pnl_str}</b>   <i>{time_str} {DISPLAY_TZ_LABEL}</i>"
         )
         trade_blocks.append(block)
 

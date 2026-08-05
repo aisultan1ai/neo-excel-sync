@@ -34,6 +34,7 @@ async def fetch_trades(
                 "toTradeDate": to_date,
                 "limit": DEFAULT_LIMIT,
                 "offset": offset,
+                "tradeType": "DIRECT",
             }
             if account_id:
                 params["accountId"] = account_id

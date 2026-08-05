@@ -1,4 +1,5 @@
-"""Telegram-хендлеры: /start, /setaccount, inline-кнопки, ввод даты/периода."""
+"""Telegram-хендлеры: /start, /setaccount, /myid, inline-кнопки, ввод даты/периода."""
+import functools
 import logging
 import re
 from datetime import date, timedelta
@@ -8,7 +9,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes, ConversationHandler
 
 from api import ApiError, fetch_instrument_details, fetch_trades
-from config import ACCOUNT_ID_DEFAULT
+from config import ACCOUNT_ID_DEFAULT, ALLOWED_USER_IDS
 from formatter import format_trades
 from storage import (
     add_instruments,
@@ -27,6 +28,53 @@ WAIT_ACCOUNT = 3
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ACCOUNT_RE = re.compile(r"^\d+$")
+
+
+def require_auth(handler):
+    """
+    Декоратор: пропускает только пользователей из ALLOWED_USER_IDS.
+    Остальным — сообщение об отказе и логирование попытки.
+    """
+    @functools.wraps(handler)
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user = update.effective_user
+        user_id = user.id if user else None
+
+        if user_id not in ALLOWED_USER_IDS:
+            log.warning(
+                "Отказ в доступе: user_id=%s username=%s",
+                user_id,
+                user.username if user else None,
+            )
+            if update.callback_query:
+                await update.callback_query.answer(
+                    "Доступ запрещён", show_alert=True,
+                )
+            elif update.message:
+                await update.message.reply_text(
+                    "⛔ Доступ запрещён.\n"
+                    "Твой ID можно узнать командой /myid — "
+                    "перешли его администратору для добавления в whitelist."
+                )
+            return ConversationHandler.END
+        return await handler(update, ctx, *args, **kwargs)
+
+    return wrapper
+
+
+async def cmd_myid(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Открытая команда — сообщает пользователю его Telegram ID."""
+    u = update.effective_user
+    if not u:
+        return
+    is_allowed = u.id in ALLOWED_USER_IDS
+    status = "✅ есть доступ" if is_allowed else "⛔ доступа нет"
+    await update.message.reply_text(
+        f"Твой Telegram ID: <code>{u.id}</code>\n"
+        f"Username: @{u.username or '—'}\n"
+        f"Статус: {status}",
+        parse_mode=ParseMode.HTML,
+    )
 
 
 def _effective_account(user_id: int) -> str | None:
@@ -68,6 +116,7 @@ def _greeting(user_id: int) -> str:
     )
 
 
+@require_auth
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
     await update.message.reply_text(
@@ -78,6 +127,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+@require_auth
 async def cmd_setaccount(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Команда /setaccount — начать ввод ID счёта."""
     await update.message.reply_text(
@@ -86,6 +136,7 @@ async def cmd_setaccount(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAIT_ACCOUNT
 
 
+@require_auth
 async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Реакция на клик по inline-кнопке."""
     q = update.callback_query
@@ -129,6 +180,7 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+@require_auth
 async def on_date_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     text = (update.message.text or "").strip()
 
@@ -149,6 +201,7 @@ async def on_date_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+@require_auth
 async def on_period_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     text = (update.message.text or "").strip()
     parts = text.split()
@@ -177,6 +230,7 @@ async def on_period_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     return ConversationHandler.END
 
 
+@require_auth
 async def on_account_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     text = (update.message.text or "").strip()
     if not ACCOUNT_RE.match(text):
@@ -195,6 +249,7 @@ async def on_account_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     return ConversationHandler.END
 
 
+@require_auth
 async def cmd_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
     await update.message.reply_text(

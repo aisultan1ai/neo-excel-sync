@@ -10,12 +10,13 @@ from telegram.ext import (
     filters,
 )
 
-from config import BOT_TOKEN
+from config import ALLOWED_USER_IDS, BOT_TOKEN
 from handlers import (
     WAIT_ACCOUNT,
     WAIT_DATE,
     WAIT_PERIOD,
     cmd_cancel,
+    cmd_myid,
     cmd_setaccount,
     cmd_start,
     on_account_input,
@@ -52,6 +53,8 @@ def build_app() -> Application:
         per_message=False,
     )
 
+    # /myid — открытая команда (без auth), нужна чтобы узнать свой ID
+    app.add_handler(CommandHandler("myid", cmd_myid))
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(conv)
     return app
@@ -67,6 +70,10 @@ def main() -> None:
     logging.getLogger("telegram.ext.Updater").setLevel(logging.WARNING)
 
     app = build_app()
+    if not ALLOWED_USER_IDS:
+        logging.warning("Доступ запрещён")
+    else:
+        logging.info("Whitelist: разрешено %d user_id", len(ALLOWED_USER_IDS))
     logging.info("Бот запущен (long polling)")
     app.run_polling()
 
