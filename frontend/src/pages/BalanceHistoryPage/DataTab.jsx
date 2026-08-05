@@ -20,24 +20,33 @@ const FIELDS = [
 const T_blue = "#3b82f6";
 
 export default function DataTab({ accounts }) {
-  const [mode,      setMode]      = useState("single"); // "single" | "range"
-  const [date,      setDate]      = useState("");
-  const [from,      setFrom]      = useState("");
-  const [to,        setTo]        = useState("");
-  const [rows,      setRows]      = useState([]);
-  const [loading,   setLoading]   = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [fetched,   setFetched]   = useState(false);
+  const [mode,        setMode]        = useState("single"); // "single" | "range"
+  const [date,        setDate]        = useState("");
+  const [from,        setFrom]        = useState("");
+  const [to,          setTo]          = useState("");
+  const [rows,        setRows]        = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [exporting,   setExporting]   = useState(false);
+  const [fetched,     setFetched]     = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const fromDate = mode === "single" ? date : from;
   const toDate   = mode === "single" ? date : to;
+
+  const toggleAccount = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const selectAll = () => setSelectedIds(accounts.map(a => a.id));
+  const clearAll  = () => setSelectedIds([]);
+
+  const effectiveIds = selectedIds.length ? selectedIds : undefined;
 
   const handleLoad = async () => {
     if (accounts.length === 0) { toast.warn("Сначала добавьте счета во вкладке «Счета»"); return; }
     if (!fromDate || !toDate)  { toast.warn("Укажите дату"); return; }
     setLoading(true);
     try {
-      const { data } = await fetchData(fromDate, toDate);
+      const { data } = await fetchData(fromDate, toDate, effectiveIds);
       setRows(data || []);
       setFetched(true);
       if (!data?.length) toast.info("Данные за выбранный период не найдены");
@@ -50,7 +59,7 @@ export default function DataTab({ accounts }) {
     if (!fromDate || !toDate) { toast.warn("Укажите дату"); return; }
     setExporting(true);
     try {
-      const res = await exportExcel(fromDate, toDate);
+      const res = await exportExcel(fromDate, toDate, effectiveIds);
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement("a");
       a.href = url;
@@ -92,6 +101,46 @@ export default function DataTab({ accounts }) {
         {/* Пресеты только в режиме периода */}
         {mode === "range" && (
           <PeriodStrip onSelect={(s, e) => { setFrom(s); setTo(e); }} />
+        )}
+
+        {/* Фильтр по счетам */}
+        {accounts.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <span style={{ ...T.label }}>Счета:</span>
+              <span style={{ fontSize: 11, color: T.faint }}>
+                {selectedIds.length === 0
+                  ? `не выбрано → все (${accounts.length})`
+                  : `выбрано ${selectedIds.length} из ${accounts.length}`}
+              </span>
+              <button type="button" onClick={selectAll}
+                style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, border: `1px solid ${T.border}`, background: "#fff", cursor: "pointer", color: T.muted }}>
+                Выбрать все
+              </button>
+              <button type="button" onClick={clearAll} disabled={selectedIds.length === 0}
+                style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, border: `1px solid ${T.border}`, background: "#fff", cursor: selectedIds.length ? "pointer" : "not-allowed", color: T.muted, opacity: selectedIds.length ? 1 : 0.5 }}>
+                Сбросить
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {accounts.map(acc => {
+                const active = selectedIds.includes(acc.id);
+                return (
+                  <button key={acc.id} type="button" onClick={() => toggleAccount(acc.id)}
+                    style={{
+                      fontSize: 12, padding: "4px 12px", borderRadius: 100,
+                      border: `1px solid ${active ? T_blue : T.border}`,
+                      background: active ? "#eff6ff" : "#fff",
+                      color: active ? T_blue : T.muted,
+                      fontWeight: active ? 600 : 500,
+                      cursor: "pointer", transition: "all 0.15s",
+                    }}>
+                    {acc.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>

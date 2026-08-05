@@ -126,15 +126,23 @@ async def delete_account(row_id: int, current_user: str = Depends(get_current_us
 
 # ── Данные ────────────────────────────────────────────────────────────────────
 
+def _filter_accounts(accounts: list, account_ids: list[int] | None) -> list:
+    if not account_ids:
+        return accounts
+    ids = set(account_ids)
+    return [a for a in accounts if a["id"] in ids]
+
+
 @router.get("/data")
 async def get_data(
     from_date: str = Query(..., alias="from"),
     to_date: str = Query(..., alias="to"),
+    account_ids: list[int] | None = Query(None),
     current_user: str = Depends(get_current_user),
 ):
     base_url, token = _unity_cfg(current_user)
     rows = []
-    for acc in bh_db.list_bh_accounts():
+    for acc in _filter_accounts(bh_db.list_bh_accounts(), account_ids):
         for entry in _fetch(base_url, token, acc["account_id"], acc["asset_id"], from_date, to_date):
             rows.append({"account_name": acc["name"], "account_id": acc["account_id"], **entry})
     return rows
@@ -144,10 +152,11 @@ async def get_data(
 async def export_excel(
     from_date: str = Query(..., alias="from"),
     to_date: str = Query(..., alias="to"),
+    account_ids: list[int] | None = Query(None),
     current_user: str = Depends(get_current_user),
 ):
     base_url, token = _unity_cfg(current_user)
-    accounts = bh_db.list_bh_accounts()
+    accounts = _filter_accounts(bh_db.list_bh_accounts(), account_ids)
 
     wb = openpyxl.Workbook()
 
