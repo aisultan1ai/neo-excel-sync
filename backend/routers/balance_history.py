@@ -41,11 +41,8 @@ _FIELD_KEYS = [
     "dailyPnl", "dailyPnlPercent", "prevDayTotalAssets",
 ]
 
-_GROUP_FILL = PatternFill("solid", fgColor="D6E4F0")  # светло-синий — только первая строка каждого счёта
-
 _HEADER_FILL = PatternFill("solid", fgColor="1F4E79")
 _HEADER_FONT = Font(bold=True, color="FFFFFF", size=10)
-_GROUP_FONT = Font(bold=True, size=10, color="1F4E79")
 _THIN = Side(style="thin", color="E2E8F0")
 _THICK = Side(style="medium", color="1F4E79")
 
@@ -200,9 +197,6 @@ async def export_excel(
             for col_idx, val in enumerate(row_values, 1):
                 cell = ws_all.cell(row=all_row, column=col_idx, value=val)
                 cell.border = _border(top=top_side)
-                if is_new_group:
-                    cell.fill = _GROUP_FILL
-                    cell.font = _GROUP_FONT
                 if col_idx == 3 and val:  # Дата
                     cell.number_format = date_fmt
                     cell.alignment = Alignment(horizontal="center")

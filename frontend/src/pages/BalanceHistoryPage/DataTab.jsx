@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { toast } from "react-toastify";
-import { Download, Loader2, Search } from "lucide-react";
+import { Check, Download, Loader2, Search, Wallet } from "lucide-react";
 import { PeriodStrip } from "./ui";
 import { T, S, fmt } from "./helpers";
 import { fetchData, exportExcel } from "./api";
@@ -105,22 +105,52 @@ export default function DataTab({ accounts }) {
 
         {/* Фильтр по счетам */}
         {accounts.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <span style={{ ...T.label }}>Счета:</span>
-              <span style={{ fontSize: 11, color: T.faint }}>
-                {selectedIds.length === 0
-                  ? `не выбрано → все (${accounts.length})`
-                  : `выбрано ${selectedIds.length} из ${accounts.length}`}
-              </span>
-              <button type="button" onClick={selectAll}
-                style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, border: `1px solid ${T.border}`, background: "#fff", cursor: "pointer", color: T.muted }}>
-                Выбрать все
-              </button>
-              <button type="button" onClick={clearAll} disabled={selectedIds.length === 0}
-                style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, border: `1px solid ${T.border}`, background: "#fff", cursor: selectedIds.length ? "pointer" : "not-allowed", color: T.muted, opacity: selectedIds.length ? 1 : 0.5 }}>
-                Сбросить
-              </button>
+          <div style={{
+            marginBottom: 16,
+            padding: "12px 14px",
+            background: T.bg,
+            border: `1px solid ${T.border}`,
+            borderRadius: 10,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Wallet size={13} color={T.muted} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.ink }}>Счета</span>
+                <span style={{
+                  fontSize: 11, fontWeight: 600,
+                  padding: "2px 8px", borderRadius: 100,
+                  background: selectedIds.length ? "#eff6ff" : "#fff",
+                  color: selectedIds.length ? T_blue : T.muted,
+                  border: `1px solid ${selectedIds.length ? "#bfdbfe" : T.border}`,
+                }}>
+                  {selectedIds.length === 0
+                    ? `все · ${accounts.length}`
+                    : `${selectedIds.length} из ${accounts.length}`}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button type="button" onClick={selectAll}
+                  disabled={selectedIds.length === accounts.length}
+                  style={{
+                    fontSize: 11, fontWeight: 500,
+                    padding: "4px 10px", borderRadius: 6,
+                    border: "none", background: "transparent",
+                    cursor: selectedIds.length === accounts.length ? "not-allowed" : "pointer",
+                    color: selectedIds.length === accounts.length ? T.faint : T_blue,
+                  }}>
+                  Выбрать все
+                </button>
+                <button type="button" onClick={clearAll} disabled={selectedIds.length === 0}
+                  style={{
+                    fontSize: 11, fontWeight: 500,
+                    padding: "4px 10px", borderRadius: 6,
+                    border: "none", background: "transparent",
+                    cursor: selectedIds.length ? "pointer" : "not-allowed",
+                    color: selectedIds.length ? T.muted : T.faint,
+                  }}>
+                  Сбросить
+                </button>
+              </div>
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {accounts.map(acc => {
@@ -128,13 +158,27 @@ export default function DataTab({ accounts }) {
                 return (
                   <button key={acc.id} type="button" onClick={() => toggleAccount(acc.id)}
                     style={{
-                      fontSize: 12, padding: "4px 12px", borderRadius: 100,
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      fontSize: 12, fontWeight: active ? 600 : 500,
+                      padding: active ? "5px 12px 5px 8px" : "5px 12px",
+                      borderRadius: 8,
                       border: `1px solid ${active ? T_blue : T.border}`,
-                      background: active ? "#eff6ff" : "#fff",
-                      color: active ? T_blue : T.muted,
-                      fontWeight: active ? 600 : 500,
+                      background: active ? "#fff" : "#fff",
+                      color: active ? T_blue : T.ink,
+                      boxShadow: active ? "0 1px 2px rgba(59,130,246,0.15)" : "none",
                       cursor: "pointer", transition: "all 0.15s",
-                    }}>
+                    }}
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor = T_blue; e.currentTarget.style.color = T_blue; } }}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.ink; } }}
+                  >
+                    {active && (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: 14, height: 14, borderRadius: 4, background: T_blue, color: "#fff",
+                      }}>
+                        <Check size={10} strokeWidth={3} />
+                      </span>
+                    )}
                     {acc.name}
                   </button>
                 );
