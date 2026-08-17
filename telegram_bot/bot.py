@@ -32,6 +32,7 @@ from handlers_predict import (
     cmd_rebuild,
     cmd_reconcile,
     cmd_report,
+    cmd_scheduler,
     cmd_scorecard,
     cmd_sync,
     cmd_train_ml,
@@ -90,10 +91,11 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("train_ml", cmd_train_ml))
     app.add_handler(CommandHandler("predict_ml", cmd_predict_ml))
     app.add_handler(CommandHandler("why_ml", cmd_why_ml))
+    app.add_handler(CommandHandler("scheduler", cmd_scheduler))
 
     app.add_handler(CallbackQueryHandler(
         on_predict_button,
-        pattern=r"^(predict_|scorecard_|report_|pattern_)",
+        pattern=r"^(predict_|scorecard_|report_|pattern_|scheduler_)",
     ))
 
     app.add_handler(conv)

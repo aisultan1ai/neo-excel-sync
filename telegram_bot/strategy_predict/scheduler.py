@@ -4,6 +4,8 @@ from datetime import date, time as dt_time, timezone
 
 from telegram.ext import Application, ContextTypes
 
+from storage import get_scheduler_enabled
+
 from .ml import MLNotReady, status as ml_status, train as ml_train
 from .predictor import predict as run_predict
 from .reconcile import reconcile_day
@@ -34,6 +36,10 @@ async def _notify(ctx: ContextTypes.DEFAULT_TYPE, text: str) -> None:
 
 
 async def _job_daily(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not get_scheduler_enabled():
+        log.info("scheduler: daily job skipped — scheduler отключён (/scheduler on)")
+        return
+
     today_dt = date.today()
     if today_dt.weekday() >= 5:
         log.info("scheduler: daily job skipped — %s выходной", today_dt)
@@ -82,6 +88,10 @@ async def _job_daily(ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _job_weekly_train(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not get_scheduler_enabled():
+        log.info("scheduler: weekly train skipped — scheduler отключён (/scheduler on)")
+        return
+
     log.info("scheduler: weekly train job started")
     init_db()
     rd = ml_status()

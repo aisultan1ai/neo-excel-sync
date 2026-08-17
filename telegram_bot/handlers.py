@@ -116,6 +116,9 @@ def predict_kb() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🧪 Pattern: exits", callback_data="pattern_exits"),
         ],
         [
+            InlineKeyboardButton("🕒 Scheduler", callback_data="scheduler_toggle"),
+        ],
+        [
             InlineKeyboardButton("⬅️ Назад", callback_data="menu_main"),
         ],
     ])

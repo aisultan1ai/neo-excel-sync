@@ -26,6 +26,7 @@ from strategy_predict.reconcile import reconcile_day, scorecard as run_scorecard
 from strategy_predict.report import plot_prediction_ranking, plot_scorecard
 from strategy_predict.service import ServiceError, sync_trades
 from strategy_predict.storage import init_db
+from storage import get_scheduler_enabled, set_scheduler_enabled
 
 log = logging.getLogger(__name__)
 
@@ -536,6 +537,36 @@ def _fmt_pct(x) -> str:
 
 
 @require_auth
+async def cmd_scheduler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    args = ctx.args or []
+    action = args[0].lower().strip() if args else "status"
+
+    if action == "on":
+        set_scheduler_enabled(True)
+        enabled = True
+    elif action == "off":
+        set_scheduler_enabled(False)
+        enabled = False
+    elif action == "status":
+        enabled = get_scheduler_enabled()
+    else:
+        await update.message.reply_text(
+            "Использование: /scheduler on | off | status"
+        )
+        return
+
+    state = "▶️ <b>включён</b>" if enabled else "⏸ <b>выключен</b>"
+    text = (
+        f"🕒 Scheduler: {state}\n"
+        f"Расписание: daily 23:15 UTC (sync+reconcile+predict), "
+        f"weekly ВС 03:00 UTC (train_ml)."
+    )
+    if not enabled:
+        text += "\n\n<i>Пока выключен — auto-jobs скипаются. Ручные /sync, /predict, /train_ml работают как обычно.</i>"
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+
+@require_auth
 async def cmd_ml_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     def _work():
         init_db()
@@ -708,18 +739,25 @@ async def on_predict_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     await q.answer()
     data = q.data or ""
 
-    routes = {
-        "predict_run":     (cmd_predict, []),
-        "scorecard_show":  (cmd_scorecard, []),
-        "report_week":     (cmd_report, ["week"]),
-        "report_month":    (cmd_report, ["month"]),
-        "pattern_entries": (cmd_pattern, ["entries"]),
-        "pattern_exits":   (cmd_pattern, ["exits"]),
-    }
-    if data not in routes:
-        return
-    handler, args = routes[data]
-    ctx.args = args
+    if data == "scheduler_toggle":
+        new_state = not get_scheduler_enabled()
+        set_scheduler_enabled(new_state)
+        ctx.args = ["status"]
+        handler = cmd_scheduler
+        args = ["status"]
+    else:
+        routes = {
+            "predict_run":     (cmd_predict, []),
+            "scorecard_show":  (cmd_scorecard, []),
+            "report_week":     (cmd_report, ["week"]),
+            "report_month":    (cmd_report, ["month"]),
+            "pattern_entries": (cmd_pattern, ["entries"]),
+            "pattern_exits":   (cmd_pattern, ["exits"]),
+        }
+        if data not in routes:
+            return
+        handler, args = routes[data]
+        ctx.args = args
 
     fake_update = SimpleNamespace(
         update_id=update.update_id,

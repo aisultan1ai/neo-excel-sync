@@ -29,6 +29,7 @@ def _load() -> dict:
 
     _state.setdefault("instruments", {})
     _state.setdefault("accounts", {})
+    _state.setdefault("scheduler_enabled", True)
     return _state
 
 
@@ -79,4 +80,17 @@ def clear_user_account(user_id: int) -> None:
     with _lock:
         s = _load()
         s["accounts"].pop(str(user_id), None)
+        _save()
+
+
+def get_scheduler_enabled() -> bool:
+    with _lock:
+        s = _load()
+        return bool(s.get("scheduler_enabled", True))
+
+
+def set_scheduler_enabled(enabled: bool) -> None:
+    with _lock:
+        s = _load()
+        s["scheduler_enabled"] = bool(enabled)
         _save()
