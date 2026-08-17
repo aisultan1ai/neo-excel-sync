@@ -53,7 +53,12 @@ def normalize_from_unity(
     ticker_map: dict[int, str],
     fallback_account_id: str | None = None,
 ) -> TradeDTO | None:
-    execution_id = str(item.get("executionId") or item.get("execution_id") or "").strip()
+    execution_id = str(
+        item.get("executionId")
+        or item.get("execution_id")
+        or item.get("id")
+        or ""
+    ).strip()
     if not execution_id:
         return None
 

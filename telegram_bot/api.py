@@ -1,8 +1,11 @@
+import asyncio
 import logging
 
 import httpx
 
 from config import API_BASE_URL, API_TIMEOUT, AUTH_TOKEN, DEFAULT_LIMIT
+
+_INSTRUMENT_RATE_LIMIT_DELAY = 0.05
 
 log = logging.getLogger(__name__)
 
@@ -199,6 +202,7 @@ async def fetch_instrument_details(ids: list[int]) -> dict[int, str]:
             for iid in missing:
                 mapping = await _fetch_details_one(client, iid)
                 result.update(mapping)
+                await asyncio.sleep(_INSTRUMENT_RATE_LIMIT_DELAY)
 
     log.info(
         "Справочник: запрошено %d id, получено %d записей",
