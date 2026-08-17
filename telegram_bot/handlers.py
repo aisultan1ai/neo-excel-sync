@@ -1,4 +1,3 @@
-"""Telegram-хендлеры: /start, /setaccount, /myid, inline-кнопки, ввод даты/периода."""
 import functools
 import logging
 import re
@@ -26,7 +25,6 @@ from storage import (
 
 log = logging.getLogger(__name__)
 
-# Состояния диалога
 WAIT_DATE = 1
 WAIT_PERIOD = 2
 WAIT_ACCOUNT = 3
@@ -36,10 +34,6 @@ ACCOUNT_RE = re.compile(r"^\d+$")
 
 
 def require_auth(handler):
-    """
-    Декоратор: пропускает только пользователей из ALLOWED_USER_IDS.
-    Остальным — сообщение об отказе и логирование попытки.
-    """
     @functools.wraps(handler)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
         user = update.effective_user
@@ -68,7 +62,6 @@ def require_auth(handler):
 
 
 async def cmd_myid(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Открытая команда — сообщает пользователю его Telegram ID."""
     u = update.effective_user
     if not u:
         return
@@ -83,12 +76,10 @@ async def cmd_myid(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def _effective_account(user_id: int) -> str | None:
-    """Приоритет: пользовательский → дефолтный из env."""
     return get_user_account(user_id) or ACCOUNT_ID_DEFAULT
 
 
 def _main_kb(current_account: str | None) -> InlineKeyboardMarkup:
-    """Верхний уровень: выбор раздела + смена счёта."""
     acct_label = (
         f"Счёт: {current_account} (сменить)"
         if current_account
@@ -100,13 +91,37 @@ def _main_kb(current_account: str | None) -> InlineKeyboardMarkup:
             InlineKeyboardButton("📈 Позиции", callback_data="positions"),
         ],
         [
+            InlineKeyboardButton("🤖 Прогноз", callback_data="menu_predict"),
+        ],
+        [
             InlineKeyboardButton(acct_label, callback_data="set_account"),
         ],
     ])
 
 
+def predict_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔮 Прогноз на завтра", callback_data="predict_run"),
+        ],
+        [
+            InlineKeyboardButton("📊 Scorecard", callback_data="scorecard_show"),
+        ],
+        [
+            InlineKeyboardButton("📅 Отчёт: неделя", callback_data="report_week"),
+            InlineKeyboardButton("📅 Отчёт: месяц", callback_data="report_month"),
+        ],
+        [
+            InlineKeyboardButton("🧪 Pattern: entries", callback_data="pattern_entries"),
+            InlineKeyboardButton("🧪 Pattern: exits", callback_data="pattern_exits"),
+        ],
+        [
+            InlineKeyboardButton("⬅️ Назад", callback_data="menu_main"),
+        ],
+    ])
+
+
 def _trades_kb() -> InlineKeyboardMarkup:
-    """Подменю раздела «Сделки»."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("За сегодня", callback_data="today"),
@@ -148,7 +163,6 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 @require_auth
 async def cmd_setaccount(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    """Команда /setaccount — начать ввод ID счёта."""
     await update.message.reply_text(
         "Введите ID счёта (только цифры). /cancel — отмена."
     )
@@ -157,13 +171,11 @@ async def cmd_setaccount(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 @require_auth
 async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    """Реакция на клик по inline-кнопке."""
     q = update.callback_query
     await q.answer()
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    # ---- Навигация по меню ----
     if q.data == "menu_main":
         await ctx.bot.send_message(
             chat_id,
@@ -181,12 +193,22 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    # ---- Позиции ----
+    if q.data == "menu_predict":
+        await ctx.bot.send_message(
+            chat_id,
+            "Раздел «Прогноз»:\n"
+            "быстрые действия — кнопками ниже, для параметризованных команд "
+            "(<code>/features TICKER DATE</code>, <code>/why TICKER</code>, "
+            "<code>/reconcile DATE</code>) вводи как обычные команды.",
+            reply_markup=predict_kb(),
+            parse_mode=ParseMode.HTML,
+        )
+        return ConversationHandler.END
+
     if q.data == "positions":
         await _send_positions(update, ctx)
         return ConversationHandler.END
 
-    # ---- Сделки ----
     if q.data == "today":
         d = date.today().isoformat()
         await _send_trades(update, ctx, d, d)
@@ -214,7 +236,6 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return WAIT_PERIOD
 
-    # ---- Настройки ----
     if q.data == "set_account":
         await q.message.reply_text(
             "Введите ID счёта (только цифры). /cancel — отмена."
@@ -309,13 +330,6 @@ async def _send_trades(
     from_date: str,
     to_date: str,
 ) -> None:
-    """
-    Основной поток:
-      1) запрос сделок с учётом accountId пользователя
-      2) если среди сделок есть instrumentId, которых нет в кэше — добираем справочник
-      3) форматируем и отдаём
-      4) снова показываем меню
-    """
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
     account_id = _effective_account(user_id)
@@ -340,7 +354,6 @@ async def _send_trades(
         )
         return
 
-    # Ленивое обогащение справочника: только по недостающим instrumentId
     needed_ids = [
         int(t["instrumentId"]) for t in trades
         if t.get("instrumentId") is not None
@@ -352,18 +365,15 @@ async def _send_trades(
             if new_items:
                 add_instruments(new_items)
         except Exception:  # noqa: BLE001
-            # Справочник — не критичный, просто залогируем
             log.exception("Не удалось обогатить справочник инструментов")
 
     instruments = get_cached_instruments()
     messages = format_trades(trades, from_date, to_date, instruments)
 
-    # Первое сообщение заменяет «Загружаю...»
     await status.edit_text(messages[0], parse_mode=ParseMode.HTML)
     for m in messages[1:]:
         await ctx.bot.send_message(chat_id, m, parse_mode=ParseMode.HTML)
 
-    # Показываем подменю сделок и главное меню
     await ctx.bot.send_message(
         chat_id,
         "Выберите ещё период или ⬅️ назад в меню:",
@@ -375,10 +385,6 @@ async def _send_positions(
     update: Update,
     ctx: ContextTypes.DEFAULT_TYPE,
 ) -> None:
-    """
-    Запросить открытые позиции по счёту и вывести форматированный список.
-    accountId обязателен, currency берётся из env (CURRENCY_ID, дефолт 1).
-    """
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
     account_id = _effective_account(user_id)
@@ -411,7 +417,6 @@ async def _send_positions(
         )
         return
 
-    # Обогащаем справочник тикеров по тем же принципам, что и для сделок
     needed_ids = [
         int(p["instrumentId"]) for p in positions
         if p.get("instrumentId") is not None

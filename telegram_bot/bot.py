@@ -1,4 +1,3 @@
-"""Точка входа: сборка приложения и запуск long polling."""
 import logging
 
 from telegram.ext import (
@@ -24,10 +23,31 @@ from handlers import (
     on_date_input,
     on_period_input,
 )
+from handlers_predict import (
+    cmd_features,
+    cmd_ml_status,
+    cmd_pattern,
+    cmd_predict,
+    cmd_predict_ml,
+    cmd_rebuild,
+    cmd_reconcile,
+    cmd_report,
+    cmd_scorecard,
+    cmd_sync,
+    cmd_train_ml,
+    cmd_why,
+    cmd_why_ml,
+    on_predict_button,
+)
 
 
 def build_app() -> Application:
-    """Собрать Application с зарегистрированными хендлерами."""
+    try:
+        from strategy_predict.storage import init_db
+        init_db()
+    except Exception:  # noqa: BLE001
+        logging.exception("strategy_predict: init_db не удался (модуль будет неактивен)")
+
     app = Application.builder().token(BOT_TOKEN).build()
 
     conv = ConversationHandler(
@@ -53,19 +73,44 @@ def build_app() -> Application:
         per_message=False,
     )
 
-    # /myid — открытая команда (без auth), нужна чтобы узнать свой ID
     app.add_handler(CommandHandler("myid", cmd_myid))
     app.add_handler(CommandHandler("start", cmd_start))
+
+    app.add_handler(CommandHandler("sync", cmd_sync))
+    app.add_handler(CommandHandler("rebuild", cmd_rebuild))
+    app.add_handler(CommandHandler("features", cmd_features))
+    app.add_handler(CommandHandler("predict", cmd_predict))
+    app.add_handler(CommandHandler("why", cmd_why))
+    app.add_handler(CommandHandler("reconcile", cmd_reconcile))
+    app.add_handler(CommandHandler("scorecard", cmd_scorecard))
+    app.add_handler(CommandHandler("pattern", cmd_pattern))
+    app.add_handler(CommandHandler("report", cmd_report))
+
+    app.add_handler(CommandHandler("ml_status", cmd_ml_status))
+    app.add_handler(CommandHandler("train_ml", cmd_train_ml))
+    app.add_handler(CommandHandler("predict_ml", cmd_predict_ml))
+    app.add_handler(CommandHandler("why_ml", cmd_why_ml))
+
+    app.add_handler(CallbackQueryHandler(
+        on_predict_button,
+        pattern=r"^(predict_|scorecard_|report_|pattern_)",
+    ))
+
     app.add_handler(conv)
+
+    try:
+        from strategy_predict.scheduler import register_jobs
+        register_jobs(app)
+    except Exception:  # noqa: BLE001
+        logging.exception("strategy_predict: scheduler не запустился")
+
     return app
 
 
 class _SecretMaskFilter(logging.Filter):
-    """Затирает известные секреты в тексте лог-записей."""
 
     def __init__(self, secrets: list[str]):
         super().__init__()
-        # Игнорируем пустые/короткие значения
         self.secrets = [s for s in secrets if s and len(s) >= 8]
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -78,7 +123,6 @@ class _SecretMaskFilter(logging.Filter):
             if s in replaced:
                 replaced = replaced.replace(s, "***REDACTED***")
         if replaced != msg:
-            # Затираем и msg и args, чтобы форматирование не вернуло секрет
             record.msg = replaced
             record.args = ()
         return True
@@ -89,11 +133,9 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         level=logging.INFO,
     )
-    # Приглушаем шум от long polling — httpx на каждый getUpdates пишет INFO.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("telegram.ext.Updater").setLevel(logging.WARNING)
 
-    # Маскируем токены во ВСЕХ логах на случай если что-то их протащит.
     mask = _SecretMaskFilter([BOT_TOKEN, AUTH_TOKEN])
     for handler in logging.root.handlers:
         handler.addFilter(mask)

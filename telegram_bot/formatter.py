@@ -1,23 +1,19 @@
-"""Форматирование сделок для отправки в Telegram (HTML parse mode)."""
 from datetime import datetime, timezone, timedelta
 from html import escape
 from typing import Iterable
 
 from config import TELEGRAM_MSG_LIMIT
 
-# Смещение отображаемого времени: UTC+5
 DISPLAY_TZ = timezone(timedelta(hours=5))
 DISPLAY_TZ_LABEL = "UTC+5"
 
 
 def _fmt_time(ts: str) -> str:
-    """ISO 8601 UTC → 'HH:MM:SS' в зоне DISPLAY_TZ."""
     if not ts:
         return "—"
     try:
         s = ts.replace("Z", "+00:00")
         dt = datetime.fromisoformat(s)
-        # Если у даты не указан tz — считаем что это UTC (Unity отдаёт UTC)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(DISPLAY_TZ).strftime("%H:%M:%S")
@@ -51,10 +47,6 @@ def format_trades(
     to_date: str,
     instruments_map: dict[int, str] | None = None,
 ) -> list[str]:
-    """
-    Собрать сообщения в HTML-разметке.
-    Возвращает список готовых текстов ≤ TELEGRAM_MSG_LIMIT символов.
-    """
     instruments_map = instruments_map or {}
     period = from_date if from_date == to_date else f"{from_date} — {to_date}"
 
@@ -103,7 +95,6 @@ def format_positions(
     positions: list[dict],
     instruments_map: dict[int, str] | None = None,
 ) -> list[str]:
-    """Собрать сообщения по открытым позициям в HTML."""
     instruments_map = instruments_map or {}
 
     if not positions:
@@ -171,10 +162,6 @@ def format_positions(
 
 
 def _split_messages(parts: Iterable[str]) -> list[str]:
-    """
-    Склеить куски (заголовок + блоки сделок) в сообщения не длиннее TELEGRAM_MSG_LIMIT.
-    Каждый блок отделяется пустой строкой.
-    """
     messages: list[str] = []
     buf: list[str] = []
     buf_len = 0
@@ -193,7 +180,6 @@ def _split_messages(parts: Iterable[str]) -> list[str]:
     if buf:
         messages.append(sep.join(buf))
 
-    # На случай если одна часть > лимита — жёстко режем
     result: list[str] = []
     for m in messages:
         if len(m) <= TELEGRAM_MSG_LIMIT:

@@ -1,10 +1,3 @@
-"""
-Персистентное хранилище на JSON-файле:
-  - справочник инструментов: instrumentId → ticker
-  - настройки пользователей: telegram_user_id → accountId
-
-Файл лежит в volume, чтобы переживать пересборку контейнера.
-"""
 import json
 import logging
 from threading import Lock
@@ -18,7 +11,6 @@ _state: dict | None = None
 
 
 def _load() -> dict:
-    """Ленивая загрузка состояния из файла. Возвращает ссылку на общий dict."""
     global _state
     if _state is not None:
         return _state
@@ -35,30 +27,25 @@ def _load() -> dict:
     else:
         _state = {}
 
-    _state.setdefault("instruments", {})  # {"25719": "AAPL"}
-    _state.setdefault("accounts", {})     # {"<user_id>": "12345"}
+    _state.setdefault("instruments", {})
+    _state.setdefault("accounts", {})
     return _state
 
 
 def _save() -> None:
-    """Атомарная запись (через .tmp + rename)."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     tmp = STATE_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(_state, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(STATE_FILE)
 
 
-# ---------- Инструменты ----------
-
 def get_cached_instruments() -> dict[int, str]:
-    """Всё, что уже есть в кэше: {id: ticker}."""
     with _lock:
         s = _load()
         return {int(k): v for k, v in s["instruments"].items()}
 
 
 def missing_instrument_ids(needed_ids: list[int]) -> list[int]:
-    """Список id, которых ещё нет в кэше."""
     with _lock:
         s = _load()
         cached = set(int(k) for k in s["instruments"].keys())
@@ -66,7 +53,6 @@ def missing_instrument_ids(needed_ids: list[int]) -> list[int]:
 
 
 def add_instruments(mapping: dict[int, str]) -> None:
-    """Добавить/обновить записи в справочнике и сохранить на диск."""
     if not mapping:
         return
     with _lock:
@@ -75,8 +61,6 @@ def add_instruments(mapping: dict[int, str]) -> None:
             s["instruments"][str(int(k))] = str(v)
         _save()
 
-
-# ---------- Настройки пользователей ----------
 
 def get_user_account(user_id: int) -> str | None:
     with _lock:

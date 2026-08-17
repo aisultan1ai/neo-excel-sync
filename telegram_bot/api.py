@@ -1,4 +1,3 @@
-"""Клиент Unity REST API."""
 import logging
 
 import httpx
@@ -9,7 +8,7 @@ log = logging.getLogger(__name__)
 
 
 class ApiError(Exception):
-    """Ошибка при обращении к Unity API — показывается пользователю."""
+    pass
 
 
 async def fetch_trades(
@@ -17,10 +16,6 @@ async def fetch_trades(
     to_date: str,
     account_id: str | None = None,
 ) -> list[dict]:
-    """
-    Загрузить все сделки за период [from_date; to_date] (даты включительно).
-    Если задан account_id — фильтруем по нему. Пагинация через offset.
-    """
     url = f"{API_BASE_URL}/trades"
     headers = {"accept": "application/json", "auth-token": AUTH_TOKEN}
 
@@ -73,10 +68,6 @@ async def fetch_trades(
 
 
 async def fetch_positions(account_id: str, currency_id: int) -> list[dict]:
-    """
-    Открытые позиции по счёту, с PnL/стоимостью в валюте currency_id.
-    accountId и currency обязательны в этом endpoint.
-    """
     url = f"{API_BASE_URL}/accountPositions"
     headers = {"accept": "application/json", "auth-token": AUTH_TOKEN}
     params = {"accountId": account_id, "currency": currency_id}
@@ -112,7 +103,6 @@ async def fetch_positions(account_id: str, currency_id: int) -> list[dict]:
 
 
 def _parse_instrument_items(data) -> dict[int, str]:
-    """Достаёт {id: ticker} из ответа /instrumentDetails."""
     items = data.get("items") if isinstance(data, dict) else data
     if not isinstance(items, list):
         return {}
@@ -131,10 +121,6 @@ async def _fetch_details_csv(
     client: httpx.AsyncClient,
     ids: list[int],
 ) -> tuple[dict[int, str], bool]:
-    """
-    Попытка №1: передать все id одним параметром через запятую.
-    Возвращает (mapping, ok) — ok=False если 400/422, чтобы попробовать фолбэк.
-    """
     url = f"{API_BASE_URL}/instrumentDetails"
     headers = {"accept": "application/json", "auth-token": AUTH_TOKEN}
     params = {
@@ -154,7 +140,7 @@ async def _fetch_details_csv(
             "Unity /instrumentDetails (csv) %s: %s",
             resp.status_code, resp.text[:300],
         )
-        return {}, True  # ok, но пусто — не будем зря фолбэчить
+        return {}, True
 
     try:
         return _parse_instrument_items(resp.json()), True
@@ -166,7 +152,6 @@ async def _fetch_details_one(
     client: httpx.AsyncClient,
     instr_id: int,
 ) -> dict[int, str]:
-    """Фолбэк: запросить один инструмент отдельным запросом."""
     url = f"{API_BASE_URL}/instrumentDetails"
     headers = {"accept": "application/json", "auth-token": AUTH_TOKEN}
     params = {"instrumentId": str(instr_id), "limit": "1"}
@@ -188,12 +173,6 @@ async def _fetch_details_one(
 
 
 async def fetch_instrument_details(ids: list[int]) -> dict[int, str]:
-    """
-    Вернуть {id: ticker} по нужным instrumentId.
-    Сначала пытаемся одним запросом (CSV-параметр), если API не принимает —
-    фолбэк на per-id (медленнее, но результат всё равно кэшируется навсегда).
-    Ошибки не поднимаем — справочник не критичен.
-    """
     if not ids:
         return {}
 
@@ -201,7 +180,6 @@ async def fetch_instrument_details(ids: list[int]) -> dict[int, str]:
     unique_ids = list({int(i) for i in ids})
 
     async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
-        # Пробуем batch через CSV; чанкуем по 100 на всякий случай
         CHUNK = 100
         need_fallback = False
         for i in range(0, len(unique_ids), CHUNK):
@@ -212,7 +190,6 @@ async def fetch_instrument_details(ids: list[int]) -> dict[int, str]:
                 break
             result.update(mapping)
 
-        # Фолбэк: тянем по одному те, что ещё не получены
         if need_fallback:
             missing = [x for x in unique_ids if x not in result]
             log.info(
