@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from .config import UNIVERSE_TICKERS
 from .features import compute_features_for_universe
 from .storage import get_conn
+from .universe import resolve_universe
 
 log = logging.getLogger(__name__)
 
@@ -66,12 +67,17 @@ def predict(
     as_of = _as_of_for(target_date)
     features = compute_features_for_universe(as_of)
     if not features:
+        n_uni = len(resolve_universe())
         return {
             "target_date": target_date,
             "as_of_date": as_of,
             "buy": [],
             "sell": [],
-            "note": "Нет данных для расчёта фич (пустой рынок или недостаточная история).",
+            "note": (
+                f"Нет данных для расчёта фич (as_of={as_of}, universe={n_uni} тикеров). "
+                "Yahoo Finance не вернул котировки — проверь docker compose logs bot "
+                "(строки yfinance/marketdata) и версию yfinance."
+            ),
         }
 
     scored: list[RankedPrediction] = []

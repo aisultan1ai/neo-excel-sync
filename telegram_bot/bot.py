@@ -95,7 +95,7 @@ def build_app() -> Application:
 
     app.add_handler(CallbackQueryHandler(
         on_predict_button,
-        pattern=r"^(predict_|scorecard_|report_|pattern_|scheduler_)",
+        pattern=r"^(sync_|rebuild_|predict_|scorecard_|report_|pattern_|scheduler_|reconcile_|ml_)",
     ))
 
     app.add_handler(conv)

@@ -83,7 +83,8 @@ async def cmd_rebuild(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await status.edit_text(f"⚠️ Внутренняя ошибка: {type(e).__name__}")
         return
 
-    check = "✅ совпадает" if abs(res["pnl_diff"]) < 0.01 else "⚠️ расхождение"
+    tol = max(0.05, abs(res["closed_pnl_from_trades"]) * 1e-6)
+    check = "✅ совпадает" if abs(res["pnl_diff"]) < tol else "⚠️ расхождение"
     text = (
         "🧮 <b>Rebuild завершён</b>\n"
         f"Обработано сделок: <b>{res['trades_processed']}</b>\n"
@@ -735,6 +736,8 @@ async def cmd_why_ml(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @require_auth
 async def on_predict_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    from datetime import date, timedelta
+
     q = update.callback_query
     await q.answer()
     data = q.data or ""
@@ -746,13 +749,20 @@ async def on_predict_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         handler = cmd_scheduler
         args = ["status"]
     else:
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
         routes = {
-            "predict_run":     (cmd_predict, []),
-            "scorecard_show":  (cmd_scorecard, []),
-            "report_week":     (cmd_report, ["week"]),
-            "report_month":    (cmd_report, ["month"]),
-            "pattern_entries": (cmd_pattern, ["entries"]),
-            "pattern_exits":   (cmd_pattern, ["exits"]),
+            "sync_today":          (cmd_sync, []),
+            "rebuild_run":         (cmd_rebuild, []),
+            "predict_run":         (cmd_predict, []),
+            "predict_ml_run":      (cmd_predict_ml, []),
+            "reconcile_yesterday": (cmd_reconcile, [yesterday]),
+            "scorecard_show":      (cmd_scorecard, []),
+            "report_week":         (cmd_report, ["week"]),
+            "report_month":        (cmd_report, ["month"]),
+            "pattern_entries":     (cmd_pattern, ["entries"]),
+            "pattern_exits":       (cmd_pattern, ["exits"]),
+            "ml_status_show":      (cmd_ml_status, []),
+            "ml_train_run":        (cmd_train_ml, []),
         }
         if data not in routes:
             return

@@ -102,18 +102,28 @@ def _main_kb(current_account: str | None) -> InlineKeyboardMarkup:
 def predict_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🔮 Прогноз на завтра", callback_data="predict_run"),
+            InlineKeyboardButton("🔄 Sync (сегодня)", callback_data="sync_today"),
+            InlineKeyboardButton("🧮 Rebuild", callback_data="rebuild_run"),
         ],
         [
+            InlineKeyboardButton("🔮 Прогноз (правило)", callback_data="predict_run"),
+            InlineKeyboardButton("🤖 Прогноз (ML)", callback_data="predict_ml_run"),
+        ],
+        [
+            InlineKeyboardButton("🎯 Reconcile (вчера)", callback_data="reconcile_yesterday"),
             InlineKeyboardButton("📊 Scorecard", callback_data="scorecard_show"),
         ],
         [
-            InlineKeyboardButton("📅 Отчёт: неделя", callback_data="report_week"),
-            InlineKeyboardButton("📅 Отчёт: месяц", callback_data="report_month"),
+            InlineKeyboardButton("📅 Неделя", callback_data="report_week"),
+            InlineKeyboardButton("📅 Месяц", callback_data="report_month"),
         ],
         [
             InlineKeyboardButton("🧪 Pattern: entries", callback_data="pattern_entries"),
             InlineKeyboardButton("🧪 Pattern: exits", callback_data="pattern_exits"),
+        ],
+        [
+            InlineKeyboardButton("🧠 ML статус", callback_data="ml_status_show"),
+            InlineKeyboardButton("🎓 Обучить ML", callback_data="ml_train_run"),
         ],
         [
             InlineKeyboardButton("🕒 Scheduler", callback_data="scheduler_toggle"),
@@ -199,10 +209,13 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if q.data == "menu_predict":
         await ctx.bot.send_message(
             chat_id,
-            "Раздел «Прогноз»:\n"
-            "быстрые действия — кнопками ниже, для параметризованных команд "
-            "(<code>/features TICKER DATE</code>, <code>/why TICKER</code>, "
-            "<code>/reconcile DATE</code>) вводи как обычные команды.",
+            "Раздел «Прогноз» — типовой поток:\n"
+            "1) <b>Sync</b> → 2) <b>Rebuild</b> → 3) <b>Прогноз</b> → 4) <b>Reconcile</b> → 5) <b>Scorecard</b>\n\n"
+            "Параметризованные команды набирай текстом:\n"
+            "• <code>/features TICKER YYYY-MM-DD</code>\n"
+            "• <code>/why TICKER [YYYY-MM-DD]</code>  •  <code>/why_ml TICKER</code>\n"
+            "• <code>/reconcile YYYY-MM-DD</code>  •  <code>/predict YYYY-MM-DD</code>\n"
+            "• <code>/sync YYYY-MM-DD [YYYY-MM-DD]</code>",
             reply_markup=predict_kb(),
             parse_mode=ParseMode.HTML,
         )

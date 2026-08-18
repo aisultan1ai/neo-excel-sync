@@ -12,6 +12,27 @@ log = logging.getLogger(__name__)
 
 PRICE_COLS = ("open", "high", "low", "close", "adj_close", "volume")
 
+_YF_SESSION: object | None = None
+_YF_SESSION_INIT = False
+
+
+def _get_yf_session():
+    global _YF_SESSION, _YF_SESSION_INIT
+    if _YF_SESSION_INIT:
+        return _YF_SESSION
+    _YF_SESSION_INIT = True
+    try:
+        from curl_cffi import requests as cffi_requests
+        _YF_SESSION = cffi_requests.Session(impersonate="chrome")
+        log.info("marketdata: curl_cffi session initialized (impersonate=chrome)")
+    except ImportError:
+        log.info("marketdata: curl_cffi не установлен — используем дефолтный HTTP-клиент yfinance")
+        _YF_SESSION = None
+    except Exception as e:  # noqa: BLE001
+        log.warning("marketdata: не удалось создать curl_cffi session: %s", e)
+        _YF_SESSION = None
+    return _YF_SESSION
+
 
 def _load_cached(ticker: str, from_date: str, to_date: str) -> pd.DataFrame:
     with get_conn() as conn:
@@ -69,7 +90,8 @@ def _num(x) -> float | None:
 def _yf_download(tickers: list[str], from_date: str, to_date: str) -> dict[str, pd.DataFrame]:
     end = (date.fromisoformat(to_date) + timedelta(days=1)).isoformat()
 
-    raw = yf.download(
+    session = _get_yf_session()
+    kwargs = dict(
         tickers=" ".join(tickers),
         start=from_date,
         end=end,
@@ -79,8 +101,29 @@ def _yf_download(tickers: list[str], from_date: str, to_date: str) -> dict[str, 
         threads=True,
         group_by="ticker",
     )
+    if session is not None:
+        kwargs["session"] = session
+
+    try:
+        raw = yf.download(**kwargs)
+    except TypeError:
+        kwargs.pop("session", None)
+        try:
+            raw = yf.download(**kwargs)
+        except Exception as e:  # noqa: BLE001
+            log.warning("yfinance download failed for %s (%s..%s): %s",
+                        tickers, from_date, to_date, e)
+            return {}
+    except Exception as e:  # noqa: BLE001
+        log.warning("yfinance download failed for %s (%s..%s): %s",
+                    tickers, from_date, to_date, e)
+        return {}
+
     result: dict[str, pd.DataFrame] = {}
     if raw is None or raw.empty:
+        log.warning("yfinance returned empty frame for %s (%s..%s) — "
+                    "проверь версию yfinance и доступ к query1.finance.yahoo.com",
+                    tickers, from_date, to_date)
         return result
 
     if isinstance(raw.columns, pd.MultiIndex):
