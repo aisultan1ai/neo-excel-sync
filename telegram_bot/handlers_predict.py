@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from html import escape
 from types import SimpleNamespace
 
@@ -12,10 +13,14 @@ from handlers import require_auth
 from strategy_predict.features import compute_features_for_universe, load_features
 from strategy_predict.positions import rebuild_positions_fifo
 from strategy_predict.analytics import period_report, plot_period
+from strategy_predict.drift import compute_drift, has_alert
 from strategy_predict.pattern import analyze as run_pattern
 from strategy_predict.ml import (
     MLNotReady,
+    MODEL_VERSION as ML_MODEL_VERSION_DEFAULT,
+    MODEL_VERSION_V2 as ML_MODEL_VERSION_V2,
     predict_ml as run_predict_ml,
+    predict_ml_shadow as run_predict_ml_shadow,
     status as ml_status_fn,
     train as train_ml_fn,
     why_ml as run_why_ml,
@@ -220,19 +225,22 @@ async def cmd_reconcile(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = ctx.args or []
     if not args:
         await update.message.reply_text(
-            "Использование: /reconcile YYYY-MM-DD\n"
-            "Дата — торговый день, для которого уже есть /predict и подтянутые /sync-сделки."
+            "Использование: /reconcile YYYY-MM-DD [rule_version]\n"
+            "Дата — торговый день, для которого уже есть /predict и подтянутые /sync-сделки.\n"
+            "rule_version — 'mrv-1.0' по умолчанию, для ML — 'xgb-1.0', 'xgb-2.0'."
         )
         return
     target_date = args[0].strip()
+    rv = args[1].strip() if len(args) >= 2 else None
 
     status = await update.message.reply_text(
-        f"⏳ Сверяю прогноз с фактом на {escape(target_date)}..."
+        f"⏳ Сверяю прогноз ({rv or 'mrv-1.0'}) с фактом на {escape(target_date)}..."
     )
 
     def _work():
         init_db()
-        return reconcile_day(target_date)
+        kwargs = {"rule_version": rv} if rv else {}
+        return reconcile_day(target_date, **kwargs)
 
     try:
         res = await _run_blocking(_work)
@@ -275,19 +283,23 @@ async def cmd_reconcile(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @require_auth
 async def cmd_scorecard(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = ctx.args or []
-    try:
-        last_n = int(args[0]) if args else 20
-    except ValueError:
-        last_n = 20
+    last_n = 20
+    rv: str | None = None
+    for a in args:
+        try:
+            last_n = int(a)
+        except ValueError:
+            rv = a.strip()
     last_n = max(1, min(last_n, 200))
 
     status = await update.message.reply_text(
-        f"⏳ Собираю scorecard за последние {last_n} сверок..."
+        f"⏳ Собираю scorecard ({rv or 'mrv-1.0'}) за последние {last_n} сверок..."
     )
 
     def _work():
         init_db()
-        return run_scorecard(last_n=last_n)
+        kwargs = {"rule_version": rv} if rv else {}
+        return run_scorecard(last_n=last_n, **kwargs)
 
     try:
         res = await _run_blocking(_work)
@@ -298,13 +310,16 @@ async def cmd_scorecard(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if res["n_days"] == 0:
         await status.edit_text(
-            "⚠️ Ещё нет сверок. Запусти /predict на прошлые дни и /reconcile для них."
+            f"⚠️ Ещё нет сверок для <code>{escape(res.get('rule_version','?'))}</code>. "
+            "Запусти /predict (или /predict_ml) на прошлые дни и /reconcile для них.",
+            parse_mode=ParseMode.HTML,
         )
         return
 
     ov = res["overall"]
     lines = [
-        f"📊 <b>Scorecard</b> — последних <b>{res['n_days']}</b> сверок",
+        f"📊 <b>Scorecard</b> — <code>{escape(res.get('rule_version','?'))}</code>  "
+        f"последних <b>{res['n_days']}</b> сверок",
         "",
         "<b>Микро-агрегаты</b> (по всем предсказаниям — честнее для баланса классов):",
         f"  precision: <b>{ov['micro_precision']:.2f}</b>   "
@@ -385,7 +400,7 @@ async def cmd_pattern(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         lines.append(
             f"{marker} <code>{escape(r.feature):22s}</code> "
             f"p_bonf=<b>{r.p_value_bonf:.3f}</b>   "
-            f"mean: entry={me} vs bl={mb}   <i>{r.direction}</i>"
+            f"mean: entry={me} vs bl={mb}   <i>{escape(r.direction)}</i>"
         )
     lines.append("")
     lines.append(
@@ -537,6 +552,44 @@ def _fmt_pct(x) -> str:
         return str(x)
 
 
+def _ml_primary_version() -> str:
+    return os.environ.get("ML_MODEL_VERSION", ML_MODEL_VERSION_DEFAULT).strip() or ML_MODEL_VERSION_DEFAULT
+
+
+def _ml_shadow_versions() -> tuple[str, ...]:
+    raw = os.environ.get("ML_SHADOW_VERSIONS", ML_MODEL_VERSION_V2).strip()
+    if not raw:
+        return ()
+    primary = _ml_primary_version()
+    return tuple(v.strip() for v in raw.split(",") if v.strip() and v.strip() != primary)
+
+
+def _ml_versions_to_train() -> tuple[str, ...]:
+    primary = _ml_primary_version()
+    shadows = _ml_shadow_versions()
+    # порядок: primary, потом shadows (без дублей)
+    seen = {primary}
+    out = [primary]
+    for v in shadows:
+        if v not in seen:
+            out.append(v); seen.add(v)
+    return tuple(out)
+
+
+def _fmt_mean_std(m: dict, key: str, digits: int = 3) -> str:
+    mean = m.get(f"{key}_mean")
+    std = m.get(f"{key}_std")
+    if mean is None:
+        return "—"
+    try:
+        base = f"{float(mean):.{digits}f}"
+        if std is None:
+            return base
+        return f"{base}±{float(std):.{digits}f}"
+    except (TypeError, ValueError):
+        return str(mean)
+
+
 @require_auth
 async def cmd_scheduler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = ctx.args or []
@@ -598,25 +651,37 @@ async def cmd_ml_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         m = json.loads(meta["metrics_json"] or "{}")
         lines.append(
             f"  {side}: <b>{escape(meta['model_version'])}</b>  "
-            f"обучена <code>{escape(meta['trained_at'][:19])}</code>  "
-            f"n_train={meta['n_train']}  n_pos={meta['n_positive']}  "
-            f"acc={m.get('accuracy', '—')}  f1={m.get('f1', '—')}"
+            f"обучена <code>{escape(meta['trained_at'][:19])}</code>"
+        )
+        lines.append(
+            f"    n_train={meta['n_train']}  n_pos={meta['n_positive']}  "
+            f"folds={m.get('n_folds', '—')}"
+        )
+        lines.append(
+            f"    P@{m.get('top_k', 5)}={_fmt_mean_std(m, 'precision_at_k')}  "
+            f"<b>PR-AUC={_fmt_mean_std(m, 'pr_auc')}</b>  "
+            f"F1={_fmt_mean_std(m, 'f1')}"
         )
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 @require_auth
 async def cmd_train_ml(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    status = await update.message.reply_text("⏳ Обучаю XGBoost (BUY + SELL)...")
+    versions = _ml_versions_to_train()
+    status = await update.message.reply_text(
+        f"⏳ Обучаю XGBoost (BUY + SELL) — версии: {', '.join(versions)}..."
+    )
 
     def _work():
         init_db()
-        results = {}
-        for side in ("BUY", "SELL"):
-            try:
-                results[side] = train_ml_fn(side)
-            except MLNotReady as e:
-                results[side] = {"error": str(e)}
+        results: dict = {}
+        for ver in versions:
+            results[ver] = {}
+            for side in ("BUY", "SELL"):
+                try:
+                    results[ver][side] = train_ml_fn(side, model_version=ver)
+                except MLNotReady as e:
+                    results[ver][side] = {"error": str(e)}
         return results
 
     try:
@@ -626,18 +691,27 @@ async def cmd_train_ml(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await status.edit_text(f"⚠️ Внутренняя ошибка: {type(e).__name__}")
         return
 
-    lines = ["🎓 <b>Обучение ML</b>"]
-    for side in ("BUY", "SELL"):
-        r = res[side]
-        if "error" in r:
-            lines.append(f"  {side}: ⛔ {escape(r['error'])}")
-        else:
+    lines = ["🎓 <b>Обучение ML</b>", "<i>метрики: mean ± std по CV-фолдам</i>"]
+    for ver in versions:
+        lines.append(f"— <b>{escape(ver)}</b> —")
+        for side in ("BUY", "SELL"):
+            r = res[ver][side]
+            if "error" in r:
+                lines.append(f"  {side}: ⛔ {escape(r['error'])}")
+                continue
             m = r["metrics"]
             lines.append(
-                f"  {side}: ✅ <b>{escape(r['model_version'])}</b>  "
-                f"n_train={r['n_train']}  n_pos={r['n_positive']}  "
-                f"acc={m.get('accuracy', '—')}  f1={m.get('f1', '—')}  "
-                f"auc={m.get('roc_auc', '—')}"
+                f"  {side}: ✅ n_train={r['n_train']}  n_pos={r['n_positive']}  "
+                f"folds={m.get('n_folds', '—')}"
+            )
+            lines.append(
+                f"    P@{m.get('top_k', 5)}={_fmt_mean_std(m, 'precision_at_k')}  "
+                f"<b>PR-AUC={_fmt_mean_std(m, 'pr_auc')}</b>  "
+                f"ROC-AUC={_fmt_mean_std(m, 'roc_auc')}"
+            )
+            lines.append(
+                f"    F1={_fmt_mean_std(m, 'f1')}  "
+                f"acc={_fmt_mean_std(m, 'accuracy')}"
             )
     await status.edit_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
@@ -646,17 +720,26 @@ async def cmd_train_ml(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_predict_ml(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = ctx.args or []
     target_date = args[0].strip() if args else None
+    primary_version = _ml_primary_version()
+    shadow_versions = _ml_shadow_versions()
 
     status = await update.message.reply_text(
-        f"⏳ ML-прогноз на {escape(target_date) if target_date else 'ближайший торговый день'}..."
+        f"⏳ ML-прогноз ({primary_version}) на "
+        f"{escape(target_date) if target_date else 'ближайший торговый день'}..."
     )
 
     def _work():
         init_db()
-        return run_predict_ml(target_date=target_date)
+        primary = run_predict_ml(target_date=target_date, model_version=primary_version)
+        shadows: list[dict] = []
+        if shadow_versions:
+            shadows = run_predict_ml_shadow(
+                target_date=target_date, shadow_versions=shadow_versions,
+            )
+        return primary, shadows
 
     try:
-        res = await _run_blocking(_work)
+        res, shadow_results = await _run_blocking(_work)
     except MLNotReady as e:
         await status.edit_text(f"⛔ {escape(str(e))}")
         return
@@ -672,19 +755,47 @@ async def cmd_predict_ml(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     lines = [
         f"🤖 <b>ML-прогноз на {escape(res['target_date'])}</b>",
         f"as_of: <code>{escape(res['as_of_date'])}</code>   "
-        f"model: <code>{escape(res['model_version'])}</code>   "
+        f"primary: <code>{escape(res['model_version'])}</code>   "
         f"universe: <b>{res['n_universe']}</b>",
         "",
-        "🟢 <b>BUY-кандидаты (по вероятности):</b>",
+        f"🟢 <b>BUY</b> (<code>{escape(res['model_version'])}</code>):",
     ]
     for b in res["buy"]:
         lines.append(f"  {b['rank']}. <code>{escape(b['ticker'])}</code>  "
                      f"P=<b>{b['confidence']:.3f}</b>")
     lines.append("")
-    lines.append("🔴 <b>SELL-кандидаты:</b>")
+    lines.append(f"🔴 <b>SELL</b> (<code>{escape(res['model_version'])}</code>):")
     for s in res["sell"]:
         lines.append(f"  {s['rank']}. <code>{escape(s['ticker'])}</code>  "
                      f"P=<b>{s['confidence']:.3f}</b>")
+
+    # Shadow-модели: компактный блок для сравнения (в БД тоже сохраняются)
+    for sh in shadow_results:
+        if not sh.get("buy") and not sh.get("sell"):
+            continue
+        lines.append("")
+        lines.append(
+            f"👁 <b>shadow</b> <code>{escape(sh.get('model_version', '?'))}</code> "
+            f"<i>(не переключаем — только для сравнения)</i>"
+        )
+        if sh.get("buy"):
+            lines.append("  🟢 " + " ".join(
+                f"<code>{escape(b['ticker'])}</code>({b['confidence']:.2f})"
+                for b in sh["buy"]
+            ))
+        if sh.get("sell"):
+            lines.append("  🔴 " + " ".join(
+                f"<code>{escape(s['ticker'])}</code>({s['confidence']:.2f})"
+                for s in sh["sell"]
+            ))
+        if sh.get("note"):
+            lines.append(f"  <i>{escape(sh['note'])}</i>")
+
+    if shadow_results:
+        lines.append("")
+        lines.append(
+            "<i>Сравнить накопленное качество: /compare 20</i>"
+        )
     await status.edit_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
@@ -732,6 +843,106 @@ async def cmd_why_ml(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
         lines.append("")
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+
+
+@require_auth
+async def cmd_compare(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    args = ctx.args or []
+    try:
+        last_n = int(args[0]) if args else 20
+    except ValueError:
+        last_n = 20
+    last_n = max(1, min(last_n, 200))
+
+    versions: list[str] = ["mrv-1.0", _ml_primary_version(), *_ml_shadow_versions()]
+    versions = list(dict.fromkeys(versions))
+
+    st = await update.message.reply_text(
+        f"⏳ Сравниваю модели ({', '.join(versions)}) за {last_n} сверок..."
+    )
+
+    def _work() -> list[dict]:
+        init_db()
+        out: list[dict] = []
+        for v in versions:
+            try:
+                res = run_scorecard(last_n=last_n, rule_version=v)
+                out.append({"version": v, "res": res, "error": None})
+            except Exception as e:  # noqa: BLE001
+                out.append({"version": v, "res": None, "error": str(e)})
+        return out
+
+    try:
+        results = await _run_blocking(_work)
+    except Exception as e:  # noqa: BLE001
+        log.exception("Неожиданная ошибка в /compare")
+        await st.edit_text(f"⚠️ Внутренняя ошибка: {type(e).__name__}")
+        return
+
+    lines = [f"⚖️ <b>Сравнение моделей</b> — последних {last_n} сверок"]
+    lines.append("<code>ver          days  micro-P  micro-R  micro-F1</code>")
+    for r in results:
+        v = r["version"]
+        if r["error"] or r["res"] is None:
+            lines.append(f"<code>{v:12s}</code> ⛔ {escape(r.get('error') or 'нет данных')}")
+            continue
+        res = r["res"]
+        if res["n_days"] == 0:
+            lines.append(f"<code>{v:12s}</code> <i>нет сверок</i>")
+            continue
+        ov = res["overall"]
+        lines.append(
+            f"<code>{v:12s} {res['n_days']:4d}  "
+            f"{ov['micro_precision']:.3f}    "
+            f"{ov['micro_recall']:.3f}    "
+            f"{ov['micro_f1']:.3f}</code>"
+        )
+    lines.append("")
+    lines.append(
+        "<i>Precision = какая доля предсказанных сделок реально произошла. "
+        "Recall = какую долю реальных сделок мы поймали.</i>"
+    )
+    await st.edit_text("\n".join(lines), parse_mode=ParseMode.HTML)
+
+
+@require_auth
+async def cmd_drift(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    st = await update.message.reply_text("⏳ Считаю PSI для всех фич...")
+
+    def _work():
+        init_db()
+        return compute_drift()
+
+    try:
+        drifts = await _run_blocking(_work)
+    except Exception as e:  # noqa: BLE001
+        log.exception("Неожиданная ошибка в /drift")
+        await st.edit_text(f"⚠️ Внутренняя ошибка: {type(e).__name__}")
+        return
+
+    marker = {"stable": "🟢", "watch": "🟡", "alert": "🔴", "insufficient": "⚪"}
+    lines = [
+        "📉 <b>Feature drift (PSI)</b>",
+        "<i>train = вся история кроме последних 30 дней; live = 30 дней</i>",
+        "<code>PSI &lt;0.10 стабильно  0.10-0.20 watch  ≥0.20 alert</code>",
+        "",
+    ]
+    drifts_sorted = sorted(
+        drifts, key=lambda d: -(d.psi if d.psi is not None else -1)
+    )
+    for d in drifts_sorted:
+        psi_str = f"{d.psi:.3f}" if d.psi is not None else "—"
+        lines.append(
+            f"{marker.get(d.status, '·')} <code>{escape(d.feature):22s}</code> "
+            f"PSI=<b>{psi_str}</b>  n_train={d.n_train}  n_live={d.n_live}"
+        )
+    if has_alert(drifts):
+        lines.append("")
+        lines.append(
+            "⚠️ <b>Дрейф выше 0.20 у нескольких фич</b> — стоит /train_ml "
+            "и посмотреть /scorecard, не деградировала ли модель."
+        )
+    await st.edit_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 @require_auth

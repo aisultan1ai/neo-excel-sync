@@ -17,6 +17,26 @@ log = logging.getLogger(__name__)
 LOOKBACK_DAYS = 365
 SPY_TICKER = "SPY"
 
+# Кросс-ассетные тикеры на Yahoo Finance
+MACRO_TICKERS: dict[str, str] = {
+    "vix": "^VIX",         # индекс волатильности
+    "dxy": "DX-Y.NYB",     # индекс доллара
+    "yield_10y": "^TNX",   # доходность 10-летних UST (в единицах × 10, т.е. 40 = 4.0%)
+}
+
+# Группировка вселенной по asset class — для class-relative фич.
+# Тикер не в справочнике → class-relative фичи будут NULL.
+ASSET_CLASSES: dict[str, tuple[str, ...]] = {
+    "us_equity_broad":  ("SPY", "QQQ", "DIA", "MDY", "TQQQ", "QLD"),
+    "us_equity_sector": ("XLK", "XLE", "XLU", "XLB", "XLI", "XLP", "XLV", "XLF", "XLY"),
+    "intl_equity":      ("EWL", "EWJ", "EWG", "EWZ"),
+    "commodities":      ("GLD", "SLV", "GDX"),
+    "bonds":            ("TLT",),
+}
+_TICKER_TO_CLASS: dict[str, str] = {
+    t: cls for cls, tickers in ASSET_CLASSES.items() for t in tickers
+}
+
 
 def _prev_trading_day(df: pd.DataFrame, target: date) -> date | None:
     if df.empty:
@@ -76,9 +96,86 @@ class TickerFeatures:
     spy_above_ma200: bool | None = None
     spy_ret_5d: float | None = None
     spy_ret_20d: float | None = None
+    # position-aware (только для тикеров с открытой long-позицией на as_of)
+    days_in_position: float | None = None
+    unrealized_pnl_pct: float | None = None
+    max_dd_in_position: float | None = None
+    entry_price: float | None = None
+    # ликвидность и кросс-ассетные (одни и те же значения для всех тикеров на as_of)
+    dollar_vol_20d: float | None = None
+    vix_level: float | None = None
+    vix_change_5d: float | None = None
+    dxy_change_5d: float | None = None
+    yield_10y_level: float | None = None
+    yield_10y_change_5d: float | None = None
+    # class-relative (тикер vs медиана его asset class)
+    asset_class: str | None = None
+    class_relative_ret_5d: float | None = None
+    class_relative_ret_20d: float | None = None
 
     def to_dict(self) -> dict:
         return {k: v for k, v in self.__dict__.items()}
+
+
+POSITION_FEATURE_NAMES: tuple[str, ...] = (
+    "days_in_position",
+    "unrealized_pnl_pct",
+    "max_dd_in_position",
+)
+
+
+def _load_open_position(ticker: str, as_of_date: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            """SELECT open_date, open_price, amount_remaining
+               FROM positions
+               WHERE ticker = ?
+                 AND open_date <= ?
+                 AND (close_date IS NULL OR close_date > ?)
+                 AND amount_remaining > 0
+               ORDER BY open_date DESC LIMIT 1""",
+            (ticker, as_of_date, as_of_date),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def _compute_position_features(
+    ticker: str, as_of_date: str, df: pd.DataFrame
+) -> dict:
+    pos = _load_open_position(ticker, as_of_date)
+    if not pos:
+        return {}
+    open_date = date.fromisoformat(pos["open_date"])
+    open_price = float(pos["open_price"])
+    if open_price <= 0:
+        return {}
+
+    target = date.fromisoformat(as_of_date)
+    close = df["close"].astype(float)
+    idx_dates = pd.to_datetime(close.index).date
+    d = _prev_trading_day(df, target)
+    if d is None:
+        return {}
+    try:
+        as_of_pos = list(idx_dates).index(d)
+    except ValueError:
+        return {}
+    close_now = float(close.iloc[as_of_pos])
+
+    # окно [open_date, as_of] по индексу дат
+    mask = [(od >= open_date and od <= d) for od in idx_dates]
+    win = close[np.asarray(mask)]
+    max_dd = None
+    if len(win) > 0:
+        min_close = float(win.min())
+        max_dd = min_close / open_price - 1.0
+
+    return {
+        "days_in_position": float((d - open_date).days),
+        "unrealized_pnl_pct": close_now / open_price - 1.0,
+        "max_dd_in_position": max_dd,
+        "entry_price": open_price,
+    }
 
 
 def compute_features(ticker: str, as_of_date: str) -> TickerFeatures | None:
@@ -138,11 +235,14 @@ def compute_features(ticker: str, as_of_date: str) -> TickerFeatures | None:
     vol_last = _safe(volume, 0)
     vol_ratio = (vol_last / vol_ma20_v) if (vol_last is not None and vol_ma20_v) else None
 
+    dollar_vol_series = (close * volume).rolling(20).mean()
+    dollar_vol_20d = _safe(dollar_vol_series, 0)
+
     prev_close = _safe(close, 1)
     open_last = _safe(open_, 0)
     gap = (open_last / prev_close - 1.0) if (open_last is not None and prev_close) else None
 
-    return TickerFeatures(
+    tf = TickerFeatures(
         ticker=ticker,
         as_of_date=d.isoformat(),
         close=c0,
@@ -156,7 +256,64 @@ def compute_features(ticker: str, as_of_date: str) -> TickerFeatures | None:
         atr_14_pct=atr_pct,
         vol_ratio_20=vol_ratio,
         overnight_gap=gap,
+        dollar_vol_20d=dollar_vol_20d,
     )
+    pos_feats = _compute_position_features(ticker, as_of_date, df)
+    for k, v in pos_feats.items():
+        setattr(tf, k, v)
+    return tf
+
+
+def _class_medians(features: dict) -> dict[str, dict[str, float | None]]:
+    """Медианы ret_5d/ret_20d по каждому asset class (только из имеющихся фич)."""
+    by_class: dict[str, dict[str, list[float]]] = {}
+    for ticker, f in features.items():
+        cls = _TICKER_TO_CLASS.get(ticker)
+        if cls is None:
+            continue
+        bucket = by_class.setdefault(cls, {"ret_5d": [], "ret_20d": []})
+        if f.ret_5d is not None:
+            bucket["ret_5d"].append(f.ret_5d)
+        if f.ret_20d is not None:
+            bucket["ret_20d"].append(f.ret_20d)
+    out: dict[str, dict[str, float | None]] = {}
+    for cls, vals in by_class.items():
+        out[cls] = {
+            "ret_5d": float(np.median(vals["ret_5d"])) if vals["ret_5d"] else None,
+            "ret_20d": float(np.median(vals["ret_20d"])) if vals["ret_20d"] else None,
+        }
+    return out
+
+
+def _macro_regime(as_of_date: str) -> dict:
+    """Кросс-ассетные фичи: level и 5-дневное изменение VIX, DXY, 10Y."""
+    target = date.fromisoformat(as_of_date)
+    from_d = (target - timedelta(days=LOOKBACK_DAYS)).isoformat()
+    out: dict[str, float | None] = {
+        "vix_level": None, "vix_change_5d": None,
+        "dxy_change_5d": None,
+        "yield_10y_level": None, "yield_10y_change_5d": None,
+    }
+    for key, ticker in MACRO_TICKERS.items():
+        df = get_prices(ticker, from_d, as_of_date)
+        if df.empty:
+            continue
+        close = df["close"].astype(float)
+        if close.empty:
+            continue
+        c0 = float(close.iloc[-1])
+        c5 = float(close.iloc[-6]) if len(close) >= 6 else None
+        change_5d = ((c0 / c5) - 1.0) if (c5 and c5 != 0) else None
+        if key == "vix":
+            out["vix_level"] = c0
+            out["vix_change_5d"] = change_5d
+        elif key == "dxy":
+            out["dxy_change_5d"] = change_5d
+        elif key == "yield_10y":
+            # ^TNX даётся в единицах × 10, приведём к %
+            out["yield_10y_level"] = c0 / 10.0
+            out["yield_10y_change_5d"] = change_5d
+    return out
 
 
 def _spy_regime(as_of_date: str) -> dict:
@@ -188,7 +345,7 @@ def compute_features_for_universe(
     target = date.fromisoformat(as_of_date)
     from_d = (target - timedelta(days=LOOKBACK_DAYS)).isoformat()
 
-    ensure_prices([*tickers, SPY_TICKER], from_d, as_of_date)
+    ensure_prices([*tickers, SPY_TICKER, *MACRO_TICKERS.values()], from_d, as_of_date)
 
     features: dict[str, TickerFeatures] = {}
     for t in tickers:
@@ -211,7 +368,10 @@ def compute_features_for_universe(
     ranks_ret20 = _rank_map(lambda f: f.ret_20d)
     ranks_rsi = _rank_map(lambda f: f.rsi_14)
 
+    class_medians = _class_medians(features)
+
     regime = _spy_regime(as_of_date)
+    macro = _macro_regime(as_of_date)
 
     with get_conn() as conn:
         for t, f in features.items():
@@ -222,6 +382,16 @@ def compute_features_for_universe(
             f.spy_above_ma200 = regime["spy_above_ma200"]
             f.spy_ret_5d = regime["spy_ret_5d"]
             f.spy_ret_20d = regime["spy_ret_20d"]
+            for k, v in macro.items():
+                setattr(f, k, v)
+            cls = _TICKER_TO_CLASS.get(t)
+            if cls is not None:
+                f.asset_class = cls
+                med = class_medians.get(cls, {})
+                if f.ret_5d is not None and med.get("ret_5d") is not None:
+                    f.class_relative_ret_5d = f.ret_5d - med["ret_5d"]
+                if f.ret_20d is not None and med.get("ret_20d") is not None:
+                    f.class_relative_ret_20d = f.ret_20d - med["ret_20d"]
             conn.execute(
                 """
                 INSERT OR REPLACE INTO features (ticker, as_of_date, payload)

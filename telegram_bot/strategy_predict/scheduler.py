@@ -6,11 +6,42 @@ from telegram.ext import Application, ContextTypes
 
 from storage import get_scheduler_enabled
 
-from .ml import MLNotReady, status as ml_status, train as ml_train
+from .drift import compute_drift, has_alert
+from .ml import (
+    MLNotReady,
+    MODEL_VERSION as ML_MODEL_VERSION_DEFAULT,
+    MODEL_VERSION_V2 as ML_MODEL_VERSION_V2,
+    predict_ml,
+    predict_ml_shadow,
+    status as ml_status,
+    train as ml_train,
+)
 from .predictor import predict as run_predict
 from .reconcile import reconcile_day
 from .service import ServiceError, sync_trades
 from .storage import init_db
+
+
+def _primary_version() -> str:
+    return os.environ.get("ML_MODEL_VERSION", ML_MODEL_VERSION_DEFAULT).strip() or ML_MODEL_VERSION_DEFAULT
+
+
+def _shadow_versions() -> tuple[str, ...]:
+    raw = os.environ.get("ML_SHADOW_VERSIONS", ML_MODEL_VERSION_V2).strip()
+    if not raw:
+        return ()
+    primary = _primary_version()
+    return tuple(v.strip() for v in raw.split(",") if v.strip() and v.strip() != primary)
+
+
+def _versions_to_train() -> tuple[str, ...]:
+    primary = _primary_version()
+    seen = {primary}
+    out = [primary]
+    for v in _shadow_versions():
+        if v not in seen:
+            out.append(v); seen.add(v)
+    return tuple(out)
 
 log = logging.getLogger(__name__)
 
@@ -61,13 +92,18 @@ async def _job_daily(ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     today = date.today().isoformat()
     rec_f1 = None
-    try:
-        rec = reconcile_day(today)
-        rec_f1 = rec["f1"]
-        log.info("scheduler: reconcile %s — predicted=%d actual=%d F1=%.2f",
-                 today, rec["n_predicted"], rec["n_actual"], rec["f1"])
-    except Exception:  # noqa: BLE001
-        log.exception("scheduler: reconcile failed")
+    # reconcile для rule-based mrv-1.0 + всех ML версий (primary + shadow)
+    rule_versions = ["mrv-1.0", _primary_version(), *_shadow_versions()]
+    rule_versions = list(dict.fromkeys(rule_versions))  # dedupe, сохраняем порядок
+    for rv in rule_versions:
+        try:
+            rec = reconcile_day(today, rule_version=rv)
+            log.info("scheduler: reconcile %s (%s) — predicted=%d actual=%d F1=%.2f",
+                     today, rv, rec["n_predicted"], rec["n_actual"], rec["f1"])
+            if rv == "mrv-1.0":
+                rec_f1 = rec["f1"]
+        except Exception:  # noqa: BLE001
+            log.exception("scheduler: reconcile (%s) failed", rv)
 
     pred_target = None
     try:
@@ -77,6 +113,25 @@ async def _job_daily(ctx: ContextTypes.DEFAULT_TYPE) -> None:
                  pred["target_date"], len(pred["buy"]), len(pred["sell"]))
     except Exception:  # noqa: BLE001
         log.exception("scheduler: predict failed")
+
+    # ML predict — primary + shadow (для сбора precision@5-per-day в БД)
+    primary = _primary_version()
+    shadows = _shadow_versions()
+    try:
+        ml_res = predict_ml(model_version=primary)
+        log.info("scheduler: ml_predict (%s) buy=%d sell=%d",
+                 primary, len(ml_res.get("buy", [])), len(ml_res.get("sell", [])))
+    except MLNotReady as e:
+        log.info("scheduler: ml_predict (%s) пропущен — %s", primary, e)
+    except Exception:  # noqa: BLE001
+        log.exception("scheduler: ml_predict failed")
+
+    if shadows:
+        try:
+            predict_ml_shadow(shadow_versions=shadows)
+            log.info("scheduler: ml_predict shadow пройден — %s", shadows)
+        except Exception:  # noqa: BLE001
+            log.exception("scheduler: ml_predict shadow failed")
 
     rec_f1_str = f"{rec_f1:.2f}" if rec_f1 is not None else "—"
     await _notify(
@@ -101,24 +156,47 @@ async def _job_weekly_train(ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     lines: list[str] = []
-    for side in ("BUY", "SELL"):
-        try:
-            res = ml_train(side)
-            m = res["metrics"]
-            log.info("scheduler: trained %s n_train=%d n_pos=%d metrics=%s",
-                     side, res["n_train"], res["n_positive"], m)
-            lines.append(
-                f"{side}: ✅ n_train={res['n_train']} n_pos={res['n_positive']} "
-                f"acc={m.get('accuracy', '—')} f1={m.get('f1', '—')}"
-            )
-        except MLNotReady as e:
-            log.info("scheduler: skip train %s — %s", side, e)
-            lines.append(f"{side}: ⛔ {e}")
-        except Exception as e:  # noqa: BLE001
-            log.exception("scheduler: train %s failed", side)
-            lines.append(f"{side}: ⚠️ {type(e).__name__}")
+    for ver in _versions_to_train():
+        lines.append(f"— {ver} —")
+        for side in ("BUY", "SELL"):
+            try:
+                res = ml_train(side, model_version=ver)
+                m = res["metrics"]
+                log.info("scheduler: trained %s (%s) n_train=%d n_pos=%d metrics=%s",
+                         side, ver, res["n_train"], res["n_positive"], m)
+                lines.append(
+                    f"{side}: ✅ n_train={res['n_train']} n_pos={res['n_positive']} "
+                    f"P@{m.get('top_k', 5)}={m.get('precision_at_k_mean', '—')} "
+                    f"PR-AUC={m.get('pr_auc_mean', '—')}"
+                )
+            except MLNotReady as e:
+                log.info("scheduler: skip train %s (%s) — %s", side, ver, e)
+                lines.append(f"{side}: ⛔ {e}")
+            except Exception as e:  # noqa: BLE001
+                log.exception("scheduler: train %s (%s) failed", side, ver)
+                lines.append(f"{side}: ⚠️ {type(e).__name__}")
 
     await _notify(ctx, "🎓 Weekly train_ml:\n" + "\n".join(lines))
+
+
+async def _job_weekly_drift(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not get_scheduler_enabled():
+        return
+    init_db()
+    try:
+        drifts = compute_drift()
+    except Exception:  # noqa: BLE001
+        log.exception("scheduler: drift compute failed")
+        return
+    alerts = [d for d in drifts if d.status == "alert"]
+    watches = [d for d in drifts if d.status == "watch"]
+    log.info("scheduler: drift — %d alerts, %d watches", len(alerts), len(watches))
+    if has_alert(drifts):
+        top_alerts = sorted(alerts, key=lambda d: -(d.psi or 0))[:5]
+        msg = "🔴 <b>Feature drift alert</b>\n" + "\n".join(
+            f"• {d.feature}: PSI={d.psi:.3f}" for d in top_alerts
+        ) + "\n\nСтоит запустить /train_ml — распределения фич сместились."
+        await _notify(ctx, msg)
 
 
 def register_jobs(app: Application) -> None:
@@ -141,7 +219,14 @@ def register_jobs(app: Application) -> None:
         days=(6,),
         name="predict_weekly_train",
     )
+    jq.run_daily(
+        _job_weekly_drift,
+        time=dt_time(4, 0, tzinfo=timezone.utc),
+        days=(0,),  # понедельник
+        name="predict_weekly_drift",
+    )
     log.info(
         "scheduler: daily 23:15 UTC (sync+reconcile+predict); "
-        "weekly ВС 03:00 UTC (train_ml)"
+        "weekly ВС 03:00 UTC (train_ml); "
+        "weekly ПН 04:00 UTC (drift check)"
     )

@@ -11,14 +11,14 @@ log = logging.getLogger(__name__)
 DEFAULT_TOP_N = 5
 
 
-def _load_predictions(target_date: str, top_n: int) -> list[dict]:
+def _load_predictions(target_date: str, top_n: int, rule_version: str) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT ticker, side, confidence, rank
                FROM predictions
                WHERE target_date = ? AND rule_version = ? AND rank <= ?
                ORDER BY side, rank""",
-            (target_date, RULE_VERSION, top_n),
+            (target_date, rule_version, top_n),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -39,8 +39,9 @@ def _load_actual(trade_date: str, universe: Iterable[str]) -> list[dict]:
 def reconcile_day(
     target_date: str,
     top_n: int = DEFAULT_TOP_N,
+    rule_version: str = RULE_VERSION,
 ) -> dict:
-    predicted = _load_predictions(target_date, top_n)
+    predicted = _load_predictions(target_date, top_n, rule_version)
     actual = _load_actual(target_date, resolve_universe())
 
     pred_set = {(p["ticker"], p["side"]) for p in predicted}
@@ -72,7 +73,7 @@ def reconcile_day(
         log.info("reconcile %s: пусто (нет прогноза и нет сделок) — не пишем в БД", target_date)
         return {
             "date": target_date,
-            "rule_version": RULE_VERSION,
+            "rule_version": rule_version,
             "n_predicted": 0, "n_actual": 0, "n_overlap": 0, "n_side_match": 0,
             "precision": 0.0, "recall": 0.0, "f1": 0.0,
             "hits": [], "misses": [], "extras": [],
@@ -86,8 +87,7 @@ def reconcile_day(
               (date, rule_version, n_predicted, n_actual, n_overlap, n_side_match,
                precision_, recall, f1, details_json)
             VALUES (?,?,?,?,?,?,?,?,?,?)
-            ON CONFLICT(date) DO UPDATE SET
-              rule_version = excluded.rule_version,
+            ON CONFLICT(date, rule_version) DO UPDATE SET
               n_predicted = excluded.n_predicted,
               n_actual = excluded.n_actual,
               n_overlap = excluded.n_overlap,
@@ -97,13 +97,13 @@ def reconcile_day(
               f1 = excluded.f1,
               details_json = excluded.details_json
             """,
-            (target_date, RULE_VERSION, n_pred, n_actual, n_overlap, n_hits,
+            (target_date, rule_version, n_pred, n_actual, n_overlap, n_hits,
              precision, recall, f1, json.dumps(details, ensure_ascii=False)),
         )
 
     return {
         "date": target_date,
-        "rule_version": RULE_VERSION,
+        "rule_version": rule_version,
         "n_predicted": n_pred,
         "n_actual": n_actual,
         "n_overlap": n_overlap,
@@ -117,7 +117,7 @@ def reconcile_day(
     }
 
 
-def scorecard(last_n: int = 20) -> dict:
+def scorecard(last_n: int = 20, rule_version: str = RULE_VERSION) -> dict:
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT date, n_predicted, n_actual, n_overlap, n_side_match,
@@ -125,11 +125,12 @@ def scorecard(last_n: int = 20) -> dict:
                FROM reconciliations
                WHERE rule_version = ?
                ORDER BY date DESC LIMIT ?""",
-            (RULE_VERSION, last_n),
+            (rule_version, last_n),
         ).fetchall()
 
     if not rows:
-        return {"n_days": 0, "history": [], "per_ticker": {}, "overall": {}}
+        return {"n_days": 0, "history": [], "per_ticker": {}, "overall": {},
+                "rule_version": rule_version}
 
     history = []
     per_ticker_hits: dict[str, int] = {}
@@ -186,6 +187,7 @@ def scorecard(last_n: int = 20) -> dict:
         "n_days": n,
         "history": history_asc,
         "per_ticker": per_ticker,
+        "rule_version": rule_version,
         "overall": {
             "macro_precision": sum_p / n,
             "macro_recall": sum_r / n,

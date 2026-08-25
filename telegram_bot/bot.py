@@ -24,6 +24,8 @@ from handlers import (
     on_period_input,
 )
 from handlers_predict import (
+    cmd_compare,
+    cmd_drift,
     cmd_features,
     cmd_ml_status,
     cmd_pattern,
@@ -84,6 +86,8 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("why", cmd_why))
     app.add_handler(CommandHandler("reconcile", cmd_reconcile))
     app.add_handler(CommandHandler("scorecard", cmd_scorecard))
+    app.add_handler(CommandHandler("compare", cmd_compare))
+    app.add_handler(CommandHandler("drift", cmd_drift))
     app.add_handler(CommandHandler("pattern", cmd_pattern))
     app.add_handler(CommandHandler("report", cmd_report))
 

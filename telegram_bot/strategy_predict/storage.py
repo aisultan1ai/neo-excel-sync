@@ -102,7 +102,7 @@ SCHEMA = [
 
     """
     CREATE TABLE IF NOT EXISTS reconciliations (
-        date            TEXT PRIMARY KEY,   -- YYYY-MM-DD (день, для которого считали факт)
+        date            TEXT NOT NULL,      -- YYYY-MM-DD (день, для которого считали факт)
         rule_version    TEXT NOT NULL,
         n_predicted     INTEGER NOT NULL,
         n_actual        INTEGER NOT NULL,
@@ -111,23 +111,105 @@ SCHEMA = [
         precision_      REAL NOT NULL,
         recall          REAL NOT NULL,
         f1              REAL NOT NULL,
-        details_json    TEXT                -- разметка: hits/misses/extras
+        details_json    TEXT,               -- разметка: hits/misses/extras
+        PRIMARY KEY(date, rule_version)
     )
     """,
 
     """
     CREATE TABLE IF NOT EXISTS ml_models (
-        side            TEXT PRIMARY KEY CHECK(side IN ('BUY','SELL')),
+        side            TEXT NOT NULL CHECK(side IN ('BUY','SELL')),
+        model_version   TEXT NOT NULL,        -- 'xgb-1.0', 'xgb-2.0', ...
         trained_at      TEXT NOT NULL,        -- ISO 8601 UTC
-        model_version   TEXT NOT NULL,        -- 'xgb-1.0'
         n_train         INTEGER NOT NULL,
         n_positive      INTEGER NOT NULL,
         feature_names   TEXT NOT NULL,        -- JSON list
-        metrics_json    TEXT NOT NULL,        -- accuracy, roc_auc, f1, ...
-        path            TEXT NOT NULL         -- относительно DATA_DIR
+        metrics_json    TEXT NOT NULL,        -- pr_auc, precision_at_k, f1, ...
+        path            TEXT NOT NULL,        -- относительно DATA_DIR
+        PRIMARY KEY(side, model_version)
     )
     """,
+    "CREATE INDEX IF NOT EXISTS idx_ml_models_side_time "
+    "ON ml_models(side, trained_at DESC)",
 ]
+
+
+def _pk_columns(conn, table: str) -> list[str]:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return [r["name"] for r in rows if r["pk"]]
+
+
+def _table_exists(conn, table: str) -> bool:
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    return row is not None
+
+
+def _migrate_ml_models_pk(conn) -> None:
+    if not _table_exists(conn, "ml_models"):
+        return
+    pk = _pk_columns(conn, "ml_models")
+    if set(pk) == {"side", "model_version"}:
+        return
+    log.info("strategy_predict: миграция ml_models PK %s -> (side, model_version)", pk)
+    conn.execute("ALTER TABLE ml_models RENAME TO ml_models__legacy_v1")
+    conn.execute("""
+        CREATE TABLE ml_models (
+            side            TEXT NOT NULL CHECK(side IN ('BUY','SELL')),
+            model_version   TEXT NOT NULL,
+            trained_at      TEXT NOT NULL,
+            n_train         INTEGER NOT NULL,
+            n_positive      INTEGER NOT NULL,
+            feature_names   TEXT NOT NULL,
+            metrics_json    TEXT NOT NULL,
+            path            TEXT NOT NULL,
+            PRIMARY KEY(side, model_version)
+        )
+    """)
+    conn.execute("""
+        INSERT INTO ml_models
+            (side, model_version, trained_at, n_train, n_positive,
+             feature_names, metrics_json, path)
+        SELECT side, model_version, trained_at, n_train, n_positive,
+               feature_names, metrics_json, path
+        FROM ml_models__legacy_v1
+    """)
+    conn.execute("DROP TABLE ml_models__legacy_v1")
+
+
+def _migrate_reconciliations_pk(conn) -> None:
+    if not _table_exists(conn, "reconciliations"):
+        return
+    pk = _pk_columns(conn, "reconciliations")
+    if set(pk) == {"date", "rule_version"}:
+        return
+    log.info("strategy_predict: миграция reconciliations PK %s -> (date, rule_version)", pk)
+    conn.execute("ALTER TABLE reconciliations RENAME TO reconciliations__legacy_v1")
+    conn.execute("""
+        CREATE TABLE reconciliations (
+            date            TEXT NOT NULL,
+            rule_version    TEXT NOT NULL,
+            n_predicted     INTEGER NOT NULL,
+            n_actual        INTEGER NOT NULL,
+            n_overlap       INTEGER NOT NULL,
+            n_side_match    INTEGER NOT NULL,
+            precision_      REAL NOT NULL,
+            recall          REAL NOT NULL,
+            f1              REAL NOT NULL,
+            details_json    TEXT,
+            PRIMARY KEY(date, rule_version)
+        )
+    """)
+    conn.execute("""
+        INSERT INTO reconciliations
+            (date, rule_version, n_predicted, n_actual, n_overlap, n_side_match,
+             precision_, recall, f1, details_json)
+        SELECT date, rule_version, n_predicted, n_actual, n_overlap, n_side_match,
+               precision_, recall, f1, details_json
+        FROM reconciliations__legacy_v1
+    """)
+    conn.execute("DROP TABLE reconciliations__legacy_v1")
 
 
 def init_db() -> None:
@@ -135,6 +217,8 @@ def init_db() -> None:
     if _initialized:
         return
     with get_conn() as conn:
+        _migrate_ml_models_pk(conn)
+        _migrate_reconciliations_pk(conn)
         for stmt in SCHEMA:
             conn.execute(stmt)
     _initialized = True
