@@ -347,8 +347,51 @@ def init_bh_tables():
         conn.close()
 
 
+def init_investor_reports_tables():
+    conn = get_db_connection()
+    if not conn:
+        return
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS investor_report_uploads (
+                    id SERIAL PRIMARY KEY,
+                    uploaded_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    uploaded_by_username TEXT NOT NULL,
+                    mode TEXT NOT NULL DEFAULT 'consolidated',
+                    period_end DATE,
+                    source_path TEXT NOT NULL,
+                    source_filename TEXT NOT NULL,
+                    commentary TEXT,
+                    status TEXT NOT NULL DEFAULT 'ready',
+                    meta JSONB DEFAULT '{}'::jsonb,
+                    uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS investor_report_files (
+                    id SERIAL PRIMARY KEY,
+                    upload_id INTEGER NOT NULL REFERENCES investor_report_uploads(id) ON DELETE CASCADE,
+                    investor_name TEXT NOT NULL,
+                    docx_path TEXT NOT NULL,
+                    data JSONB DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_ir_uploads_uploaded_at ON investor_report_uploads(uploaded_at DESC)")
+            safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_ir_uploads_user ON investor_report_uploads(uploaded_by_user_id)")
+            safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_ir_files_upload ON investor_report_files(upload_id)")
+        log.info("Investor reports tables initialized.")
+    except Exception as e:
+        log.error("init_investor_reports_tables error: %s", e, exc_info=True)
+    finally:
+        conn.close()
+
+
 def init_all():
     init_database()
     init_ff_tables()
     init_cashout_tables()
     init_bh_tables()
+    init_investor_reports_tables()

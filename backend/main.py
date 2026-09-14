@@ -31,6 +31,7 @@ from routers import (
     funding_fee,
     cashout,
     convert_template,
+    investor_reports,
 )
 from routers import balance_history
 
@@ -76,6 +77,7 @@ app.include_router(funding_fee.router)
 app.include_router(cashout.router)
 app.include_router(balance_history.router)
 app.include_router(convert_template.router)
+app.include_router(investor_reports.router)
 
 _scheduler = BackgroundScheduler(timezone="UTC")
 
