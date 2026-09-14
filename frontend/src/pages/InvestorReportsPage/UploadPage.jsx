@@ -1,16 +1,14 @@
 import React, { useRef, useState } from "react";
 import { toast } from "react-toastify";
 import {
-  ArrowLeft,
   Upload,
   FileSpreadsheet,
   X,
-  FileText,
   Download,
 } from "lucide-react";
 
 import { preview as apiPreview, templateUrl } from "./api";
-import { StepIndicator } from "./ui";
+import { PageTopBar, InvestorReportStyles } from "./ui";
 
 const ACCEPTED = ".xls,.xlsx,.xlsm";
 
@@ -18,7 +16,7 @@ export default function UploadPage({ onPreview, onCancel }) {
   const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [dragOver, setDragOver] = useState(false);
-  const [mode, setMode] = useState("consolidated"); // consolidated | single
+  const [mode, setMode] = useState("consolidated");
   const [loading, setLoading] = useState(false);
 
   const handleFileChange = (picked) => {
@@ -48,44 +46,29 @@ export default function UploadPage({ onPreview, onCancel }) {
   };
 
   const handleSubmit = async () => {
-    if (!file) {
-      toast.error("Выберите файл");
-      return;
-    }
+    if (!file) { toast.error("Выберите файл"); return; }
     setLoading(true);
     try {
-      // formula='B' по умолчанию — второй вариант убрали из UI
       const { data } = await apiPreview(file, mode, "B");
       onPreview(data);
     } catch (e) {
-      const msg = e?.response?.data?.detail || "Не удалось прочитать Excel";
-      toast.error(msg);
+      toast.error(e?.response?.data?.detail || "Не удалось прочитать Excel");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ width: "100%", maxWidth: 720, paddingRight: 20, paddingBottom: 50 }}>
-      <button onClick={onCancel} style={backLinkStyle}>
-        <ArrowLeft size={16} /> К истории
-      </button>
+    <div style={{ width: "100%", maxWidth: 680, margin: "0 auto", paddingRight: 20, paddingBottom: 50 }}>
+      <InvestorReportStyles />
 
-      <StepIndicator current="upload" />
+      <PageTopBar onBack={onCancel} backLabel="К истории" current="upload" />
 
-      <h1 style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
-        <FileText size={26} color="#3b82f6" />
-        Загрузка отчёта
-      </h1>
-      <p style={{ marginTop: 0, marginBottom: 20, color: "#64748b", fontSize: 13 }}>
-        Excel фонда → превью → генерация .docx
-      </p>
-
-      {/* ── Единая карточка ── */}
-      <div className="card" style={{ padding: 20 }}>
-        {/* Режим (tabs) */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 12, flexWrap: "wrap" }}>
-          <div style={{ display: "inline-flex", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+      {/* Единая карточка со всем содержимым */}
+      <div className="card" style={{ padding: 24 }}>
+        {/* Header: mode tabs + template */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "inline-flex", background: "#f1f5f9", borderRadius: 8, padding: 3 }}>
             <TabBtn active={mode === "consolidated"} onClick={() => setMode("consolidated")}>
               Сводный файл
             </TabBtn>
@@ -96,24 +79,25 @@ export default function UploadPage({ onPreview, onCancel }) {
           <a href={templateUrl(mode)}
              style={{
                display: "inline-flex", alignItems: "center", gap: 6,
-               fontSize: 13, color: "#3b82f6", textDecoration: "none",
-               background: "#eff6ff", padding: "6px 12px", borderRadius: 6,
-               border: "1px solid #dbeafe",
-             }}>
-            <Download size={14} />
+               fontSize: 12, color: "#64748b", textDecoration: "none",
+               padding: "6px 10px", borderRadius: 6,
+             }}
+             onMouseEnter={(e) => e.currentTarget.style.color = "#3b82f6"}
+             onMouseLeave={(e) => e.currentTarget.style.color = "#64748b"}>
+            <Download size={13} />
             Скачать шаблон
           </a>
         </div>
 
-        {/* Drop zone */}
+        {/* Drop zone — большая, чистая */}
         <div
           style={{
             border: `2px dashed ${dragOver ? "#3b82f6" : file ? "#10b981" : "#cbd5e1"}`,
-            borderRadius: 10,
-            padding: "24px 20px",
+            borderRadius: 12,
+            padding: "48px 20px",
             textAlign: "center",
             cursor: "pointer",
-            backgroundColor: dragOver ? "#eff6ff" : file ? "#f0fdf4" : "#f8fafc",
+            backgroundColor: dragOver ? "#eff6ff" : file ? "#f0fdf4" : "#fafbfc",
             transition: "all 0.15s ease",
           }}
           onClick={() => fileInputRef.current?.click()}
@@ -121,37 +105,37 @@ export default function UploadPage({ onPreview, onCancel }) {
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ACCEPTED}
-            hidden
-            onChange={(e) => handleFileChange(e.target.files[0])}
-          />
+          <input ref={fileInputRef} type="file" accept={ACCEPTED} hidden
+            onChange={(e) => handleFileChange(e.target.files[0])} />
+
           {!file ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-              <div style={{ background: "#e0f2fe", padding: 10, borderRadius: "50%" }}>
-                <Upload size={22} color="#3b82f6" />
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+              <div style={{ background: "#eff6ff", padding: 14, borderRadius: "50%" }}>
+                <Upload size={26} color="#3b82f6" />
               </div>
               <div>
-                <span style={{ color: "#3b82f6", fontWeight: 600, fontSize: 14 }}>Выбрать файл</span>
-                <span style={{ fontSize: 13, color: "#94a3b8" }}> · или drag&drop</span>
+                <div style={{ fontSize: 15, color: "#1e293b", fontWeight: 600, marginBottom: 4 }}>
+                  Перетащите Excel сюда
+                </div>
+                <div style={{ fontSize: 13, color: "#64748b" }}>
+                  или <span style={{ color: "#3b82f6", fontWeight: 500 }}>выберите файл</span>
+                </div>
               </div>
-              <div style={{ fontSize: 11, color: "#94a3b8" }}>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
                 XLS · XLSX · до 20 МБ
               </div>
             </div>
           ) : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <FileSpreadsheet size={32} color="#10b981" />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14 }}>
+              <FileSpreadsheet size={36} color="#10b981" />
               <div style={{ textAlign: "left" }}>
                 <div style={{ fontWeight: 600, color: "#1e293b", fontSize: 14 }}>{file.name}</div>
-                <div style={{ fontSize: 11, color: "#64748b" }}>
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
                   {(file.size / 1024).toFixed(1)} KB · {file.name.split(".").pop().toUpperCase()}
                 </div>
               </div>
               <button type="button" onClick={clearFile}
-                style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginLeft: 8 }}>
                 <X size={14} color="#ef4444" />
               </button>
             </div>
@@ -159,9 +143,9 @@ export default function UploadPage({ onPreview, onCancel }) {
         </div>
 
         {/* Кнопки */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
           <button type="button" onClick={onCancel} className="btn"
-            style={{ background: "#e2e8f0", color: "#334155", padding: "8px 18px" }}>
+            style={{ background: "transparent", color: "#64748b", padding: "8px 18px", boxShadow: "none" }}>
             Отмена
           </button>
           <button
@@ -169,9 +153,9 @@ export default function UploadPage({ onPreview, onCancel }) {
             onClick={handleSubmit}
             disabled={!file || loading}
             className="btn"
-            style={{ padding: "8px 24px", opacity: !file || loading ? 0.6 : 1 }}
+            style={{ padding: "8px 26px", opacity: !file || loading ? 0.5 : 1 }}
           >
-            {loading ? "Читаем..." : "Превью →"}
+            {loading ? "Читаем..." : "Далее →"}
           </button>
         </div>
       </div>
@@ -185,29 +169,17 @@ const TabBtn = ({ active, onClick, children }) => (
     onClick={onClick}
     style={{
       padding: "8px 16px",
-      background: active ? "#3b82f6" : "#fff",
-      color: active ? "#fff" : "#64748b",
+      background: active ? "#fff" : "transparent",
+      color: active ? "#1e293b" : "#64748b",
       border: "none",
       fontWeight: 600,
       fontSize: 13,
       cursor: "pointer",
+      borderRadius: 6,
       transition: "all 0.15s ease",
+      boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
     }}
   >
     {children}
   </button>
 );
-
-const backLinkStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  background: "transparent",
-  border: "none",
-  color: "#3b82f6",
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: "pointer",
-  padding: "6px 0",
-  marginBottom: 8,
-};

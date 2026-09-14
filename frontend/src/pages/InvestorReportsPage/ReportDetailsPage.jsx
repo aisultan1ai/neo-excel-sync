@@ -1,19 +1,15 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import {
-  ArrowLeft,
-  FileText,
   Download,
   Archive,
   FileSpreadsheet,
   CheckCircle2,
-  Calendar,
-  User,
 } from "lucide-react";
 
 import { getUpload, downloadFileUrl, downloadZipUrl, downloadSourceUrl } from "./api";
 import { fmtUSD, fmtSignedUSD, incomeColor } from "./helpers";
-import { StepIndicator, SkeletonRow, InvestorReportStyles } from "./ui";
+import { PageTopBar, SkeletonRow, InvestorReportStyles } from "./ui";
 
 const fmtDate = (iso) => {
   if (!iso) return "—";
@@ -47,9 +43,9 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
 
   if (loading) {
     return (
-      <div style={{ width: "100%", paddingRight: 20 }}>
+      <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", paddingRight: 20, paddingBottom: 50 }}>
         <InvestorReportStyles />
-        <StepIndicator current="details" />
+        <PageTopBar onBack={onBack} backLabel="К истории" current="details" />
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <table className="styled-table" style={{ width: "100%" }}>
             <thead>
@@ -68,62 +64,52 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
   const meta = upload.meta || {};
 
   return (
-    <div style={{ width: "100%", paddingRight: 20, paddingBottom: 50 }}>
+    <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", paddingRight: 20, paddingBottom: 50 }}>
       <InvestorReportStyles />
-      <button onClick={onBack} style={backLinkStyle}>
-        <ArrowLeft size={16} /> К истории
-      </button>
 
-      <StepIndicator current="details" />
+      <PageTopBar onBack={onBack} backLabel="К истории" current="details" />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
-            <FileText size={28} color="#3b82f6" />
-            Отчёт · {meta.reporting_date || "—"}
-          </h1>
-          <div style={{ marginTop: 10, display: "flex", gap: 18, flexWrap: "wrap", fontSize: 13, color: "#64748b" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <Calendar size={14} /> Загружено: <strong style={{ color: "#334155" }}>{fmtDate(upload.uploaded_at)}</strong>
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <User size={14} /> Пользователь: <strong style={{ color: "#334155" }}>{upload.uploaded_by_username}</strong>
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              Режим: <strong style={{ color: "#334155" }}>{upload.mode === "single" ? "по инвестору" : "сводный"}</strong>
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              Формула: <strong style={{ color: "#334155" }}>Вариант {meta.formula || "B"}</strong>
-            </span>
+      {/* Компактный header: дата + метаинфа + действия — в одну карточку */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: "12px 16px", background: "#f8fafc", borderRadius: 10,
+        border: "1px solid #f1f5f9", marginBottom: 16, gap: 16, flexWrap: "wrap",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", flex: 1 }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#94a3b8", textTransform: "uppercase", fontWeight: 600, letterSpacing: 0.3 }}>Reporting Date</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#1e293b" }}>{meta.reporting_date || "—"}</div>
           </div>
+          <div style={{ borderLeft: "1px solid #e2e8f0", height: 30 }} />
+          <MetaCol label="Загружено" value={fmtDate(upload.uploaded_at)} />
+          <MetaCol label="Пользователь" value={upload.uploaded_by_username} />
+          <MetaCol label="Режим" value={upload.mode === "single" ? "по инвестору" : "сводный"} />
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <a href={downloadSourceUrl(upload.id)}
-             className="btn" style={{ background: "#e2e8f0", color: "#334155", display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
-            <FileSpreadsheet size={14} /> Исходный Excel
+          <a href={downloadSourceUrl(upload.id)} className="btn"
+             style={{ background: "transparent", color: "#64748b", padding: "6px 12px", boxShadow: "none", border: "1px solid #e2e8f0", display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", fontSize: 12 }}>
+            <FileSpreadsheet size={13} /> Excel
           </a>
           {files.length > 0 && (
-            <a href={downloadZipUrl(upload.id)}
-               className="btn" style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
-              <Archive size={14} /> Скачать все (ZIP)
+            <a href={downloadZipUrl(upload.id)} className="btn"
+               style={{ padding: "6px 14px", display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", fontSize: 12 }}>
+              <Archive size={13} /> ZIP · {files.length}
             </a>
           )}
         </div>
       </div>
 
-      {/* Success banner */}
-      <div className="card" style={{ background: "#f0fdf4", borderLeft: "4px solid #10b981", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10 }}>
-        <CheckCircle2 size={20} color="#10b981" />
-        <div>
-          <div style={{ fontWeight: 600, color: "#065f46" }}>
-            Готово! Сгенерировано {files.length} {files.length === 1 ? "отчёт" : "отчётов"}
-          </div>
-          {upload.commentary && (
-            <div style={{ fontSize: 12, color: "#047857", marginTop: 2 }}>
-              Комментарий управляющего сохранён
-            </div>
-          )}
-        </div>
+      {/* Success mini-banner */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "10px 16px", marginBottom: 16,
+        background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0",
+      }}>
+        <CheckCircle2 size={16} color="#10b981" />
+        <span style={{ fontSize: 13, color: "#065f46", fontWeight: 500 }}>
+          Сгенерировано {files.length} {files.length === 1 ? "отчёт" : "отчётов"}
+          {upload.commentary && <span style={{ color: "#047857", fontWeight: 400 }}> · commentary сохранён</span>}
+        </span>
       </div>
 
       {/* Files table */}
@@ -137,7 +123,7 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
                 <th style={{ textAlign: "right" }}>Вложено</th>
                 <th style={{ textAlign: "right" }}>Текущая ст-ть</th>
                 <th style={{ textAlign: "right" }}>Доход за месяц</th>
-                <th style={{ textAlign: "right", width: 160 }}>Скачать</th>
+                <th style={{ textAlign: "right", width: 130 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -147,7 +133,7 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
                   <tr key={f.id}>
                     <td style={{ fontWeight: 600, color: "#1e293b" }}>{f.investor_name}</td>
                     <td>
-                      <span style={{ fontFamily: "monospace", fontSize: 12, color: "#64748b" }}>
+                      <span style={{ fontFamily: "monospace", fontSize: 12, color: "#94a3b8" }}>
                         {d.filename || `report_${f.id}.docx`}
                       </span>
                     </td>
@@ -159,10 +145,8 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
                     <td style={{ textAlign: "right" }}>
                       <a href={downloadFileUrl(upload.id, f.id)}
                          className="btn"
-                         style={{ height: 32, padding: "0 14px", display: "inline-flex", alignItems: "center", gap: 6, background: "#10b981", textDecoration: "none" }}
-                         onMouseOver={(e) => (e.currentTarget.style.background = "#059669")}
-                         onMouseOut={(e) => (e.currentTarget.style.background = "#10b981")}>
-                        <Download size={14} />
+                         style={{ height: 30, padding: "0 12px", display: "inline-flex", alignItems: "center", gap: 5, background: "#10b981", textDecoration: "none", fontSize: 12 }}>
+                        <Download size={13} />
                         .docx
                       </a>
                     </td>
@@ -177,16 +161,9 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
   );
 }
 
-const backLinkStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  background: "transparent",
-  border: "none",
-  color: "#3b82f6",
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: "pointer",
-  padding: "6px 0",
-  marginBottom: 8,
-};
+const MetaCol = ({ label, value }) => (
+  <div>
+    <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", fontWeight: 600, letterSpacing: 0.3 }}>{label}</div>
+    <div style={{ fontSize: 13, color: "#334155", fontWeight: 500 }}>{value}</div>
+  </div>
+);

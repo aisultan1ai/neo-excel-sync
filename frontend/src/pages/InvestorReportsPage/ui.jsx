@@ -6,46 +6,83 @@ import { Check, X, AlertTriangle, Info } from "lucide-react";
 export const StepIndicator = ({ current }) => {
   // current: "upload" | "preview" | "details"
   const steps = [
-    { id: "upload",  label: "Загрузка"    },
-    { id: "preview", label: "Превью"      },
-    { id: "details", label: "Готовые отчёты" },
+    { id: "upload",  label: "Загрузка" },
+    { id: "preview", label: "Превью" },
+    { id: "details", label: "Отчёты" },
   ];
   const currentIdx = steps.findIndex((s) => s.id === current);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 12 }}>
-      {steps.map((step, i) => {
-        const done = i < currentIdx;
-        const active = i === currentIdx;
-        return (
-          <React.Fragment key={step.id}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{
+      display: "flex", justifyContent: "center",
+      marginBottom: 28, marginTop: 4,
+    }}>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 10, fontSize: 12 }}>
+        {steps.map((step, i) => {
+          const done = i < currentIdx;
+          const active = i === currentIdx;
+          return (
+            <React.Fragment key={step.id}>
               <div style={{
-                width: 22, height: 22, borderRadius: "50%",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: done ? "#10b981" : active ? "#3b82f6" : "#e2e8f0",
-                color: done || active ? "#fff" : "#94a3b8",
-                fontWeight: 700, fontSize: 11,
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "6px 12px", borderRadius: 999,
+                background: active ? "#eff6ff" : "transparent",
               }}>
-                {done ? <Check size={12} /> : i + 1}
+                <div style={{
+                  width: 20, height: 20, borderRadius: "50%",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  background: done ? "#10b981" : active ? "#3b82f6" : "#e2e8f0",
+                  color: done || active ? "#fff" : "#94a3b8",
+                  fontWeight: 700, fontSize: 11,
+                  transition: "all 0.2s ease",
+                }}>
+                  {done ? <Check size={11} strokeWidth={3} /> : i + 1}
+                </div>
+                <span style={{
+                  color: active ? "#1e40af" : done ? "#64748b" : "#94a3b8",
+                  fontWeight: active ? 600 : 500,
+                  letterSpacing: 0.1,
+                }}>{step.label}</span>
               </div>
-              <span style={{
-                color: active ? "#1e293b" : done ? "#64748b" : "#94a3b8",
-                fontWeight: active ? 600 : 500,
-              }}>{step.label}</span>
-            </div>
-            {i < steps.length - 1 && (
-              <div style={{
-                flex: "0 0 32px", height: 2,
-                background: i < currentIdx ? "#10b981" : "#e2e8f0",
-              }} />
-            )}
-          </React.Fragment>
-        );
-      })}
+              {i < steps.length - 1 && (
+                <div style={{
+                  width: 24, height: 2, borderRadius: 1,
+                  background: i < currentIdx ? "#10b981" : "#e2e8f0",
+                  transition: "background 0.3s ease",
+                }} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 };
+
+/* Wrapper для верхней панели: back-link слева, степпер по центру */
+export const PageTopBar = ({ onBack, backLabel = "Назад", current }) => (
+  <div style={{ position: "relative", minHeight: 32, marginBottom: 4 }}>
+    {onBack && (
+      <button onClick={onBack} style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        background: "transparent", border: "none", color: "#3b82f6",
+        fontSize: 13, fontWeight: 500, cursor: "pointer", padding: 0,
+      }}>
+        <ArrowLeftIcon /> {backLabel}
+      </button>
+    )}
+    <div style={{ position: "absolute", left: "50%", top: 0, transform: "translateX(-50%)" }}>
+      <StepIndicator current={current} />
+    </div>
+  </div>
+);
+
+const ArrowLeftIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12"></line>
+    <polyline points="12 19 5 12 12 5"></polyline>
+  </svg>
+);
 
 /* ── Confirm dialog (modal) ─────────────────────────────────── */
 
