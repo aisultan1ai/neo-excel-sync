@@ -643,9 +643,9 @@ def _replace_commentary(doc: Document, commentary: Optional[str],
                         growth_pct: Optional[float] = None):
     """Обновляет блок Manager's Commentary.
 
-    Первый параграф после заголовка «Manager's Commentary» — user-текст (или пустой,
-    если commentary=None). Во втором параграфе (если есть — обычно текст про 'positive
-    return of approximately X%') подменяем '%'-значение на актуальное growth_pct.
+    Если commentary содержит '\\n\\n' — split по двойному переносу, первая часть
+    идёт в первый параграф, вторая — во второй. Если только один параграф в user-тексте,
+    второй параграф шаблона обновляется только по growth_pct (подмена %-числа).
     """
     paragraphs = doc.paragraphs
     heading_idx = None
@@ -665,25 +665,52 @@ def _replace_commentary(doc: Document, commentary: Optional[str],
         if p.text.strip():
             body_indices.append(j)
 
-    if commentary is not None and body_indices:
-        first = paragraphs[body_indices[0]]
-        if first.runs:
-            first.runs[0].text = commentary
-            for r in first.runs[1:]:
+    user_parts = []
+    if commentary:
+        user_parts = [chunk.strip() for chunk in re.split(r'\n\s*\n', commentary) if chunk.strip()]
+
+    def _set_paragraph_text(p, text: str):
+        if p.runs:
+            p.runs[0].text = text
+            for r in p.runs[1:]:
                 r.text = ''
         else:
-            first.add_run(commentary)
+            p.add_run(text)
 
-    if growth_pct is not None:
+    if user_parts and body_indices:
+        _set_paragraph_text(paragraphs[body_indices[0]], user_parts[0])
+
+    if len(user_parts) > 1 and len(body_indices) > 1:
+        _set_paragraph_text(paragraphs[body_indices[1]], user_parts[1])
+    elif growth_pct is not None:
         pct_text = f'{growth_pct:.2f}'.replace('.', ',')
-        for j in body_indices[1:] if commentary is not None else body_indices:
+        target_indices = body_indices[1:] if user_parts else body_indices
+        for j in target_indices:
             p = paragraphs[j]
-            # Заменяем только само число+%, ведущие пробелы/знаки не трогаем
             new_text = re.sub(r'\d+([.,]\d+)?\s*%', f'{pct_text}%', p.text, count=1)
             if new_text != p.text and p.runs:
                 p.runs[0].text = new_text
                 for r in p.runs[1:]:
                     r.text = ''
+
+
+def _replace_fund_name(doc: Document, fund_letter: str):
+    """Заменяет 'Sub-Fund X' на 'Sub-Fund <fund_letter>' в заголовочном параграфе."""
+    if not fund_letter:
+        return
+    fund_letter = fund_letter.strip().upper()
+    for p in doc.paragraphs:
+        if 'sub-fund' not in p.text.lower():
+            continue
+        for r in p.runs:
+            if 'sub-fund' in r.text.lower():
+                r.text = re.sub(
+                    r'Sub-Fund\s+[A-Z]',
+                    f'Sub-Fund {fund_letter}',
+                    r.text,
+                    flags=re.IGNORECASE,
+                )
+        return
 
 
 def _replace_reporting_date(doc: Document, reporting_date: str):
@@ -732,12 +759,22 @@ def _replace_disclaimer_date(doc: Document, reporting_date: str):
 
 
 def generate_docx(template_path: str, report: FundReport, investor: InvestorPosition,
-                  output_path: str, commentary: Optional[str] = None):
-    """Генерирует один .docx для указанного инвестора на основе шаблона."""
+                  output_path: str, commentary: Optional[str] = None,
+                  fund_letter: Optional[str] = None,
+                  reporting_date_override: Optional[str] = None):
+    """Генерирует один .docx для указанного инвестора на основе шаблона.
+
+    fund_letter — A/B/C/G/H, подменит 'Sub-Fund G' в заголовке. Если None — оставит как в шаблоне.
+    reporting_date_override — переопределит отчётную дату в заголовке и дисклеймере.
+    """
     doc = Document(template_path)
     fund = report.fund
 
-    _replace_reporting_date(doc, report.reporting_date)
+    reporting_date = reporting_date_override or report.reporting_date
+
+    _replace_reporting_date(doc, reporting_date)
+    if fund_letter:
+        _replace_fund_name(doc, fund_letter)
 
     # ---- Таблица 0: Executive Summary ----
     exec_table = doc.tables[0]
@@ -782,7 +819,7 @@ def generate_docx(template_path: str, report: FundReport, investor: InvestorPosi
 
     _replace_commentary(doc, commentary, growth_pct=fund.monthly_change_pct)
 
-    _replace_disclaimer_date(doc, report.reporting_date)
+    _replace_disclaimer_date(doc, reporting_date)
 
     doc.save(output_path)
 

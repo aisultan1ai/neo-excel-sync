@@ -108,7 +108,7 @@ export default function InvestorReportsPage() {
             Отчёты инвесторов
           </h1>
           <p style={{ margin: "6px 0 0 0", color: "#64748b", fontSize: 14 }}>
-            Algo Alliance Umbrella Fund OEIC Limited · Sub-Fund G
+            Algo Alliance Umbrella Fund OEIC Limited
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>

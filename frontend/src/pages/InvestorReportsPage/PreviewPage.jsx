@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import {
   ArrowLeft,
@@ -10,19 +10,115 @@ import {
   Users as UsersIcon,
   AlertTriangle,
   Check,
+  Calendar,
 } from "lucide-react";
 
 import { generate as apiGenerate } from "./api";
 import { fmtUSD, fmtNum, fmtPct, fmtSignedUSD, incomeColor, prettyDate } from "./helpers";
 
-export default function PreviewPage({ data, onCancel, onGenerated }) {
-  const [commentary, setCommentary] = useState(
-    `During ${data.reporting_date.replace(/^\d+\s+/, "")}, the Fund continued to demonstrate ` +
-    `stable growth. Detailed asset composition is available upon request.`
+const SUB_FUND_OPTIONS = ["A", "B", "C", "G", "H"];
+
+const MONTHS_EN = ["January","February","March","April","May","June",
+                   "July","August","September","October","November","December"];
+
+// "31.08.2026" -> "31 August 2026"
+const ddmmyyyyToLong = (d) => {
+  if (!d) return "";
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(d);
+  if (!m) return d;
+  return `${m[1]} ${MONTHS_EN[parseInt(m[2], 10) - 1]} ${m[3]}`;
+};
+
+// "31.08.2026" -> "2026-08-31" (для <input type="date">)
+const ddmmyyyyToIso = (d) => {
+  if (!d) return "";
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(d);
+  if (!m) return "";
+  return `${m[3]}-${m[2]}-${m[1]}`;
+};
+
+// "2026-08-31" -> "31 August 2026"
+const isoToLong = (iso) => {
+  if (!iso) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  return `${m[3]} ${MONTHS_EN[parseInt(m[2], 10) - 1]} ${m[1]}`;
+};
+
+// Extract "August 2026" from long "31 August 2026"
+const monthYear = (longDate) => {
+  const parts = (longDate || "").split(" ");
+  if (parts.length < 3) return longDate || "";
+  return `${parts[1]} ${parts[2]}`;
+};
+
+// Format money in USD X.XX million
+const fmtMillion = (v) => `USD ${(Number(v || 0) / 1_000_000).toFixed(2)} million`;
+
+// "0.54" -> "0,54"
+const pctForCommentary = (v) => {
+  const n = Number(v || 0);
+  return n.toFixed(2).replace(".", ",");
+};
+
+const buildDefaultCommentary = ({ fund, longEndDate, longStartDate }) => {
+  const mY = monthYear(longEndDate);
+  const growth = pctForCommentary(fund.monthly_change_pct);
+  return (
+    `During ${mY}, the Fund continued to demonstrate positive performance, ` +
+    `with its asset base increasing during the reporting period. As of ${longEndDate}, ` +
+    `the Fund's total assets amounted to ${fmtMillion(fund.assets)}, while Net Asset Value (NAV) ` +
+    `reached ${fmtMillion(fund.nav)}.\n\n` +
+    `During the reporting period, the Fund generated a positive return of approximately ${growth}% ` +
+    `based on the change in Net Asset Value before taking into account the effect of the new ` +
+    `subscription received during the month.`
   );
+};
+
+export default function PreviewPage({ data, onCancel, onGenerated }) {
+  const { fund, investors, unrecognized_sheets = [], reporting_date, source_filename,
+          mode, formula, upload_token } = data;
+
+  // Дата отчёта в ISO (для <input type="date">) — по умолчанию из Excel
+  const [reportingDateIso, setReportingDateIso] = useState(
+    () => ddmmyyyyToIso(fund.nav_per_unit_end_date) || ""
+  );
+
+  const [fundLetter, setFundLetter] = useState("G");
+
+  // Длинная английская дата, derived от reportingDateIso
+  const longEndDate = useMemo(
+    () => isoToLong(reportingDateIso) || reporting_date,
+    [reportingDateIso, reporting_date]
+  );
+
+  const longStartDate = useMemo(
+    () => ddmmyyyyToLong(fund.nav_per_unit_start_date),
+    [fund.nav_per_unit_start_date]
+  );
+
+  // Default commentary — пересчитывается только когда меняется дата или fund
+  const defaultCommentary = useMemo(
+    () => buildDefaultCommentary({ fund, longEndDate, longStartDate }),
+    [fund, longEndDate, longStartDate]
+  );
+
+  const [commentary, setCommentary] = useState(defaultCommentary);
+  const [commentaryEdited, setCommentaryEdited] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { fund, investors, unrecognized_sheets = [], reporting_date, source_filename, mode, formula, upload_token } = data;
+  // Если пользователь не редактировал commentary — обновлять его при смене даты
+  const effectiveCommentary = commentaryEdited ? commentary : defaultCommentary;
+
+  const handleCommentaryChange = (e) => {
+    setCommentary(e.target.value);
+    setCommentaryEdited(true);
+  };
+
+  const handleResetCommentary = () => {
+    setCommentary(defaultCommentary);
+    setCommentaryEdited(false);
+  };
 
   const handleGenerate = async () => {
     if (!investors?.length) {
@@ -36,9 +132,11 @@ export default function PreviewPage({ data, onCancel, onGenerated }) {
         source_filename,
         mode,
         formula,
-        commentary: commentary?.trim() || null,
+        commentary: effectiveCommentary?.trim() || null,
+        fund_letter: fundLetter,
+        reporting_date_override: longEndDate,
         report: {
-          reporting_date,
+          reporting_date: longEndDate,
           unrecognized_sheets,
           fund,
           investors,
@@ -66,9 +164,56 @@ export default function PreviewPage({ data, onCancel, onGenerated }) {
         Превью отчёта
       </h1>
       <p style={{ marginTop: 0, marginBottom: 20, color: "#64748b", fontSize: 14 }}>
-        Отчётный период: <strong style={{ color: "#1e293b" }}>{reporting_date}</strong>
-        &nbsp;·&nbsp; Файл: <span style={{ color: "#94a3b8" }}>{source_filename}</span>
+        Файл: <span style={{ color: "#94a3b8" }}>{source_filename}</span>
       </p>
+
+      {/* ── Параметры отчёта ── */}
+      <div className="card" style={{ padding: 20 }}>
+        <h3 style={{ margin: "0 0 14px 0", fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+          <Calendar size={18} color="#3b82f6" />
+          Параметры отчёта
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div>
+            <label className="input-label">Sub-Fund</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              {SUB_FUND_OPTIONS.map((letter) => (
+                <button key={letter} type="button"
+                  onClick={() => setFundLetter(letter)}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    border: `2px solid ${fundLetter === letter ? "#3b82f6" : "#e2e8f0"}`,
+                    background: fundLetter === letter ? "#eff6ff" : "#fff",
+                    color: fundLetter === letter ? "#3b82f6" : "#64748b",
+                    fontWeight: 600,
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}>
+                  {letter}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+              Будет вставлено в docx: "Sub-Fund {fundLetter}"
+            </div>
+          </div>
+          <div>
+            <label className="input-label">Reporting Date</label>
+            <input
+              type="date"
+              value={reportingDateIso}
+              onChange={(e) => setReportingDateIso(e.target.value)}
+              className="text-input"
+              style={{ width: "100%" }}
+            />
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+              В docx: <strong style={{ color: "#334155" }}>{longEndDate}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* ── Показатели фонда ── */}
       <div className="card" style={{ padding: 20 }}>
@@ -116,7 +261,7 @@ export default function PreviewPage({ data, onCancel, onGenerated }) {
             </thead>
             <tbody>
               {investors.map((inv, i) => (
-                <tr key={i}>
+                <tr key={inv.name + "-" + i}>
                   <td>
                     <div style={{ fontWeight: 600, color: "#1e293b" }}>{inv.name}</div>
                   </td>
@@ -140,15 +285,26 @@ export default function PreviewPage({ data, onCancel, onGenerated }) {
 
       {/* ── Комментарий управляющего ── */}
       <div className="card" style={{ padding: 20 }}>
-        <h3 style={{ margin: "0 0 10px 0", fontSize: 15 }}>Manager's Commentary (общий для всех инвесторов)</h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 15 }}>Manager's Commentary <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 400 }}>(общий для всех инвесторов · разделяй параграфы пустой строкой)</span></h3>
+          {commentaryEdited && (
+            <button type="button" onClick={handleResetCommentary}
+              style={{ background: "transparent", border: "1px solid #e2e8f0", color: "#64748b", fontSize: 12, padding: "4px 10px", borderRadius: 6, cursor: "pointer" }}>
+              Восстановить дефолт
+            </button>
+          )}
+        </div>
         <textarea
-          value={commentary}
-          onChange={(e) => setCommentary(e.target.value)}
-          rows={4}
+          value={effectiveCommentary}
+          onChange={handleCommentaryChange}
+          rows={8}
           className="text-input"
-          style={{ width: "100%", resize: "vertical", fontFamily: "inherit", padding: 10 }}
+          style={{ width: "100%", resize: "vertical", fontFamily: "inherit", padding: 10, lineHeight: 1.5 }}
           placeholder="Введите текст комментария управляющего..."
         />
+        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+          Дефолтный текст автоматически подставляет месяц ({monthYear(longEndDate)}), NAV, активы и % роста из Excel.
+        </div>
       </div>
 
       {/* ── Предупреждения ── */}
@@ -183,8 +339,6 @@ export default function PreviewPage({ data, onCancel, onGenerated }) {
           disabled={loading || investors.length === 0}
           className="btn"
           style={{ height: 42, padding: "0 28px", background: "#10b981", display: "flex", alignItems: "center", gap: 8, opacity: loading ? 0.6 : 1 }}
-          onMouseOver={(e) => (e.currentTarget.style.background = "#059669")}
-          onMouseOut={(e) => (e.currentTarget.style.background = "#10b981")}
         >
           <Check size={16} />
           {loading ? "Генерация..." : "Сформировать отчёты"}

@@ -79,6 +79,8 @@ class GenerateRequest(BaseModel):
     mode: str = "consolidated"
     formula: str = "B"
     source_filename: str
+    fund_letter: Optional[str] = "G"                # A/B/C/G/H — подменит "Sub-Fund X" в docx
+    reporting_date_override: Optional[str] = None   # напр. "30 September 2026" — перекроет reporting_date из Excel
 
 
 # ─────────────────────────── Helpers ───────────────────────────
@@ -266,6 +268,8 @@ async def generate(
                 investor=investor,
                 output_path=str(docx_path),
                 commentary=req.commentary,
+                fund_letter=req.fund_letter,
+                reporting_date_override=req.reporting_date_override,
             )
             results.append((investor, filename, docx_path))
         return results
