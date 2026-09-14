@@ -26,7 +26,8 @@ export const fmtSignedUSD = (v, decimals = 2) => {
   const n = Number(v);
   const sign = n > 0 ? "+" : n < 0 ? "−" : "";
   const abs = Math.abs(n);
-  return `${sign}USD ${abs.toLocaleString("en-US", {
+  // Знак после USD, перед числом: "USD +1,182.30" / "USD −378,473.95"
+  return `USD ${sign}${abs.toLocaleString("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })}`;

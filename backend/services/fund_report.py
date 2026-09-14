@@ -601,9 +601,11 @@ def _ensure_income_rows(inv_table, report: FundReport, investor: InvestorPositio
         month_label = fund.nav_per_unit_end_date
 
     def format_income(value: float, pct: float) -> str:
-        if value < 0:
-            return f'−{_fmt_usd_ru(abs(value))}  ({_fmt_pct_ru(pct)})'
-        return f'+{_fmt_usd_ru(value)}  ({_fmt_pct_ru(pct)})'
+        """USD +1 182,30 или USD −378 473,95 — знак ПОСЛЕ 'USD ', перед числом."""
+        sign = '+' if value > 0 else ('−' if value < 0 else '')
+        formatted = _fmt_usd_ru(abs(value))  # "USD 1 182,30"
+        with_sign = formatted.replace('USD ', f'USD {sign}', 1) if sign else formatted
+        return f'{with_sign}  ({_fmt_pct_ru(pct)})'
 
     monthly_str = format_income(investor.monthly_income, investor.monthly_income_pct)
     total_str = format_income(investor.total_income, investor.total_income_pct)
@@ -692,6 +694,49 @@ def _replace_commentary(doc: Document, commentary: Optional[str],
                 p.runs[0].text = new_text
                 for r in p.runs[1:]:
                     r.text = ''
+
+
+def _strip_trailing_empty_paragraphs(doc: Document):
+    """Убирает trailing пустые параграфы (в т.ч. со стилями заголовков), которые
+    добавляют лишний вертикальный пробел и могут выкинуть контент на 2-ю страницу.
+    Word требует хотя бы один <w:p> перед <w:sectPr>, поэтому один минимальный оставляем."""
+    W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+    body = doc.element.body
+    children = list(body)
+
+    # найти sectPr
+    sect_idx = None
+    for i, child in enumerate(children):
+        if child.tag == W + 'sectPr':
+            sect_idx = i
+            break
+    if sect_idx is None:
+        return
+
+    # собрать trailing пустые параграфы (перед sectPr)
+    trailing_empty = []
+    for i in range(sect_idx - 1, -1, -1):
+        child = children[i]
+        if child.tag != W + 'p':
+            break
+        text = ''.join(t.text or '' for t in child.iter(W + 't')).strip()
+        if text:
+            break
+        trailing_empty.append(child)
+
+    if not trailing_empty:
+        return
+
+    # удалить все кроме одного — Word требует финальный параграф перед sectPr
+    for p in trailing_empty[1:]:
+        body.remove(p)
+
+    # у последнего оставшегося — снять style (например heading2), чтобы не добавлял отступ
+    keeper = trailing_empty[0]
+    pPr = keeper.find(W + 'pPr')
+    if pPr is not None:
+        for pStyle in pPr.findall(W + 'pStyle'):
+            pPr.remove(pStyle)
 
 
 def _replace_fund_name(doc: Document, fund_letter: str):
@@ -820,6 +865,8 @@ def generate_docx(template_path: str, report: FundReport, investor: InvestorPosi
     _replace_commentary(doc, commentary, growth_pct=fund.monthly_change_pct)
 
     _replace_disclaimer_date(doc, reporting_date)
+
+    _strip_trailing_empty_paragraphs(doc)
 
     doc.save(output_path)
 
@@ -960,31 +1007,22 @@ def build_period_sheet(ws, investor_names: list[str],
 def generate_template_xlsx(mode: str = 'consolidated') -> bytes:
     """Создаёт пустой Excel-шаблон, совместимый с парсером.
 
-    mode='consolidated' — сводный файл: лист «за август», лист «Активы»,
-    несколько листов «В разбивке инвестор ФИО».
-    mode='single' — один инвестор: один лист «В разбивке инвестор Пример».
+    Оба режима содержат только листы «В разбивке инвестор ФИО» —
+    без вспомогательных листов «за август» и «Активы».
+    mode='consolidated' — 3 листа-примера, пользователь может добавить/удалить.
+    mode='single' — 1 лист для одного инвестора.
     """
     from openpyxl import Workbook
 
     wb = Workbook()
-    # Убираем дефолтный лист
     wb.remove(wb.active)
 
     if mode == 'single':
         ws = wb.create_sheet('В разбивке инвестор Пример')
         build_investor_sheet(ws, 'Ivan Ivanov')
     else:
-        # Сводная таблица за месяц (даты подписки)
-        period_sheet = wb.create_sheet('за август')
-        # Имена короткие, чтобы `В разбивке инвестор <name>` укладывалось в 31 символ
+        # Имена короткие — чтобы `В разбивке инвестор <name>` умещалось в 31 символ
         example_names = ['Ivan Ivanov', 'Petr Petrov', 'Anna Popova']
-        build_period_sheet(period_sheet, example_names)
-
-        # Пустой лист «Активы» (нераспознаётся парсером — просто маркер)
-        assets_sheet = wb.create_sheet('Активы')
-        assets_sheet['A1'] = 'Состав активов фонда (для будущей версии)'
-
-        # Индивидуальные листы инвесторов
         for name in example_names:
             ws = wb.create_sheet(f'В разбивке инвестор {name}')
             build_investor_sheet(ws, name)

@@ -13,6 +13,7 @@ import {
 
 import { getUpload, downloadFileUrl, downloadZipUrl, downloadSourceUrl } from "./api";
 import { fmtUSD, fmtSignedUSD, incomeColor } from "./helpers";
+import { StepIndicator, SkeletonRow, InvestorReportStyles } from "./ui";
 
 const fmtDate = (iso) => {
   if (!iso) return "—";
@@ -46,8 +47,19 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
 
   if (loading) {
     return (
-      <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>
-        Загрузка...
+      <div style={{ width: "100%", paddingRight: 20 }}>
+        <InvestorReportStyles />
+        <StepIndicator current="details" />
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <table className="styled-table" style={{ width: "100%" }}>
+            <thead>
+              <tr><th>Инвестор</th><th>Файл</th><th>Ст-ть</th><th>Доход</th><th></th></tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cols={5} />)}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
@@ -57,9 +69,12 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
 
   return (
     <div style={{ width: "100%", paddingRight: 20, paddingBottom: 50 }}>
+      <InvestorReportStyles />
       <button onClick={onBack} style={backLinkStyle}>
         <ArrowLeft size={16} /> К истории
       </button>
+
+      <StepIndicator current="details" />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 20 }}>
         <div>
