@@ -314,6 +314,31 @@ async def list_reports(current_user: str = Depends(get_current_user)):
     return rows
 
 
+@router.get("/template")
+async def download_template(mode: str = "consolidated",
+                            current_user: str = Depends(get_current_user)):
+    """Скачать пустой Excel-шаблон для заполнения бухгалтерией.
+    mode: 'consolidated' (сводный на всех) | 'single' (один инвестор).
+    Должен быть объявлен ДО `/{upload_id}` — иначе FastAPI попытается
+    распарсить 'template' как int upload_id и вернёт 422."""
+    if mode not in ("consolidated", "single"):
+        raise HTTPException(400, "mode должен быть 'consolidated' или 'single'")
+
+    try:
+        content = await run_in_threadpool(fr.generate_template_xlsx, mode)
+    except Exception as e:
+        log.error("template gen error: %s", e, exc_info=True)
+        raise HTTPException(500, "Не удалось сгенерировать шаблон")
+
+    fname = ("investor_report_template_single.xlsx" if mode == "single"
+             else "investor_report_template_consolidated.xlsx")
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @router.get("/{upload_id}")
 async def get_report_details(upload_id: int, current_user: str = Depends(get_current_user)):
     upload = ir_db.get_upload(upload_id)
@@ -365,29 +390,6 @@ async def download_zip(upload_id: int, current_user: str = Depends(get_current_u
         buf,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="investor_reports_{date_slug}.zip"'},
-    )
-
-
-@router.get("/template")
-async def download_template(mode: str = "consolidated",
-                            current_user: str = Depends(get_current_user)):
-    """Скачать пустой Excel-шаблон для заполнения бухгалтерией.
-    mode: 'consolidated' (сводный на всех) | 'single' (один инвестор)."""
-    if mode not in ("consolidated", "single"):
-        raise HTTPException(400, "mode должен быть 'consolidated' или 'single'")
-
-    try:
-        content = await run_in_threadpool(fr.generate_template_xlsx, mode)
-    except Exception as e:
-        log.error("template gen error: %s", e, exc_info=True)
-        raise HTTPException(500, "Не удалось сгенерировать шаблон")
-
-    fname = ("investor_report_template_single.xlsx" if mode == "single"
-             else "investor_report_template_consolidated.xlsx")
-    return StreamingResponse(
-        io.BytesIO(content),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 
 
