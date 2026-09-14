@@ -946,15 +946,16 @@ def build_investor_sheet(ws, investor_name: str, nav_start: float = 53.5240,
     # Пустая строка-разделитель
     header_row = len(fund_rows) + 3  # обычно 9
 
-    # Таблица позиции инвестора
+    # Таблица позиции инвестора — 8 колонок как в исходном формате фонда
     headers = [
-        'Инвестор',
-        'Первоначальная сумма',
-        f'Стоимость 1 акции при подписке',
-        'Количество акций',
-        f'Стоимость 1 акции за {end_date}',
-        'Текущая стоимость активов',
-        'Доход/убыток',
+        'Инвестор',                                                      # A
+        'Первоначальная сумма взноса в оплату юнитов Фонда',              # B
+        'Стоимость 1 акции в момент подписки',                            # C
+        'Количество акций',                                               # D
+        f'Стоимость 1 акции за {end_date}',                               # E
+        f'Текущая стоимость активов инвестора за {end_date}',              # F
+        'Доход/убыток инвестора за текущий месяц',                        # G
+        'Доход/убыток инвестора с момента инвестиции',                    # H
     ]
     for j, h in enumerate(headers, start=1):
         c = ws.cell(row=header_row, column=j, value=h)
@@ -966,26 +967,27 @@ def build_investor_sheet(ws, investor_name: str, nav_start: float = 53.5240,
     # Одна строка-плейсхолдер с формулами
     data_row = header_row + 1
     ws.cell(row=data_row, column=1, value=investor_name)
-    ws.cell(row=data_row, column=2, value=199985.00)      # сумма
+    ws.cell(row=data_row, column=2, value=199985.00)      # сумма подписки
     ws.cell(row=data_row, column=3, value=49.24)          # цена входа
     ws.cell(row=data_row, column=4, value=4061.36)        # паи
     ws.cell(row=data_row, column=5, value=nav_end)        # NAV end
-    ws.cell(row=data_row, column=6, value=f'=D{data_row}*E{data_row}')
-    ws.cell(row=data_row, column=7, value=f'=F{data_row}-B{data_row}')
+    ws.cell(row=data_row, column=6, value=f'=D{data_row}*E{data_row}')   # текущая ст-ть
+    ws.cell(row=data_row, column=7, value=f'=F{data_row}-D{data_row}*C{data_row}')  # доход за месяц (по Variant B — прибл.)
+    ws.cell(row=data_row, column=8, value=f'=F{data_row}-B{data_row}')    # доход с момента инвест.
 
-    # Итоговая строка (можно оставить пустой — парсер её игнорирует)
+    # Итоговая строка (парсер её игнорирует по правилу empty-row)
     total_row = data_row + 1
     ws.cell(row=total_row, column=1, value='Итого').font = bold
-    for j in (2, 4, 6, 7):
+    for j in (2, 4, 6, 7, 8):
         ws.cell(row=total_row, column=j,
                 value=f'=SUM({chr(64 + j)}{data_row}:{chr(64 + j)}{data_row})').font = bold
     for row in ws.iter_rows(min_row=header_row, max_row=total_row,
-                            min_col=1, max_col=7):
+                            min_col=1, max_col=8):
         for cell in row:
             cell.border = border
 
     # Ширины колонок
-    widths = {1: 30, 2: 24, 3: 32, 4: 18, 5: 30, 6: 26, 7: 18}
+    widths = {1: 26, 2: 34, 3: 30, 4: 16, 5: 26, 6: 30, 7: 30, 8: 32}
     for col_idx, w in widths.items():
         ws.column_dimensions[chr(64 + col_idx)].width = w
 
