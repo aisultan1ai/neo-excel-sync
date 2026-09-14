@@ -31,6 +31,9 @@ __pycache__/
 *.pyc
 
 data/
+!backend/data/
+backend/data/*
+!backend/data/investor_report_template.docx
 temp_uploads/
 
 *.db
