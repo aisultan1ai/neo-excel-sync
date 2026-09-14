@@ -114,7 +114,7 @@ export default function PreviewPage({ data, onCancel, onGenerated }) {
   };
 
   return (
-    <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", paddingRight: 20, paddingBottom: 100 }}>
+    <div style={{ width: "100%", paddingRight: 20, paddingBottom: 100 }}>
       <InvestorReportStyles />
 
       <PageTopBar onBack={onCancel} backLabel="Назад" current="preview" />

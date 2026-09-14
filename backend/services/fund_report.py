@@ -696,6 +696,39 @@ def _replace_commentary(doc: Document, commentary: Optional[str],
                     r.text = ''
 
 
+def _collapse_empty_between_commentary(doc: Document):
+    """Убирает пустой параграф-разделитель между двумя параграфами commentary.
+    В шаблоне между 'During {month}...' и 'During the reporting period...' есть пустой <w:p>
+    который добавляет вертикальный пробел ~ 1 строку — и может выкинуть Disclaimer на 2-ю страницу."""
+    W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+    paragraphs = doc.paragraphs
+
+    heading_idx = None
+    for i, p in enumerate(paragraphs):
+        if 'commentary' in p.text.lower() and not p.text.strip().lower().startswith('disclaimer'):
+            heading_idx = i
+            break
+    if heading_idx is None:
+        return
+
+    # Находим до Disclaimer — empty paragraphs между двумя commentary body'ями
+    to_remove = []
+    seen_first_body = False
+    for j in range(heading_idx + 1, len(paragraphs)):
+        p = paragraphs[j]
+        text = p.text.strip()
+        if 'disclaimer' in text.lower():
+            break
+        if not text:
+            if seen_first_body:
+                to_remove.append(p)
+        else:
+            seen_first_body = True
+
+    for p in to_remove:
+        p._element.getparent().remove(p._element)
+
+
 def _strip_trailing_empty_paragraphs(doc: Document):
     """Убирает trailing пустые параграфы (в т.ч. со стилями заголовков), которые
     добавляют лишний вертикальный пробел и могут выкинуть контент на 2-ю страницу.
@@ -866,6 +899,7 @@ def generate_docx(template_path: str, report: FundReport, investor: InvestorPosi
 
     _replace_disclaimer_date(doc, reporting_date)
 
+    _collapse_empty_between_commentary(doc)
     _strip_trailing_empty_paragraphs(doc)
 
     doc.save(output_path)

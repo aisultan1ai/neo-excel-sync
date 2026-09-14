@@ -59,7 +59,7 @@ export default function UploadPage({ onPreview, onCancel }) {
   };
 
   return (
-    <div style={{ width: "100%", maxWidth: 680, margin: "0 auto", paddingRight: 20, paddingBottom: 50 }}>
+    <div style={{ width: "100%", paddingRight: 20, paddingBottom: 50 }}>
       <InvestorReportStyles />
 
       <PageTopBar onBack={onCancel} backLabel="К истории" current="upload" />

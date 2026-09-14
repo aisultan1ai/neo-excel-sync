@@ -43,7 +43,7 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
 
   if (loading) {
     return (
-      <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", paddingRight: 20, paddingBottom: 50 }}>
+      <div style={{ width: "100%", paddingRight: 20, paddingBottom: 50 }}>
         <InvestorReportStyles />
         <PageTopBar onBack={onBack} backLabel="К истории" current="details" />
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -64,7 +64,7 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
   const meta = upload.meta || {};
 
   return (
-    <div style={{ width: "100%", maxWidth: 1180, margin: "0 auto", paddingRight: 20, paddingBottom: 50 }}>
+    <div style={{ width: "100%", paddingRight: 20, paddingBottom: 50 }}>
       <InvestorReportStyles />
 
       <PageTopBar onBack={onBack} backLabel="К истории" current="details" />
