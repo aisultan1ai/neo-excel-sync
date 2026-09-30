@@ -119,43 +119,10 @@ def init_database():
             """)
             safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_problems_created_at ON problems(created_at DESC)")
 
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS crypto_accounts (
-                    id SERIAL PRIMARY KEY,
-                    provider TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    asset TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_crypto_accounts_created_at ON crypto_accounts(created_at DESC)")
-
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS crypto_transfers (
-                    id SERIAL PRIMARY KEY,
-                    date DATE NOT NULL,
-                    type TEXT NOT NULL CHECK (type IN ('transfer','deposit','withdraw')),
-                    from_account_id INTEGER REFERENCES crypto_accounts(id) ON DELETE SET NULL,
-                    to_account_id   INTEGER REFERENCES crypto_accounts(id) ON DELETE SET NULL,
-                    amount NUMERIC NOT NULL,
-                    asset TEXT NOT NULL,
-                    comment TEXT,
-                    label TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_crypto_transfers_date ON crypto_transfers(date DESC)")
-
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS crypto_schemes (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    nodes JSONB NOT NULL,
-                    edges JSONB NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            safe_ddl(cur, "CREATE INDEX IF NOT EXISTS idx_crypto_schemes_created_at ON crypto_schemes(created_at DESC)")
+            # Раздел «Крипто счета» удалён — чистим его таблицы
+            cur.execute("DROP TABLE IF EXISTS crypto_transfers")
+            cur.execute("DROP TABLE IF EXISTS crypto_schemes")
+            cur.execute("DROP TABLE IF EXISTS crypto_accounts")
 
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS podft_snapshots (
@@ -347,6 +314,28 @@ def init_bh_tables():
         conn.close()
 
 
+def init_positions_tables():
+    conn = get_db_connection()
+    if not conn:
+        return
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS positions_accounts (
+                    id SERIAL PRIMARY KEY,
+                    account_id TEXT NOT NULL UNIQUE,
+                    name TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+        log.info("Positions tables initialized.")
+    except Exception as e:
+        log.error("init_positions_tables error: %s", e, exc_info=True)
+    finally:
+        conn.close()
+
+
 def init_investor_reports_tables():
     conn = get_db_connection()
     if not conn:
@@ -394,4 +383,5 @@ def init_all():
     init_ff_tables()
     init_cashout_tables()
     init_bh_tables()
+    init_positions_tables()
     init_investor_reports_tables()

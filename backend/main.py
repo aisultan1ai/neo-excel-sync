@@ -26,7 +26,7 @@ from routers import (
     splits,
     instruments,
     tasks,
-    crypto,
+    positions,
     unity_exchange,
     funding_fee,
     cashout,
@@ -71,7 +71,7 @@ app.include_router(sverka.router)
 app.include_router(splits.router)
 app.include_router(instruments.router)
 app.include_router(tasks.router)
-app.include_router(crypto.router)
+app.include_router(positions.router)
 app.include_router(unity_exchange.router)
 app.include_router(funding_fee.router)
 app.include_router(cashout.router)

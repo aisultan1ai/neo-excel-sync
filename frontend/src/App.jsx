@@ -22,7 +22,7 @@ import {
   User,
   LayoutDashboard,
   Binary,
-  Wallet,
+  Scale,
   TrendingUp,
   ClipboardList,
   BarChart3,
@@ -42,7 +42,7 @@ import LoginPage from "./pages/LoginPage";
 import DepartmentsPage from "./pages/DepartmentsPage";
 import ProfilePage from "./pages/ProfilePage";
 import InstrumentsPage from "./pages/InstrumentsPage";
-import AccountsPage from "./pages/AccountsPage";
+import PositionsPage from "./pages/PositionsPage";
 import UnityExchangePage from "./pages/UnityExchangePage";
 import FundingFeePage from "./pages/FundingFeePage";
 import BalanceHistoryPage from "./pages/BalanceHistoryPage";
@@ -97,7 +97,7 @@ const AppLayout = ({ isAdmin }) => {
           <NavButton to="/departments" icon={Users} label="Департаменты" />
           <NavButton to="/instruments" icon={Binary} label="Инструменты" />
           <NavButton to="/unity-exchange" icon={FileDiff} label="Unity ↔ Биржа" />
-          <NavButton to="/crypto" icon={Wallet} label="Крипто-счета" />
+          <NavButton to="/positions" icon={Scale} label="Сверка позиций" />
           <NavButton to="/funding-fee" icon={TrendingUp} label="Funding Fee" />
           <NavButton to="/balances" icon={BarChart3} label="Остатки" />
           <NavButton to="/convert-template" icon={ArrowRightLeft} label="Конверт Шаблон" />
@@ -200,7 +200,7 @@ function App() {
             <Route path="/departments" element={<DepartmentsPage />} />
             <Route path="/instruments" element={<InstrumentsPage />} />
             <Route path="/unity-exchange" element={<UnityExchangePage />} />
-            <Route path="/crypto" element={<AccountsPage />} />
+            <Route path="/positions" element={<PositionsPage />} />
             <Route path="/funding-fee" element={<FundingFeePage />} />
             <Route path="/balances" element={<BalanceHistoryPage />} />
             <Route path="/convert-template" element={<ConvertTemplatePage />} />

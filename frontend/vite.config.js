@@ -9,7 +9,6 @@ export default defineConfig({
         manualChunks: {
           "vendor-react":  ["react", "react-dom", "react-router-dom"],
           "vendor-grid":   ["ag-grid-community", "ag-grid-react"],
-          "vendor-flow":   ["reactflow"],
           "vendor-xlsx":   ["xlsx"],
           "vendor-ui":     ["lucide-react", "react-toastify"],
         },
