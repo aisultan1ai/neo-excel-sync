@@ -20,7 +20,6 @@ from routers import (
     auth,
     users,
     departments,
-    clients,
     settings,
     sverka,
     splits,
@@ -66,7 +65,6 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(departments.router)
-app.include_router(clients.router)
 app.include_router(settings.router)
 app.include_router(sverka.router)
 app.include_router(splits.router)

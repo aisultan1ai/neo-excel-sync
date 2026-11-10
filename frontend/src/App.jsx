@@ -16,7 +16,6 @@ import {
 import {
   FileDiff,
   Settings,
-  FileSpreadsheet,
   Layers,
   Users,
   User,
@@ -38,7 +37,6 @@ import DashboardPage from "./pages/DashboardPage";
 import SverkaPage from "./pages/SverkaPage";
 import SplitsPage from "./pages/SplitsPage";
 import SettingsPage from "./pages/SettingsPage";
-import ReportsPage from "./pages/ReportsPage";
 import LoginPage from "./pages/LoginPage";
 import DepartmentsPage from "./pages/DepartmentsPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -95,7 +93,6 @@ const AppLayout = ({ isAdmin }) => {
           <NavButton to="/" icon={LayoutDashboard} label="Главная" />
           <NavButton to="/sverka" icon={FileDiff} label="Сверка" />
           <NavButton to="/splits" icon={Layers} label="Сплиты" />
-          <NavButton to="/reports" icon={FileSpreadsheet} label="Отчеты" />
           <NavButton to="/departments" icon={Users} label="Департаменты" />
           <NavButton to="/instruments" icon={Binary} label="Инструменты" />
           <NavButton to="/unity-exchange" icon={FileDiff} label="Unity ↔ Биржа" />
@@ -199,7 +196,6 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/sverka" element={<SverkaPage />} />
             <Route path="/splits" element={<SplitsPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
             <Route path="/departments" element={<DepartmentsPage />} />
             <Route path="/instruments" element={<InstrumentsPage />} />
             <Route path="/unity-exchange" element={<UnityExchangePage />} />
