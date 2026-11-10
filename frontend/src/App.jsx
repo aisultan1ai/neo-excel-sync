@@ -81,7 +81,7 @@ const ProtectedRoute = ({ isAuthenticated }) => {
 };
 
 
-const AppLayout = ({ isAdmin }) => {
+const AppLayout = ({ isAdmin, canIncome }) => {
   return (
     <div className="app-container">
       <aside className="sidebar">
@@ -101,7 +101,7 @@ const AppLayout = ({ isAdmin }) => {
           <NavButton to="/balances" icon={BarChart3} label="Остатки" />
           <NavButton to="/convert-template" icon={ArrowRightLeft} label="Конверт Шаблон" />
           <NavButton to="/investor-reports" icon={FileText} label="Отчёты инвесторов" />
-          <NavButton to="/income" icon={Coins} label="Доходы" />
+          {canIncome && <NavButton to="/income" icon={Coins} label="Доходы" />}
           {isAdmin && <NavButton to="/backlog" icon={ClipboardList} label="BackLog" />}
 
           <div className="spacer" style={{ flex: 1 }} />
@@ -151,6 +151,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAdmin, setIsAdmin]             = useState(false);
   const [userDept, setUserDept]           = useState("");
+  const [canIncome, setCanIncome]         = useState(false);
 
   const checkAuth = () =>
     axios.get("/api/v1/profile", { withCredentials: true })
@@ -158,11 +159,13 @@ function App() {
         setIsAuthenticated(true);
         setIsAdmin(data?.is_admin === true);
         setUserDept(data?.department || "");
+        setCanIncome(data?.can_income === true);
       })
       .catch(() => {
         setIsAuthenticated(false);
         setIsAdmin(false);
         setUserDept("");
+        setCanIncome(false);
       });
 
   useEffect(() => {
@@ -175,6 +178,7 @@ function App() {
         setIsAuthenticated(false);
         setIsAdmin(false);
         setUserDept("");
+        setCanIncome(false);
       });
   };
 
@@ -192,7 +196,7 @@ function App() {
 
         {/* protected */}
         <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
-          <Route element={<AppLayout isAdmin={isAdmin} userDept={userDept} />}>
+          <Route element={<AppLayout isAdmin={isAdmin} canIncome={canIncome} userDept={userDept} />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/sverka" element={<SverkaPage />} />
             <Route path="/splits" element={<SplitsPage />} />
@@ -204,7 +208,7 @@ function App() {
             <Route path="/balances" element={<BalanceHistoryPage />} />
             <Route path="/convert-template" element={<ConvertTemplatePage />} />
             <Route path="/investor-reports" element={<InvestorReportsPage />} />
-            <Route path="/income" element={<IncomePage />} />
+            {canIncome && <Route path="/income" element={<IncomePage />} />}
             <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
             <Route path="/settings" element={<SettingsPage />} />
             {isAdmin && <Route path="/backlog" element={<BackLogPage />} />}

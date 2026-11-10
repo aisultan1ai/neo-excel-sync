@@ -20,3 +20,13 @@ TEMP_DIR = str(_BACKEND_DIR / "temp_uploads")
 
 CACHE_TTL_MINUTES = int(os.getenv("CACHE_TTL_MINUTES", "30"))
 CACHE_MAX_ITEMS = int(os.getenv("CACHE_MAX_ITEMS", "15"))
+
+# Раздел «Доходы»: доступ только этим логинам (через запятую). Пусто — закрыт для всех,
+# в том числе для администраторов.
+INCOME_USERS = frozenset(
+    u.strip() for u in os.getenv("INCOME_USERS", "").split(",") if u.strip()
+)
+
+
+def can_access_income(username: str | None) -> bool:
+    return bool(username) and username in INCOME_USERS

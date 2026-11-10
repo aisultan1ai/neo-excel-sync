@@ -51,6 +51,7 @@ services:
       INIT_ADMIN_PASSWORD: ${INIT_ADMIN_PASSWORD}
       INIT_ADMIN_DEPARTMENT: ${INIT_ADMIN_DEPARTMENT}
       INIT_ADMIN_IS_ADMIN: ${INIT_ADMIN_IS_ADMIN}
+      INCOME_USERS: ${INCOME_USERS:-}
       FERNET_KEY: ${FERNET_KEY}
     volumes:
       - ./backend/data:/app/data

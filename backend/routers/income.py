@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from core.config import can_access_income
 from core.deps import get_current_user
 from db import income as income_db
 from db import users as users_db
@@ -18,16 +19,13 @@ from services.income.rules import DEFAULT_SETTINGS, default_rate_mode, merge_set
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/income")
 
-ALLOWED_DEPARTMENTS = {"Back Office", "Бухгалтерия"}
 MAX_PERIOD_DAYS = 366
 
 
 def require_income_access(current_user: str = Depends(get_current_user)) -> str:
-    user = users_db.get_user_by_username(current_user)
-    if not user:
-        raise HTTPException(401, "Пользователь не найден")
-    if not user.is_admin and user.department not in ALLOWED_DEPARTMENTS:
-        raise HTTPException(403, "Раздел «Доходы» доступен Back Office и Бухгалтерии")
+    """Только логины из INCOME_USERS (.env). Права администратора доступа не дают."""
+    if not can_access_income(current_user) or not users_db.get_user_by_username(current_user):
+        raise HTTPException(403, "Раздел «Доходы» вам недоступен")
     return current_user
 
 

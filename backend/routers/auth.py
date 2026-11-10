@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 
-from core.config import ACCESS_TOKEN_EXPIRE_MINUTES, COOKIE_SECURE
+from core.config import ACCESS_TOKEN_EXPIRE_MINUTES, COOKIE_SECURE, can_access_income
 from core.database import get_db_connection
 from core.deps import get_current_user
 from core.limiter import limiter
@@ -62,6 +62,7 @@ async def get_profile_info(current_user: str = Depends(get_current_user)):
         "username": current_user,
         "department": user.department,
         "is_admin": user.is_admin,
+        "can_income": can_access_income(current_user),
         "stats": stats,
     }
 
