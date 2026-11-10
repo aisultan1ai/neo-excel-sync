@@ -9,7 +9,6 @@ const LISTS = [
   ["conversion_prefixes", "Конвертация: префикс тикера/кода", "Например CASH. (CASH.USDRUB)"],
   ["crypto_categories", "Крипта: категории инструмента", "Например CR"],
   ["crypto_prefixes", "Крипта: префикс тикера/кода", "Например CR. — без точки CR поймает и акции вроде CRM"],
-  ["trade_types", "Типы сделок для загрузки", "tradeType Unity: DIRECT, CONVERSION…"],
   ["transaction_types", "Типы транзакций для загрузки", "FUNDING_FEE — доход; TRADE_COMMISSION — для сверки, можно убрать"],
 ];
 
@@ -67,7 +66,8 @@ export default function SettingsTab() {
       <div style={{ ...T.small, marginBottom: 14, lineHeight: 1.6 }}>
         Как считается доход: <b>комиссия</b> = комиссия клиента − комиссия парной сделки провайдера; <b>конвертация</b> = разница курсов клиента
         и провайдера × объём; <b>mark-up</b> = markupAmount сделки; <b>крипта</b> = чистая комиссия + mark-up по крипто-инструментам;
-        <b> funding fee</b> с клиентских счетов — в комиссионный доход. Списки — через запятую.
+        <b> funding fee</b> с клиентских счетов — в комиссионный доход. Загружаются только сделки типа <b>DIRECT</b>.
+        Списки — через запятую.
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
         {LISTS.map(([k, l, h]) => field(k, l, h))}

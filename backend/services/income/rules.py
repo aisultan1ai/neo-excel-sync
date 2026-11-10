@@ -11,6 +11,10 @@ CATEGORIES = {
 
 UNKNOWN_PROVIDER = "Не определён"
 
+# Грузим только реальные сделки (tradeType = DIRECT). Сервисные проводки Unity
+# (ролловеры, комиссии-сделки, сплиты, экспирации и т. п.) в доход не входят.
+TRADE_TYPES = ["DIRECT"]
+
 DEFAULT_SETTINGS: dict = {
     # Конвертации: категория инструмента в Unity и/или префикс тикера/кода
     "conversion_categories": ["CASH"],
@@ -18,8 +22,6 @@ DEFAULT_SETTINGS: dict = {
     # Крипта: категория и/или префикс тикера/кода (EQ — акции, CR — крипта)
     "crypto_categories": ["CR"],
     "crypto_prefixes": ["CR."],
-    # Какие сделки грузить (tradeType в Unity)
-    "trade_types": ["DIRECT", "CONVERSION"],
     # Какие транзакции грузить: фандинг входит в доход, комиссии — для сверки
     "transaction_types": ["FUNDING_FEE", "TRADE_COMMISSION"],
     # Сопоставление сделки клиента со сделкой провайдера без Execution ID:

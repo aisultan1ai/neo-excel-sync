@@ -143,9 +143,12 @@ def _date_windows(from_date: str, to_date: str, days: int):
 
 def get_trades(
     base_url: str, auth_token: str, account_id: str,
-    from_date: str, to_date: str, trade_type: str = "DIRECT", page_size: int = 1000,
+    from_date: str, to_date: str, trade_type: str = "DIRECT", page_size: int = 500,
 ) -> list:
-    """Все сделки счёта за период: окнами по TRADES_WINDOW_DAYS, внутри — пагинация."""
+    """Все сделки счёта за период: окнами по TRADES_WINDOW_DAYS, внутри — пагинация.
+
+    Unity ограничивает limit значением 500 (больше — всё равно вернёт 500),
+    поэтому offset двигаем на фактическое число полученных записей."""
     items: list = []
     for w_from, w_to in _date_windows(from_date, to_date, TRADES_WINDOW_DAYS):
         offset = 0

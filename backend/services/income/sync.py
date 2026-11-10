@@ -20,7 +20,7 @@ from datetime import date
 
 from db import income as income_db
 from services import unity
-from .rules import classify_instrument, effective_role, merge_settings
+from .rules import TRADE_TYPES, classify_instrument, effective_role, merge_settings
 
 log = logging.getLogger(__name__)
 
@@ -152,9 +152,8 @@ def sync_trades(ctx: _Ctx, account_ids: list, date_from: str, date_to: str, sett
     rows, seen = [], set()
     groups = list(_chunks(account_ids, int(settings["accounts_per_request"])))
     for i, part in enumerate(groups, 1):
-        params = {"accountId": _csv(part), "fromTradeDate": date_from, "toTradeDate": date_to, "dir": "ASC"}
-        if settings.get("trade_types"):
-            params["tradeType"] = _csv(settings["trade_types"])
+        params = {"accountId": _csv(part), "fromTradeDate": date_from, "toTradeDate": date_to, "dir": "ASC",
+                  "tradeType": _csv(TRADE_TYPES)}
         for t in _pages(ctx, "/api/v1/trades", params, f"Сделки (группа {i}/{len(groups)})"):
             tid = str(t.get("id"))
             if tid in seen or not t.get("tradeDate"):
@@ -243,6 +242,11 @@ def run_sync(run_id: int, base_url: str, token: str, date_from: str, date_to: st
 
         ctx.progress("Счета Unity…", force=True)
         stats["accounts_total"] = sync_accounts(ctx)
+        # Защита: пустой ответ (нет прав у токена, сбой Unity) не должен стирать уже загруженный период.
+        # Удаление старых данных происходит только в replace_* — после того, как всё новое получено.
+        if not stats["accounts_total"]:
+            raise RuntimeError("Unity вернул пустой список счетов — проверьте токен и его права. "
+                               "Ранее загруженные данные не тронуты.")
         ctx.progress("Валюты…", force=True)
         stats["assets"] = sync_assets(ctx)
 
@@ -250,6 +254,9 @@ def run_sync(run_id: int, base_url: str, token: str, date_from: str, date_to: st
         load_ids = sorted(aid for aid, a in accounts.items() if not a.get("excluded"))
         stats["accounts_loaded"] = len(load_ids)
         stats["accounts_excluded"] = len(accounts) - len(load_ids)
+        if not load_ids:
+            raise RuntimeError("Все счета исключены из загрузки — загружать нечего. "
+                               "Ранее загруженные данные не тронуты.")
 
         trade_rows = sync_trades(ctx, load_ids, date_from, date_to, settings)
         stats["trades"] = len(trade_rows)

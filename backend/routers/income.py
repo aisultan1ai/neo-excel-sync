@@ -257,7 +257,7 @@ def get_settings(current_user: str = Depends(require_income_access)):
 def save_settings(new: dict, current_user: str = Depends(require_income_access)):
     merged = merge_settings(new)
     for k in ("conversion_categories", "conversion_prefixes", "crypto_categories", "crypto_prefixes",
-              "trade_types", "transaction_types"):
+              "transaction_types"):
         if not isinstance(merged[k], list):
             raise HTTPException(400, f"{k}: нужен список")
         merged[k] = [str(x).strip() for x in merged[k] if str(x).strip()]

@@ -61,7 +61,9 @@ async def fetch_trades(
 
             if not items or len(all_items) >= total:
                 break
-            offset += DEFAULT_LIMIT
+            # Unity отдаёт не больше 500 записей за запрос, даже если limit больше —
+            # сдвигаемся на фактически полученное, иначе часть сделок пропустится
+            offset += len(items)
 
     log.info(
         "Получено %d сделок за %s..%s (accountId=%s)",
