@@ -386,6 +386,15 @@ def init_all():
     init_positions_tables()
     init_investor_reports_tables()
     init_income_tables()
+    init_crypto_tx_tables()
+
+
+def init_crypto_tx_tables():
+    from db import crypto_tx as crypto_tx_db
+    try:
+        crypto_tx_db.init_tables()
+    except Exception as e:
+        log.error("init_crypto_tx_tables error: %s", e, exc_info=True)
 
 
 def init_income_tables():

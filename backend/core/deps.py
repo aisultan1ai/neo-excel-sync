@@ -63,15 +63,6 @@ async def require_settings_admin(current_user: str = Depends(get_current_user)) 
     return current_user
 
 
-def ensure_task_owner_or_admin(task_row: dict, user_row):
-    if not user_row:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user_row.is_admin:
-        return
-    if task_row.get("from_user_id") != user_row.id:
-        raise HTTPException(status_code=403, detail="Not allowed")
-
-
 def ff_get_user(current_user: str):
     from db.users import get_user_by_username
     user = get_user_by_username(current_user)

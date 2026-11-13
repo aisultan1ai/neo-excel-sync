@@ -23,7 +23,6 @@ from routers import (
     settings,
     sverka,
     splits,
-    instruments,
     tasks,
     positions,
     unity_exchange,
@@ -32,6 +31,7 @@ from routers import (
     convert_template,
     investor_reports,
     income,
+    crypto_tx,
 )
 from routers import balance_history
 
@@ -68,7 +68,6 @@ app.include_router(departments.router)
 app.include_router(settings.router)
 app.include_router(sverka.router)
 app.include_router(splits.router)
-app.include_router(instruments.router)
 app.include_router(tasks.router)
 app.include_router(positions.router)
 app.include_router(unity_exchange.router)
@@ -78,6 +77,7 @@ app.include_router(balance_history.router)
 app.include_router(convert_template.router)
 app.include_router(investor_reports.router)
 app.include_router(income.router)
+app.include_router(crypto_tx.router)
 
 _scheduler = BackgroundScheduler(timezone="UTC")
 

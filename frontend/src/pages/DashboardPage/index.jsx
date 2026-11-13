@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect, useCallback } from "react";
-import { Activity, Users, Clock, FileDiff, Plus, Server, Database, AlertTriangle, RefreshCw, CheckCircle } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Users, FileDiff, Plus, Server, Database, AlertTriangle, RefreshCw, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getLocalYMD } from "./helpers";
 import { checkSystemHealth, fetchProblems, fetchPodftToday, fetchPodftTrades, fetchDashboard, saveProblemApi, deleteProblemApi } from "./api";
@@ -100,8 +100,6 @@ const DashboardPage = () => {
   const formatDate = (iso) => { if (!iso) return ""; const d = new Date(iso); if (Number.isNaN(d.getTime())) return ""; return d.toLocaleDateString(); };
   const formatTime = (d) => { if (!d) return ""; try { return new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
 
-  const recentTasks = useMemo(() => (Array.isArray(stats?.recent_tasks) ? stats.recent_tasks : []), [stats]);
-
   const LIST_HEIGHT = 340;
   const HEADER_HEIGHT = 64;
   const sectionHeader = { padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", height: HEADER_HEIGHT, gap: "12px" };
@@ -132,10 +130,6 @@ const DashboardPage = () => {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "20px", marginBottom: "30px" }}>
-        <div className="card" style={{ padding: "25px", display: "flex", alignItems: "center", gap: "20px", borderLeft: "4px solid #3b82f6" }}>
-          <div style={{ background: "#eff6ff", padding: "15px", borderRadius: "12px" }}><Clock size={30} color="#3b82f6" /></div>
-          <div><div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>{stats?.active_tasks || 0}</div><div style={{ color: "#64748b", fontSize: "14px" }}>Активных задач</div></div>
-        </div>
         <div className="card" style={{ padding: "25px", display: "flex", alignItems: "center", gap: "20px", borderLeft: "4px solid #8b5cf6" }}>
           <div style={{ background: "#f5f3ff", padding: "15px", borderRadius: "12px" }}><Users size={30} color="#8b5cf6" /></div>
           <div><div style={{ fontSize: "32px", fontWeight: 800, color: "#1e293b" }}>{stats?.users || 0}</div><div style={{ color: "#64748b", fontSize: "14px" }}>Пользователей</div></div>
@@ -153,28 +147,6 @@ const DashboardPage = () => {
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "30px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "20px", alignItems: "stretch" }}>
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={sectionHeader}>
-              <div style={headerLeft}><h3 style={headerTitle}><Activity size={20} color="#64748b" /> Активность</h3></div>
-              <div style={headerRight}><Link to="/departments" style={{ fontSize: "13px", color: "#3b82f6", textDecoration: "none" }}>Все задачи →</Link></div>
-            </div>
-            <div style={{ height: LIST_HEIGHT, overflow: "auto" }}>
-              {recentTasks.length === 0 ? (
-                <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8" }}>Нет недавней активности</div>
-              ) : recentTasks.map((task, idx) => (
-                <div key={idx} style={rowBase} onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: "#334155", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.title}</div>
-                    <div style={{ fontSize: "12px", color: "#94a3b8" }}>Автор: {task.username} • {formatDate(task.created_at)}</div>
-                  </div>
-                  <span style={{ fontSize: "11px", padding: "4px 8px", borderRadius: "10px", fontWeight: 600, background: task.status === "Done" ? "#dcfce7" : task.status === "In Progress" ? "#dbeafe" : "#f1f5f9", color: task.status === "Done" ? "#166534" : task.status === "In Progress" ? "#1e40af" : "#475569", flexShrink: 0 }}>
-                    {task.status === "Open" ? "Новая" : task.status === "In Progress" ? "В работе" : "Готово"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             <div style={sectionHeader}>
               <div style={headerLeft}>
@@ -226,9 +198,6 @@ const DashboardPage = () => {
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               <Link to="/sverka" className="btn" style={{ textAlign: "center", display: "block", textDecoration: "none" }}>
                 <FileDiff size={18} style={{ verticalAlign: "middle", marginRight: "8px" }} /> Новая сверка
-              </Link>
-              <Link to="/departments" className="btn" style={{ background: "white", color: "#334155", border: "1px solid #cbd5e1", textAlign: "center", display: "block", textDecoration: "none" }}>
-                <Plus size={18} style={{ verticalAlign: "middle", marginRight: "8px" }} /> Создать задачу
               </Link>
             </div>
           </div>

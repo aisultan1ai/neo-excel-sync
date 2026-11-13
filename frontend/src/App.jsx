@@ -17,10 +17,8 @@ import {
   FileDiff,
   Settings,
   Layers,
-  Users,
   User,
   LayoutDashboard,
-  Binary,
   Scale,
   TrendingUp,
   ClipboardList,
@@ -28,6 +26,7 @@ import {
   ArrowRightLeft,
   FileText,
   Coins,
+  Bitcoin,
 } from "lucide-react";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -38,9 +37,7 @@ import SverkaPage from "./pages/SverkaPage";
 import SplitsPage from "./pages/SplitsPage";
 import SettingsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/LoginPage";
-import DepartmentsPage from "./pages/DepartmentsPage";
 import ProfilePage from "./pages/ProfilePage";
-import InstrumentsPage from "./pages/InstrumentsPage";
 import PositionsPage from "./pages/PositionsPage";
 import UnityExchangePage from "./pages/UnityExchangePage";
 import FundingFeePage from "./pages/FundingFeePage";
@@ -49,6 +46,7 @@ import BackLogPage from "./pages/BackLogPage";
 import ConvertTemplatePage from "./pages/ConvertTemplatePage";
 import InvestorReportsPage from "./pages/InvestorReportsPage";
 import IncomePage from "./pages/IncomePage";
+import CryptoTxPage from "./pages/CryptoTxPage";
 
 
 // Подсветка
@@ -93,14 +91,13 @@ const AppLayout = ({ isAdmin, canIncome }) => {
           <NavButton to="/" icon={LayoutDashboard} label="Главная" />
           <NavButton to="/sverka" icon={FileDiff} label="Сверка" />
           <NavButton to="/splits" icon={Layers} label="Сплиты" />
-          <NavButton to="/departments" icon={Users} label="Департаменты" />
-          <NavButton to="/instruments" icon={Binary} label="Инструменты" />
           <NavButton to="/unity-exchange" icon={FileDiff} label="Unity ↔ Биржа" />
           <NavButton to="/positions" icon={Scale} label="Сверка позиций" />
           <NavButton to="/funding-fee" icon={TrendingUp} label="Funding Fee" />
           <NavButton to="/balances" icon={BarChart3} label="Остатки" />
           <NavButton to="/convert-template" icon={ArrowRightLeft} label="Конверт Шаблон" />
           <NavButton to="/investor-reports" icon={FileText} label="Отчёты инвесторов" />
+          <NavButton to="/crypto-tx" icon={Bitcoin} label="Крипто-транзакции" />
           {canIncome && <NavButton to="/income" icon={Coins} label="Доходы" />}
           {isAdmin && <NavButton to="/backlog" icon={ClipboardList} label="BackLog" />}
 
@@ -200,8 +197,6 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/sverka" element={<SverkaPage />} />
             <Route path="/splits" element={<SplitsPage />} />
-            <Route path="/departments" element={<DepartmentsPage />} />
-            <Route path="/instruments" element={<InstrumentsPage />} />
             <Route path="/unity-exchange" element={<UnityExchangePage />} />
             <Route path="/positions" element={<PositionsPage />} />
             <Route path="/funding-fee" element={<FundingFeePage />} />
@@ -209,6 +204,7 @@ function App() {
             <Route path="/convert-template" element={<ConvertTemplatePage />} />
             <Route path="/investor-reports" element={<InvestorReportsPage />} />
             {canIncome && <Route path="/income" element={<IncomePage />} />}
+            <Route path="/crypto-tx" element={<CryptoTxPage />} />
             <Route path="/profile" element={<ProfilePage onLogout={handleLogout} />} />
             <Route path="/settings" element={<SettingsPage />} />
             {isAdmin && <Route path="/backlog" element={<BackLogPage />} />}
