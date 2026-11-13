@@ -183,7 +183,7 @@ def delete_section(section_id: int, move_to: int | None) -> int:
 
 # ── Транзакции ───────────────────────────────────────────────────────────────
 
-def _where(date_from, date_to, section_id, q):
+def _where(date_from, date_to, section_id, q, counterparty=None):
     sql, params = [], []
     if date_from:
         sql.append("t.tx_time >= %s::date")
@@ -194,6 +194,9 @@ def _where(date_from, date_to, section_id, q):
     if section_id:
         sql.append("t.section_id = %s")
         params.append(section_id)
+    if counterparty:
+        sql.append("t.counterparty = %s")
+        params.append(counterparty)
     if q:
         sql.append("(t.counterparty ILIKE %s OR t.tx_hash ILIKE %s OR t.comment ILIKE %s OR t.asset ILIKE %s)")
         like = f"%{q}%"
@@ -201,8 +204,8 @@ def _where(date_from, date_to, section_id, q):
     return (" WHERE " + " AND ".join(sql)) if sql else "", params
 
 
-def list_tx(date_from=None, date_to=None, section_id=None, q=None) -> list[dict]:
-    where, params = _where(date_from, date_to, section_id, q)
+def list_tx(date_from=None, date_to=None, section_id=None, q=None, counterparty=None) -> list[dict]:
+    where, params = _where(date_from, date_to, section_id, q, counterparty)
     with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(f"SELECT {_TX_COLS} FROM crypto_transactions t{where} ORDER BY t.tx_time DESC, t.id DESC", params)

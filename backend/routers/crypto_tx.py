@@ -181,11 +181,12 @@ def list_tx(
     date_to: date | None = Query(None, alias="to"),
     section_id: int | None = None,
     q: str | None = Query(None, max_length=200),
+    counterparty: str | None = Query(None, max_length=200),
     current_user: str = Depends(require_access),
 ):
     if date_from and date_to and date_from > date_to:
         raise HTTPException(400, "Дата «с» больше даты «по»")
-    items = tx_db.list_tx(date_from, date_to, section_id, (q or "").strip() or None)
+    items = tx_db.list_tx(date_from, date_to, section_id, (q or "").strip() or None, counterparty or None)
     return {"items": items, "totals": _totals(items)}
 
 
@@ -252,9 +253,10 @@ def export_excel(
     date_to: date | None = Query(None, alias="to"),
     section_id: int | None = None,
     q: str | None = Query(None, max_length=200),
+    counterparty: str | None = Query(None, max_length=200),
     current_user: str = Depends(require_access),
 ):
-    items = tx_db.list_tx(date_from, date_to, section_id, (q or "").strip() or None)
+    items = tx_db.list_tx(date_from, date_to, section_id, (q or "").strip() or None, counterparty or None)
     sections = tx_db.list_sections()
     if section_id:
         sections = [s for s in sections if s["id"] == section_id]

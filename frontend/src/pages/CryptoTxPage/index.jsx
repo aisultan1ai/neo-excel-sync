@@ -80,11 +80,12 @@ function TxTable({ items, secById, showSection, whoTitle, onEdit, onDelete }) {
 
 export default function CryptoTxPage() {
   const [sections, setSections] = useState([]);
-  const [filters, setFilters]   = useState({ from: "", to: "", section_id: "", q: "" });
+  const [filters, setFilters]   = useState({ from: "", to: "", counterparty: "", q: "" });
+  const [selSection, setSelSection] = useState("");    // выбранный раздел (плитка / вкладка)
   const [query, setQuery]       = useState("");
   const [data, setData]         = useState({ items: [], totals: {} });
   const [loading, setLoading]   = useState(false);
-  const [view, setView]         = useState("dates");    // dates | sections
+  const [view, setView]         = useState("sections"); // sections | dates
   const [modal, setModal]       = useState({ open: false, tx: null });
   const [sectionsOpen, setSectionsOpen] = useState(false);
   const [cps, setCps]           = useState({});
@@ -126,13 +127,21 @@ export default function CryptoTxPage() {
   const tot = data.totals || {};
   // плитки и блоки: активные разделы + архивные, если в выборке есть их транзакции
   const visibleSections = sections.filter((s) => !s.archived || tot[s.id]?.count);
-  const activeSection = filters.section_id ? secById[Number(filters.section_id)] : null;
+  // во вкладках «По разделам» всегда открыт какой-то раздел; в списке — только если выбран
+  const tabSection = secById[Number(selSection)] || visibleSections[0] || null;
+  const activeSection = view === "sections" ? tabSection : (selSection ? secById[Number(selSection)] : null);
+  const shownItems = useMemo(
+    () => (activeSection ? data.items.filter((t) => t.section_id === activeSection.id) : data.items),
+    [data.items, activeSection],
+  );
 
-  const bySection = useMemo(() => {
-    const out = {};
-    data.items.forEach((t) => { (out[t.section_id] = out[t.section_id] || []).push(t); });
-    return out;
-  }, [data.items]);
+  // контрагенты для фильтра: выбранного раздела или всех разделов
+  const cpOptions = useMemo(() => {
+    const src = activeSection ? [cps[activeSection.id] || []] : Object.values(cps);
+    const set = new Set(src.flat());
+    if (filters.counterparty) set.add(filters.counterparty);
+    return [...set].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [cps, activeSection, filters.counterparty]);
 
   const handleDelete = async (t) => {
     const ok = await confirm({
@@ -161,7 +170,7 @@ export default function CryptoTxPage() {
   const handleExport = async () => {
     setBusy("export");
     try {
-      const { data: blob } = await exportTx(filters);
+      const { data: blob } = await exportTx({ ...filters, section_id: activeSection?.id });
       downloadBlob(blob, `Крипто_транзакции_${filters.from || "всё"}_${filters.to || "сегодня"}.xlsx`);
     } catch { toast.error("Ошибка выгрузки"); }
     finally { setBusy(""); }
@@ -205,6 +214,20 @@ export default function CryptoTxPage() {
               <button key={label} style={{ ...S.ghost, padding: "6px 10px", fontSize: 12 }} onClick={() => setFilters((f) => ({ ...f, ...fn() }))}>{label}</button>
             ))}
           </div>
+          <div className="input-group" style={{ margin: 0 }}>
+            <label className="input-label">Биржа / контрагент</label>
+            <select className="text-input" value={filters.counterparty} style={{ width: 220 }}
+              onChange={(e) => setFilters((f) => ({ ...f, counterparty: e.target.value }))}>
+              <option value="">Все</option>
+              {cpOptions.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          {(filters.counterparty || filters.from || filters.to || query || selSection) && (
+            <button style={{ ...S.ghost, padding: "6px 10px", fontSize: 12 }} title="Сбросить все фильтры"
+              onClick={() => { setFilters({ from: "", to: "", counterparty: "", q: "" }); setQuery(""); setSelSection(""); }}>
+              Сбросить
+            </button>
+          )}
           <div style={{ position: "relative", marginLeft: "auto" }}>
             <Search size={14} color={T.faint} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
             <input className="text-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Контрагент, хэш, комментарий" style={{ paddingLeft: 30, width: 260 }} />
@@ -215,14 +238,14 @@ export default function CryptoTxPage() {
       {/* Итоги по разделам — клик фильтрует */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
         {visibleSections.map((s) => {
-          const active = Number(filters.section_id) === s.id;
+          const active = activeSection?.id === s.id;
           const t = tot[s.id] || {};
           return (
-            <button key={s.id} onClick={() => setFilters((f) => ({ ...f, section_id: active ? "" : s.id }))}
+            <button key={s.id} onClick={() => setSelSection(active && view === "dates" ? "" : s.id)}
               style={{ flex: "1 1 200px", textAlign: "left", padding: "12px 14px", background: active ? "#eff6ff" : "#fff", border: `1px solid ${active ? "#93c5fd" : T.border}`, borderRadius: 10, cursor: "pointer", opacity: s.archived ? 0.7 : 1 }}>
               <div style={{ ...T.label, color: s.direction === "in" ? T.green : T.red }}>{s.name}{s.archived ? " · архив" : ""}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: T.ink, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{sumText(t.by_asset)}</div>
-              <div style={{ ...T.small, fontSize: 11, marginTop: 2 }}>{t.count || 0} транз.{active ? " · фильтр включён" : ""}</div>
+              <div style={{ ...T.small, fontSize: 11, marginTop: 2 }}>{t.count || 0} транз.{active ? (view === "dates" ? " · показан только он" : " · открыт") : ""}</div>
             </button>
           );
         })}
@@ -231,32 +254,47 @@ export default function CryptoTxPage() {
       <div className="card">
         <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 2, background: T.bg, borderRadius: 8, padding: 3, border: `1px solid ${T.border}` }}>
-            {[["dates", "Списком по датам"], ["sections", "По разделам"]].map(([k, l]) => (
+            {[["sections", "По разделам"], ["dates", "Списком по датам"]].map(([k, l]) => (
               <button key={k} onClick={() => setView(k)} style={{ padding: "6px 14px", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: view === k ? 600 : 400, background: view === k ? "#fff" : "transparent", color: view === k ? T.blue : T.muted, boxShadow: view === k ? "0 1px 3px rgba(0,0,0,0.1)" : "none" }}>{l}</button>
             ))}
           </div>
-          <span style={T.small}>{loading ? "Загрузка…" : `${data.items.length} транзакций`}{activeSection ? ` · ${activeSection.name}` : ""}</span>
+          <span style={T.small}>{loading ? "Загрузка…" : `${shownItems.length} транзакций`}{activeSection ? ` · ${activeSection.name}` : ""}{filters.counterparty ? ` · ${filters.counterparty}` : ""}</span>
           {loading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
         </div>
 
         {view === "dates" ? (
-          <TxTable items={data.items} secById={secById} showSection onEdit={(t) => setModal({ open: true, tx: t })} onDelete={handleDelete} />
+          <TxTable items={shownItems} secById={secById} showSection={!activeSection}
+            whoTitle={activeSection ? whoLabel(activeSection) : undefined}
+            onEdit={(t) => setModal({ open: true, tx: t })} onDelete={handleDelete} />
+        ) : !tabSection ? (
+          <div style={S.empty}><span style={{ color: T.faint, fontSize: 13 }}>Разделов нет — добавьте их кнопкой «Разделы»</span></div>
         ) : (
-          visibleSections.filter((s) => !activeSection || activeSection.id === s.id).map((s) => (
-            <div key={s.id} style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-                <DirPill section={s} />
-                <b style={{ fontSize: 14, color: T.ink }}>{s.name}</b>
-                <span style={T.small}>{(bySection[s.id] || []).length} транз. · {sumText(tot[s.id]?.by_asset)}</span>
-                {!s.archived && (
-                  <button style={{ ...S.ghost, padding: "4px 10px", fontSize: 12, marginLeft: "auto" }}
-                    onClick={() => setModal({ open: true, tx: null, sectionId: s.id })}><Plus size={12} /> Добавить</button>
-                )}
-              </div>
-              <TxTable items={bySection[s.id] || []} secById={secById} whoTitle={whoLabel(s)}
-                onEdit={(t) => setModal({ open: true, tx: t })} onDelete={handleDelete} />
+          <>
+            {/* вкладки разделов */}
+            <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${T.border}`, marginBottom: 12, flexWrap: "wrap" }}>
+              {visibleSections.map((s) => {
+                const on = s.id === tabSection.id;
+                return (
+                  <button key={s.id} onClick={() => setSelSection(s.id)}
+                    style={{ padding: "8px 14px", border: "none", borderBottom: `2px solid ${on ? T.blue : "transparent"}`, marginBottom: -1, background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: on ? 600 : 400, color: on ? T.blue : T.muted, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.direction === "in" ? T.green : T.red }} />
+                    {s.name}
+                    <span style={{ background: on ? "#dbeafe" : T.bg, color: on ? T.blue : T.muted, borderRadius: 100, padding: "0 7px", fontSize: 11 }}>{tot[s.id]?.count || 0}</span>
+                  </button>
+                );
+              })}
             </div>
-          ))
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+              <DirPill section={tabSection} />
+              <span style={T.small}>{shownItems.length} транз. · {sumText(tot[tabSection.id]?.by_asset)}</span>
+              {!tabSection.archived && (
+                <button style={{ ...S.ghost, padding: "4px 10px", fontSize: 12, marginLeft: "auto" }}
+                  onClick={() => setModal({ open: true, tx: null, sectionId: tabSection.id })}><Plus size={12} /> Добавить в «{tabSection.name}»</button>
+              )}
+            </div>
+            <TxTable items={shownItems} secById={secById} whoTitle={whoLabel(tabSection)}
+              onEdit={(t) => setModal({ open: true, tx: t })} onDelete={handleDelete} />
+          </>
         )}
       </div>
 
