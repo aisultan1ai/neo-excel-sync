@@ -3,9 +3,16 @@ Fund report service — парсит месячный Excel фонда и ген
 для каждого инвестора по утверждённому шаблону.
 
 Портировано из fund_report_generator/fund_report_generator.py (reference implementation).
-Формула Income for month использует Вариант B (как считает бухгалтерия в исходном Excel):
-    value_start = Σ units_i × max(subscription_price_i, NAV_per_unit_start)
-    income_month = current_value − value_start
+Income for month (доход за месяц):
+  1) если на листе инвестора есть колонка «Доход/убыток инвестора за текущий месяц» — берём её
+     (сумма по траншам), это ровно то, что посчитала бухгалтерия;
+  2) иначе считаем по траншам так же, как бухгалтерия:
+       транш куплен в этом месяце  → current − сумма взноса;
+       транш куплен раньше         → units × (NAV_end − NAV_start).
+     Новый транш определяется по дате подписки (позже начала месяца), а без даты — по цене
+     подписки, равной NAV на конец месяца.
+  Раньше (Вариант B) брали units × max(цена подписки, NAV_start): у траншей, купленных дороже
+  текущего NAV (например по 1000), «за месяц» превращалось в убыток с момента покупки.
 """
 
 from __future__ import annotations
@@ -47,6 +54,7 @@ class InvestorTranche:
     subscription_amount: float
     subscription_price: float
     units: float
+    month_income: Optional[float] = None   # из колонки «за текущий месяц», если она есть в Excel
 
 
 @dataclass
@@ -77,38 +85,51 @@ class InvestorPosition:
 
         self.current_value = self.total_units * fund.nav_per_unit_end
 
-        if formula == "A":
+        excel_month = [t.month_income for t in self.tranches]
+        if self.tranches and all(m is not None for m in excel_month):
+            # 1) значение бухгалтерии из Excel
+            self.monthly_income = sum(excel_month)
+            value_start = self.current_value - self.monthly_income
+        else:
+            # 2) расчёт по траншам (formula A и B теперь совпадают; параметр оставлен для совместимости)
             try:
                 start_boundary = datetime.strptime(fund.nav_per_unit_start_date, '%d.%m.%Y')
             except ValueError:
                 start_boundary = None
             value_start = 0.0
             for t in self.tranches:
-                is_new_this_month = False
-                if t.subscription_date and start_boundary:
-                    try:
-                        sub_dt = datetime.strptime(t.subscription_date, '%d.%m.%Y')
-                        is_new_this_month = sub_dt > start_boundary
-                    except ValueError:
-                        pass
-                if is_new_this_month:
-                    value_start += t.subscription_amount
-                else:
-                    value_start += t.units * fund.nav_per_unit_start
-        else:
-            # Вариант B — как в Excel: value_start = Σ units × max(subscription_price, NAV_start)
-            value_start = sum(
-                t.units * max(t.subscription_price, fund.nav_per_unit_start)
-                for t in self.tranches
-            )
+                value_start += (t.subscription_amount if _is_new_this_month(t, fund, start_boundary)
+                                else t.units * fund.nav_per_unit_start)
+            self.monthly_income = self.current_value - value_start
 
-        self.monthly_income = self.current_value - value_start
-        if value_start > 0:
-            self.monthly_income_pct = (self.current_value / value_start - 1) * 100
+        # % за месяц = изменение NAV на пай из файла («The change NAV per share»), если у инвестора
+        # были паи на начало месяца; деньги, внесённые в течение месяца, процент не размывают.
+        # Если инвестор вошёл только в этом месяце — % от его взноса.
+        try:
+            start_boundary = datetime.strptime(fund.nav_per_unit_start_date, '%d.%m.%Y')
+        except ValueError:
+            start_boundary = None
+        held_at_start = [t for t in self.tranches if not _is_new_this_month(t, fund, start_boundary)]
+        if held_at_start:
+            self.monthly_income_pct = fund.monthly_change_pct
+        else:
+            invested = sum(t.subscription_amount for t in self.tranches)
+            self.monthly_income_pct = (self.monthly_income / invested * 100) if invested > 0 else 0.0
 
         self.total_income = self.current_value - self.total_subscription
         if self.total_subscription > 0:
             self.total_income_pct = (self.current_value / self.total_subscription - 1) * 100
+
+
+def _is_new_this_month(t: InvestorTranche, fund: FundMetrics, start_boundary: Optional[datetime]) -> bool:
+    if t.subscription_date and start_boundary:
+        try:
+            return datetime.strptime(t.subscription_date, '%d.%m.%Y') > start_boundary
+        except ValueError:
+            pass
+    # даты нет: в этом месяце подписываются по NAV на конец месяца
+    end = fund.nav_per_unit_end
+    return bool(end) and abs(t.subscription_price - end) <= max(1e-6, abs(end) * 1e-9)
 
 
 @dataclass
@@ -282,12 +303,14 @@ def parse_investor_tranches(rows: list[list], subscription_dates: list[dict]) ->
     if header_idx is None:
         raise ValueError("Не найден заголовок таблицы позиции инвестора.")
 
-    col_name = col_amount = col_price = col_units = None
+    col_name = col_amount = col_price = col_units = col_month = None
     for j, cell in enumerate(header_row):
         c = _norm(cell)
         if not c:
             continue
-        if c.startswith('инве') and col_name is None:
+        if ('текущий месяц' in c or ('доход' in c and 'месяц' in c)) and col_month is None:
+            col_month = j
+        elif c.startswith('инве') and col_name is None:
             col_name = j
         elif ('первоначальная сумма' in c or c.startswith('сумма')) and col_amount is None:
             col_amount = j
@@ -319,12 +342,14 @@ def parse_investor_tranches(rows: list[list], subscription_dates: list[dict]) ->
                 real_name = str(name_cell).strip()
 
         date = find_subscription_date(subscription_dates, amount, price, units)
+        month = _num(row[col_month]) if col_month is not None and col_month < len(row) else None
 
         tranches.append(InvestorTranche(
             subscription_date=date,
             subscription_amount=amount,
             subscription_price=price,
             units=units,
+            month_income=month,
         ))
 
     return tranches, real_name
@@ -1107,6 +1132,7 @@ def report_to_dict(report: FundReport) -> dict:
                         'subscription_amount': t.subscription_amount,
                         'subscription_price': t.subscription_price,
                         'units': t.units,
+                        'month_income': t.month_income,
                     }
                     for t in inv.tranches
                 ],
@@ -1137,6 +1163,7 @@ def report_from_dict(data: dict) -> FundReport:
                 subscription_amount=float(t['subscription_amount']),
                 subscription_price=float(t['subscription_price']),
                 units=float(t['units']),
+                month_income=_num(t.get('month_income')),
             )
             for t in inv_data.get('tranches', [])
         ]
