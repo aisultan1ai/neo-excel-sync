@@ -68,7 +68,7 @@ export default function SettingsTab({ accounts, tz = 0, onTzChange }) {
     finally { setSavingMap(false); }
   };
 
-  const T_blue = "#3b82f6";
+  const T_blue = "#0b7a6c";
 
   return (
     <div>
@@ -78,7 +78,7 @@ export default function SettingsTab({ accounts, tz = 0, onTzChange }) {
           {[{ v: 0, l: "UTC+0" }, { v: 5, l: "UTC+5" }].map(({ v, l }) => (
             <label key={v} onClick={() => onTzChange(v)}
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 18px", borderRadius: 8,
-                border: `2px solid ${tz === v ? T_blue : T.border}`, background: tz === v ? "#eff6ff" : "#fff",
+                border: `2px solid ${tz === v ? T_blue : T.border}`, background: tz === v ? "#e9f7f4" : "#fff",
                 cursor: "pointer", transition: "all 0.15s", userSelect: "none" }}>
               <div style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${tz === v ? T_blue : T.border}`,
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -98,7 +98,7 @@ export default function SettingsTab({ accounts, tz = 0, onTzChange }) {
             <input className="text-input" placeholder="https://rest.unity.finance"
               value={config.base_url} onChange={(e) => setConfig((p) => ({ ...p, base_url: e.target.value }))} />
             {config.base_url && (
-              <div style={{ marginTop: 6, fontSize: 11, color: T.muted, fontFamily: "monospace", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 10px" }}>
+              <div style={{ marginTop: 6, fontSize: 11, color: T.muted, fontFamily: "var(--font-mono)", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 10px" }}>
                 {config.base_url.replace(/\/+$/, "")}/api/v1/cashOut
               </div>
             )}

@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import Modal from "../../components/Modal";
 import useConfirm from "../../components/useConfirm";
+import PageHeader from "../../components/PageHeader";
 import { deleteTx, exportTx, getCounterparties, importTx, listSections, listTx } from "./api";
 import { DIR_LABEL, PRESETS, S, T, downloadBlob, errText, fmtAmount, fmtDT, shortHash, whoLabel } from "./helpers";
 import TxModal from "./TxModal";
@@ -57,7 +58,7 @@ function TxTable({ items, secById, showSection, whoTitle, onEdit, onDelete }) {
                 <td style={S.td}>{t.counterparty || "—"}</td>
                 <td style={{ ...S.td, ...S.num, fontWeight: 600, color: out ? T.red : T.green }}>{out ? "−" : "+"}{fmtAmount(t.amount)}</td>
                 <td style={{ ...S.td, ...T.small }}>{t.asset || "—"}</td>
-                <td style={{ ...S.td, fontFamily: "monospace", fontSize: 12 }} title={t.tx_hash || ""}>
+                <td style={{ ...S.td, fontFamily: "var(--font-mono)", fontSize: 12 }} title={t.tx_hash || ""}>
                   {shortHash(t.tx_hash)}
                   {t.tx_hash && <button style={{ ...S.iconBtn, marginLeft: 4 }} title="Скопировать хэш" onClick={() => copy(t.tx_hash)}><Copy size={12} /></button>}
                 </td>
@@ -177,26 +178,26 @@ export default function CryptoTxPage() {
   };
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: T.ink, letterSpacing: "-0.02em" }}>Крипто-транзакции</h1>
-          <p style={{ margin: "3px 0 0", ...T.small }}>История пополнений и выводов по разделам</p>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <button className="btn" onClick={() => setModal({ open: true, tx: null })}><Plus size={14} style={{ marginRight: 6 }} />Добавить</button>
-          <button style={S.ghost} onClick={() => setSectionsOpen(true)} title="Добавить, переименовать, скрыть или удалить разделы">
-            <FolderCog size={14} /> Разделы
-          </button>
-          <button style={S.ghost} onClick={() => fileRef.current?.click()} disabled={!!busy} title="Загрузить Excel: блоки с заголовками разделов">
-            {busy === "import" ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Upload size={14} />} Импорт из Excel
-          </button>
-          <button style={S.ghost} onClick={handleExport} disabled={!!busy} title="Скачать с текущими фильтрами">
-            {busy === "export" ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={14} />} Скачать Excel
-          </button>
-          <input ref={fileRef} type="file" accept=".xlsx,.xlsm" style={{ display: "none" }} onChange={handleImport} />
-        </div>
-      </div>
+    <div style={{ fontFamily: "var(--font-sans)" }}>
+      <PageHeader
+        title="Крипто-транзакции"
+        subtitle="История пополнений и выводов по разделам"
+        actions={
+          <>
+            <button className="btn" onClick={() => setModal({ open: true, tx: null })}><Plus size={14} style={{ marginRight: 6 }} />Добавить</button>
+            <button style={S.ghost} onClick={() => setSectionsOpen(true)} title="Добавить, переименовать, скрыть или удалить разделы">
+              <FolderCog size={14} /> Разделы
+            </button>
+            <button style={S.ghost} onClick={() => fileRef.current?.click()} disabled={!!busy} title="Загрузить Excel: блоки с заголовками разделов">
+              {busy === "import" ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Upload size={14} />} Импорт из Excel
+            </button>
+            <button style={S.ghost} onClick={handleExport} disabled={!!busy} title="Скачать с текущими фильтрами">
+              {busy === "export" ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={14} />} Скачать Excel
+            </button>
+            <input ref={fileRef} type="file" accept=".xlsx,.xlsm" style={{ display: "none" }} onChange={handleImport} />
+          </>
+        }
+      />
 
       {/* Фильтры */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -242,7 +243,7 @@ export default function CryptoTxPage() {
           const t = tot[s.id] || {};
           return (
             <button key={s.id} onClick={() => setSelSection(active && view === "dates" ? "" : s.id)}
-              style={{ flex: "1 1 200px", textAlign: "left", padding: "12px 14px", background: active ? "#eff6ff" : "#fff", border: `1px solid ${active ? "#93c5fd" : T.border}`, borderRadius: 10, cursor: "pointer", opacity: s.archived ? 0.7 : 1 }}>
+              style={{ flex: "1 1 200px", textAlign: "left", padding: "12px 14px", background: active ? "#e9f7f4" : "#fff", border: `1px solid ${active ? "#7fd9cb" : T.border}`, borderRadius: 10, cursor: "pointer", opacity: s.archived ? 0.7 : 1 }}>
               <div style={{ ...T.label, color: s.direction === "in" ? T.green : T.red }}>{s.name}{s.archived ? " · архив" : ""}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: T.ink, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{sumText(t.by_asset)}</div>
               <div style={{ ...T.small, fontSize: 11, marginTop: 2 }}>{t.count || 0} транз.{active ? (view === "dates" ? " · показан только он" : " · открыт") : ""}</div>
@@ -279,7 +280,7 @@ export default function CryptoTxPage() {
                     style={{ padding: "8px 14px", border: "none", borderBottom: `2px solid ${on ? T.blue : "transparent"}`, marginBottom: -1, background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: on ? 600 : 400, color: on ? T.blue : T.muted, display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.direction === "in" ? T.green : T.red }} />
                     {s.name}
-                    <span style={{ background: on ? "#dbeafe" : T.bg, color: on ? T.blue : T.muted, borderRadius: 100, padding: "0 7px", fontSize: 11 }}>{tot[s.id]?.count || 0}</span>
+                    <span style={{ background: on ? "#d3f1ec" : T.bg, color: on ? T.blue : T.muted, borderRadius: 100, padding: "0 7px", fontSize: 11 }}>{tot[s.id]?.count || 0}</span>
                   </button>
                 );
               })}

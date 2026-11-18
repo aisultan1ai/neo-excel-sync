@@ -48,11 +48,11 @@ export default function AccountsTab({ accounts, selAccountId, onSelect, onDelete
                   const pos = (acc.total_income || 0) >= 0;
                   return (
                     <tr key={acc.id}
-                      style={{ cursor: "pointer", background: sel ? "#eff6ff" : undefined }}
+                      style={{ cursor: "pointer", background: sel ? "#e9f7f4" : undefined }}
                       onClick={() => onSelect(String(acc.id))}>
                       <td style={{ fontWeight: 600 }}>
                         {acc.name}
-                        {sel && <Pill color="#dbeafe" text="#1d4ed8" style={{ marginLeft: 8 }}>выбран</Pill>}
+                        {sel && <Pill color="#d3f1ec" text="#065a50" style={{ marginLeft: 8 }}>выбран</Pill>}
                       </td>
                       <td style={T.small}>{fmtDate(acc.created_at)}</td>
                       <td style={{ textAlign: "right", ...T.body }}>{(acc.total_records || 0).toLocaleString()}</td>

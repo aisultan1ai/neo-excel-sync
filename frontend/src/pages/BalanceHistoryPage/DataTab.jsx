@@ -17,7 +17,7 @@ const FIELDS = [
   ["dailyPnlPercent",  "Daily PnL %"],
 ];
 
-const T_blue = "#3b82f6";
+const T_blue = "#0b7a6c";
 
 export default function DataTab({ accounts }) {
   const [mode,        setMode]        = useState("single"); // "single" | "range"
@@ -119,9 +119,9 @@ export default function DataTab({ accounts }) {
                 <span style={{
                   fontSize: 11, fontWeight: 600,
                   padding: "2px 8px", borderRadius: 100,
-                  background: selectedIds.length ? "#eff6ff" : "#fff",
+                  background: selectedIds.length ? "#e9f7f4" : "#fff",
                   color: selectedIds.length ? T_blue : T.muted,
-                  border: `1px solid ${selectedIds.length ? "#bfdbfe" : T.border}`,
+                  border: `1px solid ${selectedIds.length ? "#a8e3da" : T.border}`,
                 }}>
                   {selectedIds.length === 0
                     ? `все · ${accounts.length}`
@@ -249,7 +249,7 @@ export default function DataTab({ accounts }) {
                   return (
                     <tr key={i}>
                       <td style={{ fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>{row.account_name}</td>
-                      <td style={{ fontFamily: "monospace", fontSize: 12 }}>{row.date}</td>
+                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{row.date}</td>
                       {FIELDS.map(([key]) => (
                         <td key={key} style={{
                           textAlign: "right", fontSize: 13,

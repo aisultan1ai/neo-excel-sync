@@ -110,7 +110,7 @@ export const DataTable = ({ columns, rows, maxHeight = 520, search = true, empty
               <tfoot>
                 <tr>
                   {columns.map((c, i) => (
-                    <td key={c.key} style={{ ...S.td, ...(c.num ? S.num : {}), fontWeight: 700, background: "#eff6ff", position: "sticky", bottom: 0 }}>
+                    <td key={c.key} style={{ ...S.td, ...(c.num ? S.num : {}), fontWeight: 700, background: "#e9f7f4", position: "sticky", bottom: 0 }}>
                       {i === 0 ? "Итого" : c.total ? (c.render ? c.render(totals[c.key], {}) : totals[c.key]) : ""}
                     </td>
                   ))}

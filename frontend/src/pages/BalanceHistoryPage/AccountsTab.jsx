@@ -64,8 +64,8 @@ export default function AccountsTab({ accounts, onRefresh }) {
                 {accounts.map((acc) => (
                   <tr key={acc.id}>
                     <td style={{ fontWeight: 600, fontSize: 13 }}>{acc.name}</td>
-                    <td style={{ textAlign: "right", fontFamily: "monospace", fontSize: 13 }}>{acc.account_id}</td>
-                    <td style={{ textAlign: "right", fontFamily: "monospace", fontSize: 13 }}>{acc.asset_id}</td>
+                    <td style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13 }}>{acc.account_id}</td>
+                    <td style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 13 }}>{acc.asset_id}</td>
                     <td>
                       <button style={S.iconBtn} onClick={() => handleDelete(acc.id, acc.name)} title="Удалить">
                         <Trash2 size={15} color={T.red} />

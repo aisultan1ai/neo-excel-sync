@@ -4,7 +4,7 @@ export const T = {
   faint:  "#94a3b8",
   border: "#e2e8f0",
   bg:     "#f8fafc",
-  blue:   "#2563eb",
+  blue:   "#065a50",
   green:  "#16a34a",
   red:    "#dc2626",
   amber:  "#b45309",

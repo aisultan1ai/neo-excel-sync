@@ -7,7 +7,7 @@ const DatabaseTab = ({ settings, canEdit, handleOverlapChange }) => (
     <textarea
       className="text-input"
       disabled={!canEdit}
-      style={{ height: "250px", fontFamily: "monospace", lineHeight: "1.6" }}
+      style={{ height: "250px", fontFamily: "var(--font-mono)", lineHeight: "1.6" }}
       value={settings.overlap_accounts.join("\n")}
       onChange={handleOverlapChange}
     />

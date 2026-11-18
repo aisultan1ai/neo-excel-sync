@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { Play, Download, Loader, Search } from "lucide-react";
 import FileSection from "./FileSection";
 import ResultTable from "./ResultTable";
+import PageHeader from "../../components/PageHeader";
 import { getLocalYMD, parseDateToISO, podftRowKey, buildPodftPayloadTrade } from "./helpers";
 
 const SverkaPage = () => {
@@ -42,7 +43,7 @@ const SverkaPage = () => {
     { id: "unmatched1", label: "Расх. Unity", color: "#dc2626" },
     { id: "unmatched2", label: "Расх. АИС", color: "#dc2626" },
     { id: "podft_7m_deals", label: "ПОД/ФТ", color: "#ca8a04" },
-    { id: "crypto_deals", label: "Крипто", color: "#2563eb" },
+    { id: "crypto_deals", label: "Крипто", color: "#065a50" },
     { id: "duplicates1", label: "Дубли", color: "#ea580c" },
   ], []);
 
@@ -94,15 +95,15 @@ const SverkaPage = () => {
       <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } .spin-anim { animation: spin 1s linear infinite; }`}</style>
 
       <div style={{ flexShrink: 0, overflowY: "auto", paddingBottom: "20px" }}>
-        <h1 style={{ marginBottom: "20px", fontSize: "28px", color: "#1e293b" }}>Сверка данных</h1>
+        <PageHeader title="Сверка данных" />
         <div className="card" style={{ padding: "30px", border: "none", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)" }}>
           <div style={{ display: "flex", gap: "40px", flexWrap: "wrap" }}>
-            <FileSection title="Unity" color="#3b82f6" file={file1} setFile={setFile1} headers={{ list: headers1, onLoad: setHeaders1 }} idCol={cols.id_col_1} setIdCol={(val) => setCols((prev) => ({ ...prev, id_col_1: val }))} accCol={cols.acc_col_1} setAccCol={(val) => setCols((prev) => ({ ...prev, acc_col_1: val }))} defaultIdName={defaults.id_unity} defaultAccName={defaults.acc_unity} />
+            <FileSection title="Unity" color="#0b7a6c" file={file1} setFile={setFile1} headers={{ list: headers1, onLoad: setHeaders1 }} idCol={cols.id_col_1} setIdCol={(val) => setCols((prev) => ({ ...prev, id_col_1: val }))} accCol={cols.acc_col_1} setAccCol={(val) => setCols((prev) => ({ ...prev, acc_col_1: val }))} defaultIdName={defaults.id_unity} defaultAccName={defaults.acc_unity} />
             <div style={{ width: "1px", background: "#e2e8f0", margin: "10px 0" }} />
             <FileSection title="АИС" color="#8b5cf6" file={file2} setFile={setFile2} headers={{ list: headers2, onLoad: setHeaders2 }} idCol={cols.id_col_2} setIdCol={(val) => setCols((prev) => ({ ...prev, id_col_2: val }))} accCol={cols.acc_col_2} setAccCol={(val) => setCols((prev) => ({ ...prev, acc_col_2: val }))} defaultIdName={defaults.id_ais} defaultAccName={defaults.acc_ais} />
           </div>
           <div style={{ marginTop: "30px", display: "flex", justifyContent: "center" }}>
-            <button className="btn" onClick={handleCompare} disabled={loading} style={{ padding: "16px 60px", fontSize: "18px", fontWeight: 600, borderRadius: "12px", display: "flex", alignItems: "center", gap: "12px", background: loading ? "#94a3b8" : "#3b82f6", cursor: loading ? "not-allowed" : "pointer" }}>
+            <button className="btn" onClick={handleCompare} disabled={loading} style={{ padding: "16px 60px", fontSize: "18px", fontWeight: 600, borderRadius: "12px", display: "flex", alignItems: "center", gap: "12px", background: loading ? "#94a3b8" : "#0b7a6c", cursor: loading ? "not-allowed" : "pointer" }}>
               {loading ? "Обработка..." : <><Play size={24} fill="white" /> Запустить сверку</>}
             </button>
           </div>

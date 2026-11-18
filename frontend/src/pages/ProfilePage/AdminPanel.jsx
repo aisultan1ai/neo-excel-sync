@@ -78,7 +78,7 @@ const AdminPanel = ({ profile, users, departments, onCreateUser, onDeleteUser, o
                   <>
                     <span style={{ fontWeight: 600, color: "#334155" }}>{d.name}</span>
                     <div style={{ display: "flex", gap: "5px" }}>
-                      <button onClick={() => { setEditingDept(d.id); setEditDeptName(d.name); }} style={{ border: "none", background: "none", cursor: "pointer", color: "#3b82f6" }}><Edit2 size={16} /></button>
+                      <button onClick={() => { setEditingDept(d.id); setEditDeptName(d.name); }} style={{ border: "none", background: "none", cursor: "pointer", color: "#0b7a6c" }}><Edit2 size={16} /></button>
                       <button onClick={() => onDeleteDept(d.id)} style={{ border: "none", background: "none", cursor: "pointer", color: "#ef4444" }}><Trash2 size={16} /></button>
                     </div>
                   </>

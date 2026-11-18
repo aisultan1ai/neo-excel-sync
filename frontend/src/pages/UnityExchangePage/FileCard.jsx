@@ -38,7 +38,7 @@ const FileCard = ({ title, color, file, setFile, accept }) => {
           <div style={{ border: "1px dashed #cbd5e1", background: "#f8fafc", borderRadius: 12, height: 150, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
             <UploadCloud size={30} color="#94a3b8" />
             <div style={{ textAlign: "center" }}>
-              <div style={{ color: "#3b82f6", fontWeight: 500 }}>Выберите файл</div>
+              <div style={{ color: "#0b7a6c", fontWeight: 500 }}>Выберите файл</div>
               <div style={{ fontSize: 12, color: "#94a3b8" }}>или перетащите сюда</div>
             </div>
           </div>

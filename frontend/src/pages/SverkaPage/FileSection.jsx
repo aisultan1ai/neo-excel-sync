@@ -74,7 +74,7 @@ const FileSection = ({ title, file, setFile, headers, idCol, setIdCol, accCol, s
           <div className="file-upload-area" style={{ height: "100%", position: "absolute", width: "100%", top: 0 }}>
             <UploadCloud size={32} color="#94a3b8" style={{ marginBottom: "10px" }} />
             <div style={{ textAlign: "center" }}>
-              <span style={{ color: "#3b82f6", fontWeight: 600, fontSize: "16px" }}>Выберите файл</span>
+              <span style={{ color: "#0b7a6c", fontWeight: 600, fontSize: "16px" }}>Выберите файл</span>
               <span style={{ display: "block", fontSize: "13px", color: "#94a3b8", marginTop: "4px" }}>или перетащите сюда</span>
             </div>
           </div>

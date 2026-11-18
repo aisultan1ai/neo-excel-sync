@@ -133,13 +133,13 @@ export default function ReportDetailsPage({ uploadId, onBack }) {
                   <tr key={f.id}>
                     <td style={{ fontWeight: 600, color: "#1e293b" }}>{f.investor_name}</td>
                     <td>
-                      <span style={{ fontFamily: "monospace", fontSize: 12, color: "#94a3b8" }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "#94a3b8" }}>
                         {d.filename || `report_${f.id}.docx`}
                       </span>
                     </td>
-                    <td style={{ textAlign: "right", fontFamily: "monospace" }}>{fmtUSD(d.total_subscription)}</td>
-                    <td style={{ textAlign: "right", fontFamily: "monospace" }}>{fmtUSD(d.current_value)}</td>
-                    <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: 600, color: incomeColor(d.monthly_income) }}>
+                    <td style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>{fmtUSD(d.total_subscription)}</td>
+                    <td style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>{fmtUSD(d.current_value)}</td>
+                    <td style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontWeight: 600, color: incomeColor(d.monthly_income) }}>
                       {fmtSignedUSD(d.monthly_income)}
                     </td>
                     <td style={{ textAlign: "right" }}>

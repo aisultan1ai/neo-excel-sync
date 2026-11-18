@@ -64,7 +64,7 @@ export const TabNav = ({ active, onChange }) => (
           padding: "9px 16px", border: "none", cursor: "pointer",
           fontSize: 13, fontWeight: isActive ? 600 : 500,
           color: isActive ? T.blue : T.muted,
-          background: isActive ? "#eff6ff" : "transparent",
+          background: isActive ? "#e9f7f4" : "transparent",
           borderBottom: `2px solid ${isActive ? T.blue : "transparent"}`,
           marginBottom: -2, borderRadius: "6px 6px 0 0",
           transition: "all 0.15s",

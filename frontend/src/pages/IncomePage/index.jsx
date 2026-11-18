@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Coins, FileBarChart, Landmark, Lock, Settings, Stethoscope, Wallet } from "lucide-react";
+import PageHeader from "../../components/PageHeader";
 import { T, monthBounds, prevMonthYM } from "./helpers";
 import { Tabs } from "./ui";
 import ReportTab from "./ReportTab";
@@ -43,19 +44,17 @@ export default function IncomePage() {
   }
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: T.ink, letterSpacing: "-0.02em" }}>Доходы по клиентам</h1>
-          <p style={{ margin: "3px 0 0", ...T.small }}>
-            Unity · комиссии (клиент − провайдер), конвертации, mark-up, крипта — по профилям и провайдерам
-          </p>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
-          <Coins size={15} color={T.blue} />
-          <span style={{ fontSize: 12, color: T.blue, fontWeight: 600 }}>Income</span>
-        </div>
-      </div>
+    <div style={{ fontFamily: "var(--font-sans)" }}>
+      <PageHeader
+        title="Доходы по клиентам"
+        subtitle="Unity · комиссии (клиент − провайдер), конвертации, mark-up, крипта — по профилям и провайдерам"
+        actions={
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#e9f7f4", borderRadius: 8, border: "1px solid #a8e3da" }}>
+              <Coins size={15} color={T.blue} />
+              <span style={{ fontSize: 12, color: T.blue, fontWeight: 600 }}>Income</span>
+            </div>
+        }
+      />
 
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
 

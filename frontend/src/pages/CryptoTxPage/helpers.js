@@ -4,7 +4,7 @@ export const DIR_LABEL = { in: "Пополнение", out: "Вывод" };
 
 export const T = {
   ink: "#1e293b", muted: "#64748b", faint: "#94a3b8", border: "#e2e8f0", bg: "#f8fafc",
-  blue: "#2563eb", green: "#15803d", red: "#b91c1c",
+  blue: "#065a50", green: "#15803d", red: "#b91c1c",
   label: { fontSize: 11, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "#94a3b8" },
   small: { fontSize: 12, color: "#64748b" },
 };

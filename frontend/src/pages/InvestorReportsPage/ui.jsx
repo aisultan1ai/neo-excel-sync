@@ -26,12 +26,12 @@ export const StepIndicator = ({ current }) => {
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: 8,
                 padding: "6px 12px", borderRadius: 999,
-                background: active ? "#eff6ff" : "transparent",
+                background: active ? "#e9f7f4" : "transparent",
               }}>
                 <div style={{
                   width: 20, height: 20, borderRadius: "50%",
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  background: done ? "#10b981" : active ? "#3b82f6" : "#e2e8f0",
+                  background: done ? "#10b981" : active ? "#0b7a6c" : "#e2e8f0",
                   color: done || active ? "#fff" : "#94a3b8",
                   fontWeight: 700, fontSize: 11,
                   transition: "all 0.2s ease",
@@ -39,7 +39,7 @@ export const StepIndicator = ({ current }) => {
                   {done ? <Check size={11} strokeWidth={3} /> : i + 1}
                 </div>
                 <span style={{
-                  color: active ? "#1e40af" : done ? "#64748b" : "#94a3b8",
+                  color: active ? "#064d45" : done ? "#64748b" : "#94a3b8",
                   fontWeight: active ? 600 : 500,
                   letterSpacing: 0.1,
                 }}>{step.label}</span>
@@ -65,7 +65,7 @@ export const PageTopBar = ({ onBack, backLabel = "Назад", current }) => (
     {onBack && (
       <button onClick={onBack} style={{
         display: "inline-flex", alignItems: "center", gap: 6,
-        background: "transparent", border: "none", color: "#3b82f6",
+        background: "transparent", border: "none", color: "#0b7a6c",
         fontSize: 13, fontWeight: 500, cursor: "pointer", padding: 0,
       }}>
         <ArrowLeftIcon /> {backLabel}
@@ -116,10 +116,10 @@ export const ConfirmDialog = ({ open, title, message, confirmText = "Удали�
         }}>
         <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
           <div style={{
-            background: danger ? "#fee2e2" : "#dbeafe", padding: 10, borderRadius: "50%",
+            background: danger ? "#fee2e2" : "#d3f1ec", padding: 10, borderRadius: "50%",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
           }}>
-            <AlertTriangle size={20} color={danger ? "#ef4444" : "#3b82f6"} />
+            <AlertTriangle size={20} color={danger ? "#ef4444" : "#0b7a6c"} />
           </div>
           <div style={{ flex: 1 }}>
             <h3 style={{ margin: "4px 0 6px 0", fontSize: 16, color: "#1e293b" }}>{title}</h3>
@@ -132,7 +132,7 @@ export const ConfirmDialog = ({ open, title, message, confirmText = "Удали�
             {cancelText}
           </button>
           <button type="button" onClick={onConfirm} className="btn"
-            style={{ background: danger ? "#ef4444" : "#3b82f6", padding: "8px 18px" }}>
+            style={{ background: danger ? "#ef4444" : "#0b7a6c", padding: "8px 18px" }}>
             {confirmText}
           </button>
         </div>
@@ -202,7 +202,7 @@ export const InvestorReportStyles = () => (
     }
     .ir-search-input:focus {
       outline: none;
-      border-color: #3b82f6;
+      border-color: #0b7a6c;
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
   `}</style>

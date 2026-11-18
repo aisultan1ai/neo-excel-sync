@@ -278,7 +278,7 @@ export default function HistoryTab({ accounts, tz = 0 }) {
                     </td>
                     <td style={{ fontSize: 12, color: T.muted }}>{fmtDate(r.netting_date)}</td>
                     <td><StatusPill s={r.status} /></td>
-                    <td style={{ fontSize: 11, fontFamily: "monospace", color: "#475569" }}>
+                    <td style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "#475569" }}>
                       {r.transaction_id || (r.status === "error" ? <span style={{ color: T.red, fontSize: 11 }}>{r.error_message?.slice(0, 50)}</span> : "-")}
                     </td>
                     <td style={{ fontSize: 12, color: T.muted }}>{r.triggered_by}</td>

@@ -93,9 +93,9 @@ export default function AccountPicker({ accounts, selected, setSelected, onRefre
           <span style={{ fontSize: 12, fontWeight: 600, color: T.ink }}>Счета</span>
           <span style={{
             fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 100,
-            background: selected.length ? "#eff6ff" : "#fff",
+            background: selected.length ? "#e9f7f4" : "#fff",
             color: selected.length ? T.blue : T.muted,
-            border: `1px solid ${selected.length ? "#bfdbfe" : T.border}`,
+            border: `1px solid ${selected.length ? "#a8e3da" : T.border}`,
           }}>
             {selected.length ? `${selected.length} из ${accounts.length}` : `не выбраны · ${accounts.length}`}
           </span>

@@ -82,7 +82,7 @@ export default function UploadPage({ onPreview, onCancel }) {
                fontSize: 12, color: "#64748b", textDecoration: "none",
                padding: "6px 10px", borderRadius: 6,
              }}
-             onMouseEnter={(e) => e.currentTarget.style.color = "#3b82f6"}
+             onMouseEnter={(e) => e.currentTarget.style.color = "#0b7a6c"}
              onMouseLeave={(e) => e.currentTarget.style.color = "#64748b"}>
             <Download size={13} />
             Скачать шаблон
@@ -92,12 +92,12 @@ export default function UploadPage({ onPreview, onCancel }) {
         {/* Drop zone — большая, чистая */}
         <div
           style={{
-            border: `2px dashed ${dragOver ? "#3b82f6" : file ? "#10b981" : "#cbd5e1"}`,
+            border: `2px dashed ${dragOver ? "#0b7a6c" : file ? "#10b981" : "#cbd5e1"}`,
             borderRadius: 12,
             padding: "48px 20px",
             textAlign: "center",
             cursor: "pointer",
-            backgroundColor: dragOver ? "#eff6ff" : file ? "#f0fdf4" : "#fafbfc",
+            backgroundColor: dragOver ? "#e9f7f4" : file ? "#f0fdf4" : "#fafbfc",
             transition: "all 0.15s ease",
           }}
           onClick={() => fileInputRef.current?.click()}
@@ -110,15 +110,15 @@ export default function UploadPage({ onPreview, onCancel }) {
 
           {!file ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-              <div style={{ background: "#eff6ff", padding: 14, borderRadius: "50%" }}>
-                <Upload size={26} color="#3b82f6" />
+              <div style={{ background: "#e9f7f4", padding: 14, borderRadius: "50%" }}>
+                <Upload size={26} color="#0b7a6c" />
               </div>
               <div>
                 <div style={{ fontSize: 15, color: "#1e293b", fontWeight: 600, marginBottom: 4 }}>
                   Перетащите Excel сюда
                 </div>
                 <div style={{ fontSize: 13, color: "#64748b" }}>
-                  или <span style={{ color: "#3b82f6", fontWeight: 500 }}>выберите файл</span>
+                  или <span style={{ color: "#0b7a6c", fontWeight: 500 }}>выберите файл</span>
                 </div>
               </div>
               <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>

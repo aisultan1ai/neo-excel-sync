@@ -127,7 +127,7 @@ export default function PreviewPage({ data, onCancel, onGenerated }) {
       }}>
         <div style={{ fontSize: 12, color: "#64748b", flex: "1 1 auto" }}>
           <span style={{ color: "#94a3b8" }}>Файл: </span>
-          <span style={{ color: "#334155", fontFamily: "monospace" }}>{source_filename}</span>
+          <span style={{ color: "#334155", fontFamily: "var(--font-mono)" }}>{source_filename}</span>
         </div>
 
         <ParamField label="Sub-Fund">
@@ -151,7 +151,7 @@ export default function PreviewPage({ data, onCancel, onGenerated }) {
         display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
         gap: 10, marginBottom: 16,
       }}>
-        <MetricInline icon={Wallet}   color="#3b82f6" label="Total Assets" hint="Совокупные активы фонда"
+        <MetricInline icon={Wallet}   color="#0b7a6c" label="Total Assets" hint="Совокупные активы фонда"
                        value={fmtUSD(fund.assets)} />
         <MetricInline icon={DollarSign} color="#10b981" label="NAV" hint="Стоимость чистых активов"
                        value={fmtUSD(fund.nav)} />
@@ -195,13 +195,13 @@ export default function PreviewPage({ data, onCancel, onGenerated }) {
                 <tr key={inv.name + "-" + i}>
                   <td style={{ fontWeight: 600, color: "#1e293b" }}>{inv.name}</td>
                   <td style={{ textAlign: "center" }}>{inv.tranches_count || inv.tranches?.length || 0}</td>
-                  <td style={{ textAlign: "right", fontFamily: "monospace" }}>{fmtUSD(inv.total_subscription)}</td>
-                  <td style={{ textAlign: "right", fontFamily: "monospace" }}>{fmtNum(inv.total_units, 2)}</td>
-                  <td style={{ textAlign: "right", fontFamily: "monospace" }}>{fmtUSD(inv.current_value)}</td>
-                  <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: 600, color: incomeColor(inv.monthly_income) }}>
+                  <td style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>{fmtUSD(inv.total_subscription)}</td>
+                  <td style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>{fmtNum(inv.total_units, 2)}</td>
+                  <td style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>{fmtUSD(inv.current_value)}</td>
+                  <td style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontWeight: 600, color: incomeColor(inv.monthly_income) }}>
                     {fmtSignedUSD(inv.monthly_income)} <span style={{ fontSize: 11, opacity: 0.7 }}>({fmtPct(inv.monthly_income_pct)})</span>
                   </td>
-                  <td style={{ textAlign: "right", fontFamily: "monospace", fontWeight: 600, color: incomeColor(inv.total_income) }}>
+                  <td style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontWeight: 600, color: incomeColor(inv.total_income) }}>
                     {fmtSignedUSD(inv.total_income)} <span style={{ fontSize: 11, opacity: 0.7 }}>({fmtPct(inv.total_income_pct)})</span>
                   </td>
                   <td style={{ fontSize: 12, color: "#64748b" }}>{prettyDate(inv.earliest_subscription_date)}</td>
@@ -306,7 +306,7 @@ const MetricInline = ({ icon: Icon, color, label, value, hint }) => (
     </div>
     <div style={{ minWidth: 0, flex: 1 }}>
       <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.3 }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", fontFamily: "monospace", marginTop: 1 }}>{value}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", fontFamily: "var(--font-mono)", marginTop: 1 }}>{value}</div>
     </div>
   </div>
 );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Users, FileDiff, Plus, Server, Database, AlertTriangle, RefreshCw, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
+import PageHeader from "../../components/PageHeader";
 import { getLocalYMD } from "./helpers";
 import { checkSystemHealth, fetchProblems, fetchPodftToday, fetchPodftTrades, fetchDashboard, saveProblemApi, deleteProblemApi } from "./api";
 import PodftModal from "./PodftModal";
@@ -114,20 +115,18 @@ const DashboardPage = () => {
 
   return (
     <div style={{ width: "100%", paddingRight: "20px" }}>
-      <div style={{ marginBottom: "30px", display: "flex", justifyContent: "space-between", alignItems: "end" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: "32px", background: "linear-gradient(90deg, #2563eb, #3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            Добро пожаловать, {username}!
-          </h1>
-          <p style={{ color: "#64748b", marginTop: "5px" }}>Вот обзор системы на сегодня.</p>
-        </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", background: health.api === "Online" ? "#ecfdf5" : "#fef2f2", padding: "8px 15px", borderRadius: "20px", border: `1px solid ${health.api === "Online" ? "#a7f3d0" : "#fecaca"}` }}>
-          <div style={{ width: "8px", height: "8px", background: health.api === "Online" ? "#10b981" : "#ef4444", borderRadius: "50%", boxShadow: `0 0 5px ${health.api === "Online" ? "#10b981" : "#ef4444"}` }} />
-          <span style={{ fontSize: "13px", color: health.api === "Online" ? "#065f46" : "#991b1b", fontWeight: 600 }}>
-            {health.api === "Online" ? "System Stable" : "System Issues"}
-          </span>
-        </div>
-      </div>
+      <PageHeader
+        title={`Добро пожаловать, ${username}!`}
+        subtitle="Вот обзор системы на сегодня."
+        actions={
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", background: health.api === "Online" ? "#ecfdf5" : "#fef2f2", padding: "8px 15px", borderRadius: "20px", border: `1px solid ${health.api === "Online" ? "#a7f3d0" : "#fecaca"}` }}>
+              <div style={{ width: "8px", height: "8px", background: health.api === "Online" ? "#10b981" : "#ef4444", borderRadius: "50%", boxShadow: `0 0 5px ${health.api === "Online" ? "#10b981" : "#ef4444"}` }} />
+              <span style={{ fontSize: "13px", color: health.api === "Online" ? "#065f46" : "#991b1b", fontWeight: 600 }}>
+                {health.api === "Online" ? "System Stable" : "System Issues"}
+              </span>
+            </div>
+        }
+      />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "20px", marginBottom: "30px" }}>
         <div className="card" style={{ padding: "25px", display: "flex", alignItems: "center", gap: "20px", borderLeft: "4px solid #8b5cf6" }}>
@@ -179,7 +178,7 @@ const DashboardPage = () => {
                     {isAdmin && (
                       <div style={{ display: "flex", gap: "10px", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                         <button type="button" onClick={() => openEditProblem(p)} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }} title="Редактировать">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0b7a6c" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         </button>
                         <button type="button" onClick={() => handleProblemSaved("delete", p)} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }} title="Удалить">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>

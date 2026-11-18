@@ -163,7 +163,7 @@ export default function ReportTab({ period, setPeriod, onGoTo }) {
         </div>
 
         {syncing && (
-          <div style={{ marginTop: 10, padding: "10px 12px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, fontSize: 12, color: T.blue }}>
+          <div style={{ marginTop: 10, padding: "10px 12px", background: "#e9f7f4", border: "1px solid #a8e3da", borderRadius: 8, fontSize: 12, color: T.blue }}>
             <b>Загрузка {fmtDate(run.date_from)} — {fmtDate(run.date_to)}:</b> {run.progress}
             <div style={{ color: T.muted, marginTop: 4 }}>
               Запросы в Unity идут последовательно с учётом лимитов. Исключённые счета не загружаются.

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { BarChart3, Lock, ShieldAlert } from "lucide-react";
+import PageHeader from "../../components/PageHeader";
 import { TabNav } from "./ui";
 import { T } from "./helpers";
 import { listAccounts } from "./api";
@@ -55,19 +56,17 @@ export default function BalanceHistoryPage() {
   }
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: T.ink, letterSpacing: "-0.02em" }}>Остатки</h1>
-          <p style={{ margin: "3px 0 0", ...T.small }}>
-            Unity · Остатки по счетам · {accounts.length} {accounts.length === 1 ? "счёт" : accounts.length < 5 ? "счёта" : "счетов"}
-          </p>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
-          <BarChart3 size={15} color={T.blue} />
-          <span style={{ fontSize: 12, color: T.blue, fontWeight: 600 }}>Balance History</span>
-        </div>
-      </div>
+    <div style={{ fontFamily: "var(--font-sans)" }}>
+      <PageHeader
+        title="Остатки"
+        subtitle={`Unity · Остатки по счетам · ${accounts.length} ${accounts.length === 1 ? "счёт" : accounts.length < 5 ? "счёта" : "счетов"}`}
+        actions={
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#e9f7f4", borderRadius: 8, border: "1px solid #a8e3da" }}>
+              <BarChart3 size={15} color={T.blue} />
+              <span style={{ fontSize: 12, color: T.blue, fontWeight: 600 }}>Balance History</span>
+            </div>
+        }
+      />
 
       <TabNav active={activeTab} onChange={setActiveTab} />
 

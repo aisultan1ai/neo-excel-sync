@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { AlertTriangle, Loader2, Scale, Search, X } from "lucide-react";
+import PageHeader from "../../components/PageHeader";
 import { listAccounts, reconcilePositions } from "./api";
 import { STATUS, T, S, todayStr, isIssue } from "./helpers";
 import { StatTile } from "./ui";
@@ -65,20 +66,17 @@ export default function PositionsPage() {
   const partialPeriod = !!from || (to && to < todayStr());
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      {/* Шапка */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: T.ink, letterSpacing: "-0.02em" }}>Сверка позиций</h1>
-          <p style={{ margin: "3px 0 0", ...T.small }}>
-            Unity · Позиции на счёте vs сумма DIRECT-сделок (BUY − SELL) по каждому инструменту
-          </p>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
-          <Scale size={15} color={T.blue} />
-          <span style={{ fontSize: 12, color: T.blue, fontWeight: 600 }}>Positions Recon</span>
-        </div>
-      </div>
+    <div style={{ fontFamily: "var(--font-sans)" }}>
+      <PageHeader
+        title="Сверка позиций"
+        subtitle="Unity · Позиции на счёте vs сумма DIRECT-сделок (BUY − SELL) по каждому инструменту"
+        actions={
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#e9f7f4", borderRadius: 8, border: "1px solid #a8e3da" }}>
+              <Scale size={15} color={T.blue} />
+              <span style={{ fontSize: 12, color: T.blue, fontWeight: 600 }}>Positions Recon</span>
+            </div>
+        }
+      />
 
       {/* Параметры */}
       <div className="card" style={{ marginBottom: 16 }}>

@@ -110,7 +110,7 @@ export default function TxModal({ open, tx, defaultSectionId, sections, counterp
           <input className="text-input" value={form.asset} onChange={set("asset")} placeholder="USDT, BTC… (необязательно)" style={{ width: "100%", textTransform: "uppercase" }} />)}
         <div style={{ gridColumn: "1 / -1" }}>
           {field("Хэш транзакции",
-            <input className="text-input" value={form.tx_hash} onChange={set("tx_hash")} placeholder="0x… или txid" style={{ width: "100%", fontFamily: "monospace", fontSize: 12 }} />,
+            <input className="text-input" value={form.tx_hash} onChange={set("tx_hash")} placeholder="0x… или txid" style={{ width: "100%", fontFamily: "var(--font-mono)", fontSize: 12 }} />,
             "Повтор хэша в том же разделе не допускается")}
         </div>
         <div style={{ gridColumn: "1 / -1" }}>

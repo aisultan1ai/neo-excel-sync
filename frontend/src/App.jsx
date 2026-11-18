@@ -31,6 +31,7 @@ import {
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./App.css";
+import BrandMark from "./components/BrandMark";
 
 import DashboardPage from "./pages/DashboardPage";
 import SverkaPage from "./pages/SverkaPage";
@@ -60,8 +61,8 @@ const NavButton = ({ to, icon: Icon, label }) => {
   const active = isActivePath(location.pathname, to);
 
   return (
-    <Link to={to} className={`nav-btn ${active ? "active" : ""}`}>
-      <Icon size={20} style={{ marginRight: "10px" }} />
+    <Link to={to} className={`nav-btn ${active ? "active" : ""}`} aria-current={active ? "page" : undefined}>
+      <Icon size={20} style={{ marginRight: "12px" }} />
       {label}
     </Link>
   );
@@ -84,7 +85,11 @@ const AppLayout = ({ isAdmin, canIncome }) => {
     <div className="app-container">
       <aside className="sidebar">
         <div className="logo-area">
-          <h2>NeoExcelSync</h2>
+          <BrandMark size={30} />
+          <div>
+            <h2>NeoCore</h2>
+            <span className="logo-sub">Back Office Platform</span>
+          </div>
         </div>
 
         <nav className="nav-menu">
@@ -109,7 +114,9 @@ const AppLayout = ({ isAdmin, canIncome }) => {
       </aside>
 
       <main className="content-area">
-        <Outlet />
+        <div className="content-inner">
+          <Outlet />
+        </div>
       </main>
 
       <ToastContainer position="bottom-right" theme="light" />

@@ -4,6 +4,7 @@ import { Layers, AlertCircle, Upload, FileSpreadsheet, X } from "lucide-react";
 import { toast } from "react-toastify";
 import ResultCard from "./ResultCard";
 import ReferenceManager from "./ReferenceManager";
+import PageHeader from "../../components/PageHeader";
 
 const SplitsPage = () => {
   const [file, setFile] = useState(null);
@@ -36,12 +37,12 @@ const SplitsPage = () => {
 
   return (
     <div style={{ width: "100%", paddingRight: "20px", paddingBottom: "50px" }}>
-      <h1 style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>Проверка Сплитов</h1>
+      <PageHeader icon={Layers} title="Проверка Сплитов" />
 
       <div className="card" style={{ padding: "30px" }}>
         <div style={{ marginBottom: "20px" }}>
           <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-            <Layers size={24} color="#3b82f6" /> Шаг 1. Загрузка ежедневного отчета (АИС)
+            <Layers size={24} color="#0b7a6c" /> Шаг 1. Загрузка ежедневного отчета (АИС)
           </h3>
           <p style={{ margin: "5px 0 0 0", fontSize: "14px", color: "#64748b" }}>Загрузите файл для проверки. Он будет сверен с текущим справочником.</p>
         </div>
@@ -49,15 +50,15 @@ const SplitsPage = () => {
         <div
           style={{ border: "2px dashed #cbd5e1", borderRadius: "12px", padding: "40px 20px", textAlign: "center", cursor: "pointer", backgroundColor: file ? "#f0f9ff" : "#f8fafc", transition: "all 0.2s ease", position: "relative" }}
           onClick={() => document.getElementById("split-file-upload").click()}
-          onMouseOver={(e) => (e.currentTarget.style.borderColor = "#3b82f6")}
+          onMouseOver={(e) => (e.currentTarget.style.borderColor = "#0b7a6c")}
           onMouseOut={(e) => (e.currentTarget.style.borderColor = "#cbd5e1")}
         >
           <input id="split-file-upload" type="file" accept=".xlsx, .xls" hidden onChange={(e) => setFile(e.target.files[0])} />
           {!file ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-              <div style={{ background: "#e0f2fe", padding: "15px", borderRadius: "50%" }}><Upload size={30} color="#3b82f6" /></div>
+              <div style={{ background: "#e0f2fe", padding: "15px", borderRadius: "50%" }}><Upload size={30} color="#0b7a6c" /></div>
               <div>
-                <span style={{ color: "#3b82f6", fontWeight: 600 }}>Нажмите, чтобы загрузить</span><br />
+                <span style={{ color: "#0b7a6c", fontWeight: 600 }}>Нажмите, чтобы загрузить</span><br />
                 <span style={{ fontSize: "13px", color: "#94a3b8" }}>или перетащите файл сюда</span>
               </div>
             </div>

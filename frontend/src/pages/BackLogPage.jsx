@@ -2,12 +2,13 @@
 import axios from "axios";
 import { toast } from "react-toastify";
 import { RefreshCw, Loader2, ChevronDown } from "lucide-react";
+import PageHeader from "../components/PageHeader";
 
 
 const ACTION_META = {
   account_add:     { label: "Добавлен счёт",        bg: "#dcfce7", color: "#15803d" },
   account_delete:  { label: "Удалён счёт",           bg: "#fee2e2", color: "#dc2626" },
-  records_load:    { label: "Загрузка данных",        bg: "#dbeafe", color: "#1d4ed8" },
+  records_load:    { label: "Загрузка данных",        bg: "#d3f1ec", color: "#065a50" },
   records_delete:  { label: "Удаление данных",        bg: "#fef9c3", color: "#a16207" },
   cashout_send:    { label: "Транзакция отправлена",  bg: "#f3e8ff", color: "#7c3aed" },
   schedule_upsert: { label: "Расписание настроено",   bg: "#e0f2fe", color: "#0369a1" },
@@ -90,11 +91,8 @@ export default function BackLogPage() {
   const inp = { fontSize: 13, height: 36, border: "1px solid #e2e8f0", borderRadius: 8, padding: "0 10px", color: "#334155" };
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", padding: "0 4px" }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1e293b", letterSpacing: "-0.02em" }}>BackLog</h1>
-        <p style={{ margin: "3px 0 0", fontSize: 12, color: "#64748b" }}>Журнал действий · Funding Fee · только для администратора</p>
-      </div>
+    <div style={{ fontFamily: "var(--font-sans)", padding: "0 4px" }}>
+      <PageHeader title="BackLog" subtitle="Журнал действий · Funding Fee · только для администратора" />
 
       {/* Filters */}
       <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 16px", marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
@@ -116,7 +114,7 @@ export default function BackLogPage() {
         <input type="date" style={inp} value={filterEndDate}   onChange={(e) => setFilterEndDate(e.target.value)} />
         <button
           onClick={load} disabled={loading}
-          style={{ height: 36, padding: "0 16px", borderRadius: 8, border: "none", background: "#2563eb", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+          style={{ height: 36, padding: "0 16px", borderRadius: 8, border: "none", background: "#065a50", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
           {loading ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <RefreshCw size={14} />}
           Обновить
         </button>

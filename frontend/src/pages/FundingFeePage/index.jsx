@@ -2,6 +2,7 @@
 import axios from "axios";
 import { toast } from "react-toastify";
 import { Lock, Plus, ShieldAlert } from "lucide-react";
+import PageHeader from "../../components/PageHeader";
 import { TabNav } from "./ui";
 import { T } from "./helpers";
 import { getAccounts, deleteAccount as apiDeleteAccount } from "./api";
@@ -92,18 +93,16 @@ export default function FundingFeePage() {
   }
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: T.ink, letterSpacing: "-0.02em" }}>Funding Fee</h1>
-          <p style={{ margin: "3px 0 0", ...T.small }}>Binance Futures · Загрузка, анализ, Cash In / Out</p>
-        </div>
-        {activeTab === "accounts" && (
+    <div style={{ fontFamily: "var(--font-sans)" }}>
+      <PageHeader
+        title="Funding Fee"
+        subtitle="Binance Futures · Загрузка, анализ, Cash In / Out"
+        actions={activeTab === "accounts" && (
           <button className="btn" onClick={() => setShowAdd(true)}>
             <Plus size={14} style={{ marginRight: 6 }} />Добавить аккаунт
           </button>
         )}
-      </div>
+      />
 
       <TabNav active={activeTab} onChange={setActiveTab} />
 

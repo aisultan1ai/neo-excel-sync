@@ -18,6 +18,7 @@ import {
   ChevronUp,
   ShieldCheck,
 } from "lucide-react";
+import PageHeader from "../../components/PageHeader";
 import { toast } from "react-toastify";
 
 const EXCHANGES = { FU: ["OKXE", "BINA", "BYBIT"], CFD: ["CTRD", "BYBIT", "BINA"] };
@@ -105,7 +106,7 @@ const IssueRow = ({ item, defaultOpen }) => {
         onClick={() => setOpen((v) => !v)}
       >
         <span style={{ fontSize: 12, color: "#64748b", minWidth: 52 }}>#{item.row_num}</span>
-        <span style={{ fontSize: 12, fontFamily: "monospace", color: "#334155", flex: 1 }}>
+        <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "#334155", flex: 1 }}>
           Trade ID: <strong>{item.trade_id}</strong>
         </span>
         <span style={{
@@ -273,29 +274,23 @@ const ConvertTemplatePage = () => {
 
   return (
     <div style={{ width: "100%", paddingRight: 20, paddingBottom: 50 }}>
-      <h1 style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
-        <ArrowRightLeft size={28} color="#3b82f6" />
-        Конверт Шаблон
-      </h1>
-      <p style={{ marginTop: 0, marginBottom: 24, color: "#64748b", fontSize: 14 }}>
-        Конвертация торговых отчётов (Binance CSV / Excel) в стандартный шаблон Excel
-      </p>
+      <PageHeader icon={ArrowRightLeft} title="Конверт Шаблон" subtitle="Конвертация торговых отчётов (Binance CSV / Excel) в стандартный шаблон Excel" />
 
       {/* ── Upload ── */}
       <div className="card" style={{ padding: 28 }}>
         <h3 style={{ margin: "0 0 18px 0", display: "flex", alignItems: "center", gap: 8 }}>
-          <Upload size={20} color="#3b82f6" />
+          <Upload size={20} color="#0b7a6c" />
           Шаг 1. Загрузка файла
         </h3>
 
         <div
           style={{
-            border: `2px dashed ${dragOver ? "#3b82f6" : file ? "#10b981" : "#cbd5e1"}`,
+            border: `2px dashed ${dragOver ? "#0b7a6c" : file ? "#10b981" : "#cbd5e1"}`,
             borderRadius: 12,
             padding: "32px 20px",
             textAlign: "center",
             cursor: "pointer",
-            backgroundColor: dragOver ? "#eff6ff" : file ? "#f0fdf4" : "#f8fafc",
+            backgroundColor: dragOver ? "#e9f7f4" : file ? "#f0fdf4" : "#f8fafc",
             transition: "all 0.2s ease",
           }}
           onClick={() => fileInputRef.current?.click()}
@@ -309,10 +304,10 @@ const ConvertTemplatePage = () => {
           {!file ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
               <div style={{ background: "#e0f2fe", padding: 14, borderRadius: "50%" }}>
-                <Upload size={28} color="#3b82f6" />
+                <Upload size={28} color="#0b7a6c" />
               </div>
               <div>
-                <span style={{ color: "#3b82f6", fontWeight: 600 }}>Нажмите для выбора файла</span>
+                <span style={{ color: "#0b7a6c", fontWeight: 600 }}>Нажмите для выбора файла</span>
                 <br />
                 <span style={{ fontSize: 13, color: "#94a3b8" }}>или перетащите файл сюда</span>
               </div>
@@ -343,7 +338,7 @@ const ConvertTemplatePage = () => {
       {/* ── Params ── */}
       <div className="card" style={{ padding: 28 }}>
         <h3 style={{ margin: "0 0 18px 0", display: "flex", alignItems: "center", gap: 8 }}>
-          <Hash size={20} color="#3b82f6" />
+          <Hash size={20} color="#0b7a6c" />
           Шаг 2. Параметры конвертации
         </h3>
 
@@ -369,7 +364,7 @@ const ConvertTemplatePage = () => {
                     cursor: "pointer",
                     fontWeight: 600,
                     fontSize: 14,
-                    background: instrumentType === t ? "#3b82f6" : "#f8fafc",
+                    background: instrumentType === t ? "#0b7a6c" : "#f8fafc",
                     color: instrumentType === t ? "#fff" : "#64748b",
                     transition: "all 0.15s ease",
                   }}
@@ -415,7 +410,7 @@ const ConvertTemplatePage = () => {
           {/* Stats row */}
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
             <StatCard icon={CheckCircle2} label="Строк обработано" value={result.total} color="#10b981" />
-            <StatCard icon={BarChart2} label="Инструментов" value={result.instruments} color="#3b82f6" />
+            <StatCard icon={BarChart2} label="Инструментов" value={result.instruments} color="#0b7a6c" />
             <StatCard icon={CalendarDays} label="Период дат" value={result.date_range} color="#8b5cf6" />
           </div>
 
@@ -429,7 +424,7 @@ const ConvertTemplatePage = () => {
             <div style={{ padding: "16px 22px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                  <FileSpreadsheet size={20} color="#3b82f6" />
+                  <FileSpreadsheet size={20} color="#0b7a6c" />
                   Предпросмотр (первые 10 строк)
                 </h3>
                 <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3, display: "flex", gap: 14 }}>
@@ -449,12 +444,12 @@ const ConvertTemplatePage = () => {
                     type="checkbox"
                     checked={splitExport}
                     onChange={(e) => setSplitExport(e.target.checked)}
-                    style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#3b82f6" }}
+                    style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#0b7a6c" }}
                   />
                   <span style={{ fontSize: 13, color: "#475569", whiteSpace: "nowrap" }}>
                     Разбить по 5000 строк
                     {splitExport && result?.total > 5000 && (
-                      <span style={{ marginLeft: 5, color: "#3b82f6", fontWeight: 600 }}>
+                      <span style={{ marginLeft: 5, color: "#0b7a6c", fontWeight: 600 }}>
                         ({Math.ceil(result.total / 5000)} файла → .zip)
                       </span>
                     )}

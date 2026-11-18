@@ -3,6 +3,7 @@ import axios from "axios";
 import { User, Shield, Key, BarChart3, Briefcase, LogOut } from "lucide-react";
 import { toast } from "react-toastify";
 import AdminPanel from "./AdminPanel";
+import PageHeader from "../../components/PageHeader";
 
 const ProfilePage = ({ onLogout }) => {
   const [profile, setProfile] = useState(null);
@@ -90,18 +91,20 @@ const ProfilePage = ({ onLogout }) => {
 
   return (
     <div style={{ maxWidth: "1000px", margin: "0 auto", paddingBottom: "50px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" }}>
-        <h1 style={{ margin: 0 }}>Личный кабинет</h1>
-        <button onClick={onLogout} className="btn" style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca", display: "flex", alignItems: "center", gap: "8px", padding: "8px 16px", fontSize: "14px" }} onMouseOver={(e) => (e.currentTarget.style.background = "#fecaca")} onMouseOut={(e) => (e.currentTarget.style.background = "#fee2e2")}>
-          <LogOut size={18} /> Выйти
-        </button>
-      </div>
+      <PageHeader
+        title="Личный кабинет"
+        actions={
+            <button onClick={onLogout} className="btn" style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca", display: "flex", alignItems: "center", gap: "8px", padding: "8px 16px", fontSize: "14px" }} onMouseOver={(e) => (e.currentTarget.style.background = "#fecaca")} onMouseOut={(e) => (e.currentTarget.style.background = "#fee2e2")}>
+              <LogOut size={18} /> Выйти
+            </button>
+        }
+      />
 
       <div style={{ display: "flex", gap: "30px", flexWrap: "wrap", marginBottom: "40px" }}>
         <div style={{ flex: 1, minWidth: "300px" }}>
           <div className="card" style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "20px" }}>
-            <div style={{ width: "80px", height: "80px", borderRadius: "50%", background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #3b82f6" }}>
-              <User size={40} color="#3b82f6" />
+            <div style={{ width: "80px", height: "80px", borderRadius: "50%", background: "#e9f7f4", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #0b7a6c" }}>
+              <User size={40} color="#0b7a6c" />
             </div>
             <div>
               <h2 style={{ margin: 0, fontSize: "24px", display: "flex", alignItems: "center", gap: "10px" }}>

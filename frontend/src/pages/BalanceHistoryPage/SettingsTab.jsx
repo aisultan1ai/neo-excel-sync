@@ -28,7 +28,7 @@ export default function SettingsTab() {
     finally { setSaving(false); }
   };
 
-  const T_blue = "#3b82f6";
+  const T_blue = "#0b7a6c";
 
   return (
     <div>
@@ -43,7 +43,7 @@ export default function SettingsTab() {
             <input className="text-input" placeholder="https://rest.unity.finance"
               value={config.base_url} onChange={(e) => setConfig((p) => ({ ...p, base_url: e.target.value }))} />
             {config.base_url && (
-              <div style={{ marginTop: 6, fontSize: 11, color: T.muted, fontFamily: "monospace", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 10px" }}>
+              <div style={{ marginTop: 6, fontSize: 11, color: T.muted, fontFamily: "var(--font-mono)", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 10px" }}>
                 {config.base_url.replace(/\/+$/, "")}/api/v1/balanceHistory
               </div>
             )}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Save, Settings, Shield, Key, TrendingUp, Layers, Database, Lock } from "lucide-react";
+import PageHeader from "../../components/PageHeader";
 import { toast } from "react-toastify";
 import GeneralTab from "./tabs/GeneralTab";
 import PodftTab from "./tabs/PodftTab";
@@ -83,31 +84,31 @@ const SettingsPage = () => {
 
   return (
     <div style={{ maxWidth: "1000px", margin: "0 auto", paddingBottom: "60px" }}>
-      <div style={{ marginBottom: "25px", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "end" }}>
-        <div>
-          <h1 style={{ fontSize: "32px", margin: "0 0 10px 0", color: "#1e293b" }}>Настройки</h1>
-          <p style={{ color: "#64748b", margin: 0 }}>Управление параметрами системы</p>
-        </div>
-        {!canEdit && (
-          <div style={{ background: "#fef2f2", color: "#ef4444", padding: "8px 15px", borderRadius: "8px", fontSize: "13px", display: "flex", alignItems: "center", gap: "8px", border: "1px solid #fecaca" }}>
-            <Lock size={16} /><span>Только чтение ({userRole})</span>
-          </div>
-        )}
-      </div>
+      <PageHeader
+        title="Настройки"
+        subtitle="Управление параметрами системы"
+        actions={
+          !canEdit && (
+                    <div style={{ background: "#fef2f2", color: "#ef4444", padding: "8px 15px", borderRadius: "8px", fontSize: "13px", display: "flex", alignItems: "center", gap: "8px", border: "1px solid #fecaca" }}>
+                      <Lock size={16} /><span>Только чтение ({userRole})</span>
+                    </div>
+                  )
+        }
+      />
 
       <div style={{ display: "flex", gap: "10px", overflowX: "auto", paddingBottom: "5px", marginBottom: "25px", justifyContent: "center", flexWrap: "wrap" }}>
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 18px", borderRadius: "25px", border: "1px solid", borderColor: isActive ? "#3b82f6" : "#e2e8f0", background: isActive ? "#3b82f6" : "white", color: isActive ? "white" : "#64748b", fontWeight: 600, fontSize: "14px", cursor: "pointer", transition: "all 0.2s ease", boxShadow: isActive ? "0 4px 6px -1px rgba(0,0,0,0.1)" : "none" }}>
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 18px", borderRadius: "25px", border: "1px solid", borderColor: isActive ? "#0b7a6c" : "#e2e8f0", background: isActive ? "#0b7a6c" : "white", color: isActive ? "white" : "#64748b", fontWeight: 600, fontSize: "14px", cursor: "pointer", transition: "all 0.2s ease", boxShadow: isActive ? "0 4px 6px -1px rgba(0,0,0,0.1)" : "none" }}>
               <Icon size={16} /> {tab.label}
             </button>
           );
         })}
       </div>
 
-      <div className="card" style={{ padding: "40px", minHeight: "300px", borderTop: "4px solid #3b82f6", boxShadow: "0 10px 25px -5px rgba(0,0,0,0.05)" }}>
+      <div className="card" style={{ padding: "40px", minHeight: "300px", borderTop: "4px solid #0b7a6c", boxShadow: "0 10px 25px -5px rgba(0,0,0,0.05)" }}>
         {activeTab === "general" && <GeneralTab {...tabProps} />}
         {activeTab === "podft" && <PodftTab {...tabProps} />}
         {activeTab === "crypto" && <CryptoTab {...tabProps} />}
@@ -117,7 +118,7 @@ const SettingsPage = () => {
 
         {canEdit && (
           <div style={{ marginTop: "30px", borderTop: "1px solid #e2e8f0", paddingTop: "20px", display: "flex", justifyContent: "flex-end" }}>
-            <button className="btn" onClick={saveSettings} disabled={saving} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 30px", fontSize: "16px", background: "#3b82f6", color: "white", border: "none", boxShadow: "0 4px 6px -1px rgba(59,130,246,0.3)" }}>
+            <button className="btn" onClick={saveSettings} disabled={saving} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 30px", fontSize: "16px", background: "#0b7a6c", color: "white", border: "none", boxShadow: "0 4px 6px -1px rgba(59,130,246,0.3)" }}>
               <Save size={20} /> {saving ? "Сохранение..." : "Сохранить изменения"}
             </button>
           </div>
@@ -132,8 +133,8 @@ const SettingsPage = () => {
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .4s; border-radius: 24px; }
         .slider.disabled { cursor: not-allowed; opacity: 0.6; }
         .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: #3b82f6; }
-        input:checked + .slider.disabled { background-color: #93c5fd; }
+        input:checked + .slider { background-color: #0b7a6c; }
+        input:checked + .slider.disabled { background-color: #7fd9cb; }
         input:checked + .slider:before { transform: translateX(16px); }
         .text-input:disabled { background-color: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
       `}</style>

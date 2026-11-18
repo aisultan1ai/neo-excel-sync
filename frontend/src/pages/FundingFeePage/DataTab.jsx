@@ -218,12 +218,12 @@ export default function DataTab({ accounts, selAccountId, onSelect, onAccountsRe
       {streaming && (
         <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "12px 16px", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Loader2 size={16} style={{ animation: "spin 1s linear infinite", color: "#3b82f6", flexShrink: 0 }} />
+            <Loader2 size={16} style={{ animation: "spin 1s linear infinite", color: "#0b7a6c", flexShrink: 0 }} />
             <span style={{ fontSize: 13, fontWeight: 500, color: T.ink }}>{streamMsg}</span>
           </div>
           {streamN > 0 && (
             <div style={{ height: 4, background: "#e0f2fe", borderRadius: 2, marginTop: 10, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${Math.min(100, streamN / 50)}%`, background: "#3b82f6", borderRadius: 2, transition: "width 0.3s" }} />
+              <div style={{ height: "100%", width: `${Math.min(100, streamN / 50)}%`, background: "#0b7a6c", borderRadius: 2, transition: "width 0.3s" }} />
             </div>
           )}
         </div>
@@ -244,7 +244,7 @@ export default function DataTab({ accounts, selAccountId, onSelect, onAccountsRe
             <div style={{ flex: "1 1 200px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 20px" }}>
               <div style={{ ...T.label, marginBottom: 8 }}>Параметры</div>
               <div style={{ fontSize: 13, fontWeight: 500, color: T.ink }}>{startDate} → {endDate}</div>
-              {selSymbol && <div style={{ marginTop: 4 }}><Pill color="#eff6ff" text="#1d4ed8">{selSymbol}</Pill></div>}
+              {selSymbol && <div style={{ marginTop: 4 }}><Pill color="#e9f7f4" text="#065a50">{selSymbol}</Pill></div>}
               <div style={{ ...T.small, marginTop: 6 }}>{summary.total_records} записей</div>
             </div>
           </div>

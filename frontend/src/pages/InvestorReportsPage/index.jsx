@@ -18,6 +18,7 @@ import { listUploads, deleteUpload, downloadZipUrl, downloadSourceUrl, templateU
 import UploadPage from "./UploadPage";
 import PreviewPage from "./PreviewPage";
 import ReportDetailsPage from "./ReportDetailsPage";
+import PageHeader from "../../components/PageHeader";
 import { ConfirmDialog, InvestorReportStyles, SkeletonRow } from "./ui";
 
 const MONTHS_RU = ["Январь","Февраль","Март","Апрель","Май","Июнь",
@@ -119,31 +120,27 @@ export default function InvestorReportsPage() {
     <div style={{ width: "100%", paddingRight: 20, paddingBottom: 50 }}>
       <InvestorReportStyles />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, gap: 20, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
-            <FileText size={28} color="#3b82f6" />
-            Отчёты инвесторов
-          </h1>
-          <p style={{ margin: "6px 0 0 0", color: "#64748b", fontSize: 14 }}>
-            Algo Alliance Umbrella Fund OEIC Limited
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <a href={templateUrl("consolidated")}
-             className="btn"
-             style={{ background: "#e2e8f0", color: "#334155", display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none" }}
-             title="Скачать пустой Excel-шаблон">
-            <FileSpreadsheet size={16} />
-            Шаблон Excel
-          </a>
-          <button className="btn" onClick={goUpload}
-            style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Plus size={16} />
-            Загрузить отчёт
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={FileText}
+        title="Отчёты инвесторов"
+        subtitle="Algo Alliance Umbrella Fund OEIC Limited"
+        actions={
+          <>
+            <a href={templateUrl("consolidated")}
+               className="btn"
+               style={{ background: "#e2e8f0", color: "#334155", display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none" }}
+               title="Скачать пустой Excel-шаблон">
+              <FileSpreadsheet size={16} />
+              Шаблон Excel
+            </a>
+            <button className="btn" onClick={goUpload}
+              style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Plus size={16} />
+              Загрузить отчёт
+            </button>
+          </>
+        }
+      />
 
       {/* Search / stats bar */}
       {(loading || uploads.length > 0) && (
@@ -190,8 +187,8 @@ export default function InvestorReportsPage() {
           </div>
         ) : uploads.length === 0 ? (
           <div style={{ padding: 60, textAlign: "center" }}>
-            <div style={{ display: "inline-flex", background: "#eff6ff", padding: 16, borderRadius: "50%", marginBottom: 14 }}>
-              <FileText size={32} color="#3b82f6" />
+            <div style={{ display: "inline-flex", background: "#e9f7f4", padding: 16, borderRadius: "50%", marginBottom: 14 }}>
+              <FileText size={32} color="#0b7a6c" />
             </div>
             <h3 style={{ margin: "8px 0", color: "#1e293b" }}>Пока нет ни одной загрузки</h3>
             <p style={{ color: "#64748b", margin: "0 0 20px" }}>Загрузите сводный Excel фонда, чтобы сгенерировать отчёты инвесторам.</p>
@@ -224,8 +221,8 @@ export default function InvestorReportsPage() {
                   <tr key={u.id} style={{ cursor: "pointer" }}
                       onClick={() => goDetails(u.id)}>
                     <td style={{ textAlign: "center" }}>
-                      <div style={{ display: "inline-flex", background: "#eff6ff", padding: 6, borderRadius: 8 }}>
-                        <Calendar size={16} color="#3b82f6" />
+                      <div style={{ display: "inline-flex", background: "#e9f7f4", padding: 6, borderRadius: 8 }}>
+                        <Calendar size={16} color="#0b7a6c" />
                       </div>
                     </td>
                     <td>
@@ -235,8 +232,8 @@ export default function InvestorReportsPage() {
                     <td>
                       <span style={{
                         fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 12,
-                        background: u.mode === "single" ? "#fef3c7" : "#dbeafe",
-                        color:      u.mode === "single" ? "#92400e" : "#1e40af",
+                        background: u.mode === "single" ? "#fef3c7" : "#d3f1ec",
+                        color:      u.mode === "single" ? "#92400e" : "#064d45",
                       }}>
                         {u.mode === "single" ? "По инвестору" : "Сводный"}
                       </span>
@@ -269,7 +266,7 @@ export default function InvestorReportsPage() {
                           <Trash2 size={14} />
                         </button>
                         <button type="button" onClick={() => goDetails(u.id)} title="Открыть детали"
-                                style={{...btnIconStyle, color: "#3b82f6"}}>
+                                style={{...btnIconStyle, color: "#0b7a6c"}}>
                           <ChevronRight size={14} />
                         </button>
                       </div>

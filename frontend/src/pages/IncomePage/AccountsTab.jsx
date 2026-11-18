@@ -161,7 +161,7 @@ export default function AccountsTab() {
               </thead>
               <tbody>
                 {visible.map((a) => (
-                  <tr key={a.account_id} style={{ opacity: a.excluded ? 0.5 : 1, background: selected.has(a.account_id) ? "#eff6ff" : undefined }}>
+                  <tr key={a.account_id} style={{ opacity: a.excluded ? 0.5 : 1, background: selected.has(a.account_id) ? "#e9f7f4" : undefined }}>
                     <td style={S.td}><input type="checkbox" checked={selected.has(a.account_id)} onChange={() => toggle(a.account_id)} /></td>
                     <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{a.account_id}</td>
                     <td style={S.td}>{a.name || "—"}</td>

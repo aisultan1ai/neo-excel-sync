@@ -17,7 +17,7 @@ function TradesDetail({ row }) {
   }, [row.trades]);
 
   return (
-    <div style={{ padding: "12px 16px 16px 40px", background: T.bg, whiteSpace: "normal", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+    <div style={{ padding: "12px 16px 16px 40px", background: T.bg, whiteSpace: "normal", fontFamily: "var(--font-sans)" }}>
       <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 10, ...T.small }}>
         <span>Куплено: <b style={{ color: T.green }}>{fmtQty(row.buy_qty)}</b></span>
         <span>Продано: <b style={{ color: T.red }}>{fmtQty(row.sell_qty)}</b></span>

@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { Play, Download, Loader, Settings2 } from "lucide-react";
 import FileCard from "./FileCard";
 import ResultTable from "./ResultTable";
+import PageHeader from "../../components/PageHeader";
 import { Input, Check } from "./ui";
 
 const UnityExchangePage = () => {
@@ -89,11 +90,11 @@ const UnityExchangePage = () => {
 
   return (
     <div style={{ width: "100%", height: "calc(100vh - 40px)", display: "flex", flexDirection: "column", gap: 14 }}>
-      <h1 style={{ margin: 0, fontSize: 24, color: "#1e293b", fontWeight: 500 }}>Unity ↔ Биржа</h1>
+      <PageHeader title="Unity ↔ Биржа" style={{ marginBottom: 0 }} />
 
       <div style={{ display: "flex", gap: 10 }}>
         {["BINANCE", "OKX", "BYBIT"].map((t) => (
-          <button key={t} onClick={() => { setExchangeType(t); setExchangeFile(null); setResult(null); }} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #e2e8f0", background: exchangeType === t ? "#3b82f6" : "#fff", color: exchangeType === t ? "#fff" : "#334155", fontWeight: 400, cursor: "pointer" }}>
+          <button key={t} onClick={() => { setExchangeType(t); setExchangeFile(null); setResult(null); }} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #e2e8f0", background: exchangeType === t ? "#0b7a6c" : "#fff", color: exchangeType === t ? "#fff" : "#334155", fontWeight: 400, cursor: "pointer" }}>
             {t}
           </button>
         ))}
@@ -101,7 +102,7 @@ const UnityExchangePage = () => {
 
       <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 18 }}>
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-          <FileCard title="Unity (.xlsx)" color="#3b82f6" file={unityFile} setFile={setUnityFile} accept=".xlsx,.xls" />
+          <FileCard title="Unity (.xlsx)" color="#0b7a6c" file={unityFile} setFile={setUnityFile} accept=".xlsx,.xls" />
           <div style={{ width: 1, background: "#e2e8f0", margin: "10px 0" }} />
           <FileCard title={exchangeTitle} color="#8b5cf6" file={exchangeFile} setFile={setExchangeFile} accept={accept} />
         </div>
@@ -127,7 +128,7 @@ const UnityExchangePage = () => {
         </div>
 
         <div style={{ marginTop: 18, display: "flex", justifyContent: "center" }}>
-          <button onClick={run} disabled={loading} style={{ padding: "12px 28px", borderRadius: 12, border: "none", background: loading ? "#94a3b8" : "#3b82f6", color: "#fff", fontWeight: 400, fontSize: 15, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+          <button onClick={run} disabled={loading} style={{ padding: "12px 28px", borderRadius: 12, border: "none", background: loading ? "#94a3b8" : "#0b7a6c", color: "#fff", fontWeight: 400, fontSize: 15, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 10 }}>
             {loading ? <><Loader size={18} className="spin" /> Обработка...</> : <><Play size={18} /> Запустить сверку</>}
           </button>
         </div>
